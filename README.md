@@ -51,7 +51,15 @@ being built and proven first, in isolation, before the real audio engine:
    Media Format SDK and doesn't cover AAC at all. Verified against real
    ffmpeg-generated MP3/AAC/WMA files: all three load, decode, and
    crossfade correctly through the playlist engine.
-7. Packaging/installer - not started.
+7. **Packaging/installer - done, verified end-to-end.** `installer/InkwyrdAudio.iss`
+   (Inno Setup 7) builds a per-user installer (no admin/UAC needed) that
+   bundles the app, its runtime DLLs, and licensing docs. Verified with a
+   real silent install/launch/uninstall cycle: installs cleanly with no
+   elevation prompt, the installed exe runs correctly, and the bundled
+   uninstaller removes everything (files, Start Menu shortcuts, registry
+   key) with nothing left behind. See `CLAUDE.md` for a build/output-name
+   gotcha currently in play (a leftover locked file from an earlier
+   failed test).
 
 ## Dev environment setup
 

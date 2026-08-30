@@ -1,0 +1,24 @@
+Inkwyrd Audio - Third-Party Software Notices
+==============================================
+
+Inkwyrd Audio uses the following third-party software. Every component
+listed is permissively licensed (no copyleft, no royalty). The full
+checklist with reasoning is in docs/THIRD_PARTY_LICENSES.md in the
+project repository.
+
+  JUCE                    Free "Starter" tier (juce.com)
+  VST3 SDK                MIT (bundled inside JUCE)
+  libopus                 BSD-3-Clause
+  libsodium               ISC
+  dr_mp3                  Public domain / MIT-0
+  IXWebSocket             BSD-3-Clause
+  discord/libdave         MIT
+  Cisco mlspp             BSD-2-Clause (bundled inside libdave)
+  BoringSSL               OpenSSL-style / ISC (bundled inside libdave)
+  nlohmann/json           MIT (bundled inside libdave)
+  Windows Media Foundation  Part of Windows (AAC/M4A, WMA decoding)
+  WASAPI                  Part of Windows (audio device I/O)
+  Elgato Stream Deck SDK  Standard free plugin-distribution terms
+  ws                      MIT (Stream Deck plugin only)
+
+Click Next to continue installing Inkwyrd Audio.

@@ -197,7 +197,59 @@ unknown):
 6. **Broader format support - done, verified with real files.** See the
    "Format support" section above for the full detail (including a real
    bug worth reading about: `StringArray` has no tokenizing constructor).
-7. Packaging/installer - not started.
+7. **Packaging/installer - done, verified end-to-end.** Inno Setup 7
+   script (`installer/InkwyrdAudio.iss`) bundling `InkwyrdAudioApp.exe`
+   + its 3 runtime DLLs (`libdave`, `libsodium`, `opus`) + a licensing
+   readme (`docs/THIRD_PARTY_LICENSES.md`, shown as `ThirdPartyNotices.txt`
+   pre-install) + `README.md`.
+
+   **Per-user install, not per-machine** - `PrivilegesRequired=lowest` +
+   `DefaultDirName={localappdata}\Programs\{#MyAppName}`. This was a real
+   fix, not the original design: the first version used
+   `DefaultDirName={autopf}\...` (Program Files), which forces admin/UAC
+   regardless of any runtime override, since Inno Setup decides privilege
+   level from `DefaultDirName`'s constant at compile time. A silent-install
+   test against that version spawned an elevated child process stuck
+   waiting on a UAC consent prompt a headless session can't answer -
+   neither `Stop-Process` nor `taskkill` could kill it afterward ("Access
+   is denied": a non-admin session can't touch an elevated process, even
+   one it spawned itself). **Those two zombie processes (PIDs 51104 the
+   setup exe, 32332 its `.tmp` child) are still running** as of this
+   writing and can't be cleared without a reboot or the user manually
+   ending them in Task Manager - this is *why* `OutputBaseFilename` in
+   the `.iss` is currently `InkwyrdAudio-Setup-v2-{#MyAppVersion}` rather
+   than the clean `InkwyrdAudio-Setup-{#MyAppVersion}`: the zombies still
+   hold the original output filename open, and recompiling under that
+   name fails with `Error 32: process cannot access the file` (confirmed
+   directly - reverted the name and re-tried the compile specifically to
+   check whether the lock had cleared; it hadn't). **Revert this once
+   those processes are gone.**
+
+   Switching to `PrivilegesRequired=lowest` fixed the actual bug: verified
+   via a full real end-to-end cycle (Playwright-style discipline, not
+   just reading the script) - `/VERYSILENT /SUPPRESSMSGBOXES` install to
+   a scratch `%LOCALAPPDATA%`-style directory completed in-process with no
+   elevation prompt and no hang; installed file layout matched exactly
+   (exe + 3 DLLs + the two renamed docs + uninstaller); launching the
+   installed exe directly ran correctly (printed the expected
+   "set PLAYLIST_FOLDER first" message and exited cleanly - correct
+   behavior for a console app run with no env vars set, not a crash, and
+   proof all 3 DLLs actually resolved from the install dir); running the
+   bundled `unins000.exe` with the same silent flags removed the install
+   directory, the Start Menu folder, and the `HKCU` uninstall registry key
+   completely - nothing left behind.
+
+   One tooling gotcha hit while testing this, worth recording since it
+   looks exactly like a real installer bug at first: **the Bash tool's
+   MSYS/Git-Bash layer silently rewrites leading-slash arguments as
+   Windows paths** - `/VERYSILENT` became the literal string
+   `C:/Program Files/Git/VERYSILENT` before Inno Setup ever saw it,
+   so the installer launched fully interactive instead of silent and sat
+   there indefinitely (looked identical to another UAC-style hang until
+   the install log's `Setup command line:` entry was actually read).
+   Fixed by driving `Start-Process`/Inno Setup invocations through the
+   PowerShell tool instead of Bash for anything with `/`-prefixed
+   arguments.
 
 ## Dev environment
 
