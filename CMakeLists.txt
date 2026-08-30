@@ -48,6 +48,22 @@ set_target_properties(dave PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${dave_SOURCE_DIR}/include"
 )
 
+# dave is a manually-declared IMPORTED target (not vcpkg-installed), so
+# vcpkg's automatic post-build DLL copy (which handles opus/sodium/zlib)
+# doesn't know about it. Any executable that links DiscordVoice
+# (transitively pulling in dave) needs this called on it once.
+function(inkwyrd_copy_dave_dll target)
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:dave>"
+            "$<TARGET_FILE_DIR:${target}>"
+    )
+endfunction()
+
+add_subdirectory(src/discord-voice)
 add_subdirectory(src/discord-spike)
 add_subdirectory(src/audio-engine)
 add_subdirectory(src/audio-engine-test)
+add_subdirectory(src/vst-hosting)
+add_subdirectory(src/vst-hosting-test)
+add_subdirectory(src/app)

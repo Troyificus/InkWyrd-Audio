@@ -17,9 +17,26 @@ being built and proven first, in isolation, before the real audio engine:
    out Gateway -> Voice Gateway -> DAVE/MLS key exchange -> UDP IP
    discovery -> encrypted RTP, confirmed by actually hearing the tone in
    a real Discord voice channel.
-2. Core audio engine (playlist, soundboard, master mixer) - not started.
-3. VST3 hosting - not started.
-4. Wire the audio engine into the Discord client from step 1 - not started.
+2. **`src/audio-engine`** (+ `src/audio-engine-test`) - **built,
+   mechanically verified.** Playlist (shuffle + crossfade) and soundboard
+   (overlapping one-shot triggers), summed and played to real speakers.
+   Confirmed via real runs: auto-crossfade fires on schedule, shuffle
+   order is genuinely random, soundboard triggers overlap correctly.
+   Not yet confirmed by ear - see `CLAUDE.md`.
+3. **`src/vst-hosting`** (+ `src/vst-hosting-test`) - **built,
+   mechanically verified.** VST3 scanning/loading and a live
+   mic -> plugin chain -> speakers path. Confirmed via real runs against
+   this machine's actual installed plugins: scan, load into a live
+   chain, remove while running, clean shutdown. Not yet confirmed by
+   ear - see `CLAUDE.md`.
+4. **`src/app`** - **built, mechanically verified locally, Discord
+   streaming not yet listened-to.** The actual combined application:
+   mic through the VST3 chain, mixed with playlist+soundboard, streamed
+   to Discord (or local-monitor-only if no Discord credentials are set).
+   Confirmed via a real run: VST scan/add/remove, playlist crossfade,
+   and soundboard triggers all working concurrently on one shared audio
+   callback. Not yet confirmed whether audio actually reaches Discord -
+   see `CLAUDE.md`.
 5. Stream Deck integration - not started.
 6. Broader format support (MP3 via dr_mp3, AAC/WMA via Media Foundation) - not started.
 7. Packaging/installer - not started.
@@ -75,3 +92,29 @@ CMake) before any audio can be sent. `docs/dave-protocol-notes.md` covers
 that protocol and the non-obvious parts that cost real debugging time -
 **read it before touching the voice code**, particularly the notes on
 keeping the endpoint's port and on `transition_id = 0`.
+
+### Running the full app
+
+```
+setx PLAYLIST_FOLDER "path\to\your\music"
+setx SOUNDBOARD_FOLDER "path\to\your\sound-effects"
+```
+
+WAV/AIFF/FLAC/OGG only for now - MP3 is a later build step (see above).
+`SOUNDBOARD_FOLDER` is optional. Add the same `DISCORD_BOT_TOKEN` /
+`DISCORD_GUILD_ID` / `DISCORD_CHANNEL_ID` as the spike above to actually
+stream to Discord - without them the app runs in local-monitor-only mode
+(mic + playlist + soundboard through your speakers, nothing sent
+anywhere), which is a fine way to test the audio engine and VST3 chain
+without any Discord setup at all.
+
+Then run `build/src/app/Debug/InkwyrdAudioApp.exe` (path may vary by
+generator/config). Commands once running: `s` skip/crossfade, `h` toggle
+shuffle, `t` now playing, `p` list found VST3 plugins, `a <index>` /
+`r <index>` add/remove a plugin from the live voice chain, `l` list the
+chain, a number triggers a soundboard sound, `q` quits (cleanly leaves
+the Discord channel first, if connected).
+
+**Wear headphones when testing** - mic input runs live to your speakers
+through the VST3 chain, and speaker-to-mic feedback is exactly as
+unpleasant as it sounds.

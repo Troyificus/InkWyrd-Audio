@@ -1,0 +1,75 @@
+#include "MasterEngine.h"
+
+MasterEngine::MasterEngine(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse, PluginChain& voiceChainToUse)
+    : playlist(playlistToUse), soundboard(soundboardToUse), voiceChain(voiceChainToUse)
+{
+    musicMixer.addInputSource(&playlist, false);
+    musicMixer.addInputSource(&soundboard, false);
+}
+
+void MasterEngine::setDiscordSender(DiscordAudioSender* sender)
+{
+    discordSender.store(sender);
+}
+
+void MasterEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
+{
+    currentSampleRate = device->getCurrentSampleRate();
+    auto blockSize = device->getCurrentBufferSizeSamples();
+
+    musicMixer.prepareToPlay(blockSize, currentSampleRate);
+    voiceChain.prepareToPlay(currentSampleRate, blockSize);
+
+    micBuffer.setSize(2, blockSize);
+    masterBuffer.setSize(2, blockSize);
+}
+
+void MasterEngine::audioDeviceStopped()
+{
+    musicMixer.releaseResources();
+    voiceChain.releaseResources();
+}
+
+void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
+                                                     int numInputChannels,
+                                                     float* const* outputChannelData,
+                                                     int numOutputChannels,
+                                                     int numSamples,
+                                                     const juce::AudioIODeviceCallbackContext&)
+{
+    // 1. Mic input, run through the VST3 chain.
+    micBuffer.setSize(2, numSamples, false, false, true);
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        auto* src = numInputChannels > 0 ? inputChannelData[juce::jmin(ch, numInputChannels - 1)] : nullptr;
+        if (src != nullptr)
+            micBuffer.copyFrom(ch, 0, src, numSamples);
+        else
+            micBuffer.clear(ch, 0, numSamples);
+    }
+    scratchMidi.clear();
+    voiceChain.processBlock(micBuffer, scratchMidi);
+
+    // 2. Playlist + soundboard mix, straight into the master buffer.
+    masterBuffer.setSize(2, numSamples, false, false, true);
+    juce::AudioSourceChannelInfo info(&masterBuffer, 0, numSamples);
+    musicMixer.getNextAudioBlock(info);
+
+    // 3. Sum processed voice into the same buffer - this is now the
+    // final master mix, used for both local output and the Discord send.
+    masterBuffer.addFrom(0, 0, micBuffer, 0, 0, numSamples);
+    masterBuffer.addFrom(1, 0, micBuffer, 1, 0, numSamples);
+
+    for (int ch = 0; ch < numOutputChannels; ++ch)
+    {
+        if (outputChannelData[ch] == nullptr)
+            continue;
+        if (ch < 2)
+            juce::FloatVectorOperations::copy(outputChannelData[ch], masterBuffer.getReadPointer(ch), numSamples);
+        else
+            juce::FloatVectorOperations::clear(outputChannelData[ch], numSamples);
+    }
+
+    if (auto* sender = discordSender.load())
+        sender->pushSamples(masterBuffer, currentSampleRate);
+}

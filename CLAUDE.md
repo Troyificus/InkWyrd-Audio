@@ -52,8 +52,54 @@ unknown):
    skip works, clean shutdown. What's NOT yet confirmed: whether the
    crossfade actually *sounds* smooth and the soundboard *sounds* right
    - that needs a human listening, which hasn't happened yet.
-3. VST3 hosting - not started.
-4. Wire the audio engine into the Discord client from step 1 - not started.
+3. **VST3 hosting - built, mechanically verified.** `src/vst-hosting`
+   (`PluginScanner`, `PluginChain`) plus `src/vst-hosting-test` (a
+   console harness: live mic -> chain -> speakers via WASAPI, using
+   `juce::AudioProcessorPlayer`). Confirmed via real runs against this
+   machine's actual installed VST3 plugins (40 found, including
+   FabFilter, iZotope RX, Neural DSP, Guitar Rig 7): scanning works,
+   loading a real plugin into a live chain works, removing it while
+   audio is running works, clean shutdown. `PluginChain::plugins` is
+   mutated from the message thread while `processBlock` runs on the
+   audio thread - genuinely concurrent, not hypothetical - guarded by
+   `chainLock` (a `CriticalSection`); this is a deliberately-accepted
+   rare-event lock, not a hot-path one. As with step 2: mechanically
+   verified, not yet listened-to for actual audio quality/latency.
+4. **Wire the audio engine into the Discord client from step 1 - built,
+   mechanically verified for the local half, Discord-streaming half not
+   yet tested.** `src/app` is the actual combined application. Along the
+   way, `GatewayClient`/`VoiceGatewayClient`/`VoiceUdpSocket`/
+   `DaveSession` were extracted out of `discord-spike` into a new shared
+   library, `src/discord-voice` - `discord-spike` now just links it
+   (rebuilt clean after the move, confirming the refactor didn't break
+   it).
+
+   New pieces specific to `src/app`:
+   - `MasterEngine` (`juce::AudioIODeviceCallback`) - the one real-time
+     audio callback for the whole app. Neither `AudioSourcePlayer` nor
+     `AudioProcessorPlayer` alone can combine mic-input-through-a-VST3-
+     chain (processor-style) with playlist+soundboard output
+     (source-style) into one buffer, so this drives both directly.
+   - `DiscordAudioSender` - bridges the audio callback (device-rate
+     blocks, arbitrary size) to Discord's fixed 20ms/48kHz Opus cadence
+     via a lock-free `juce::AbstractFifo` and a background thread that
+     does the actual encode/DAVE-encrypt/RTP-send (never on the audio
+     thread). Resamples device-rate -> 48kHz with `LagrangeInterpolator`
+     when the device isn't already 48kHz - deliberately "good enough for
+     voice chat" (small per-block drift, self-corrects via the FIFO's
+     ~2s headroom), not sample-accurate mastering-grade resampling.
+     Stereo throughout, unlike the spike's mono test tone, since this
+     carries mixed music+voice.
+
+   Verified via a real local run (no Discord credentials - the app
+   degrades to local-monitor-only mode cleanly when they're absent, by
+   design, so this doesn't require Discord to test the local half):
+   VST3 scan (40 real plugins) + playlist auto-crossfade + soundboard
+   trigger + VST chain add/remove all running *concurrently* on the same
+   shared audio callback without interfering with each other, clean
+   shutdown. **Not yet verified:** whether audio actually reaches
+   Discord through `DiscordAudioSender` - needs a real bot token and a
+   listening test, same as steps 1-3's own audio quality.
 5. Stream Deck integration - not started.
 6. Broader format support (dr_mp3, Media Foundation for AAC/WMA) - not started.
 7. Packaging/installer - not started.
