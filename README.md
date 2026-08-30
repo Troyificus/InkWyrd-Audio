@@ -1,144 +1,143 @@
 # Inkwyrd Audio
 
-Standalone Windows desktop app for running D&D sessions over Discord: local
-music playlists (shuffle/crossfade), an on-demand soundboard, and live
-mic processing through your own VST3 chain - all mixed in-process and sent
-to Discord through the app's own bot connection. No virtual audio cables,
-no DAW routing. See `docs/design-brief.md` for the full architecture and
-the reasoning behind each dependency choice.
+**Beta** - a standalone Windows app for running D&D (or any tabletop)
+sessions over Discord: local music playlists with shuffle and crossfade,
+an on-demand soundboard, and live mic processing through your own VST3
+plugins - all mixed together and sent straight to Discord through the
+app's own bot connection. No virtual audio cable, no DAW routing, no
+Kenku FM.
 
-## Build order
+## Download
 
-Per the design brief, the riskiest unknown (the Discord voice protocol) is
-being built and proven first, in isolation, before the real audio engine:
+Grab the latest installer from the
+[Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases/latest)
+and run it. It installs just for your own Windows account - no admin
+rights needed.
 
-1. **`src/discord-spike`** - **done and verified.** A bare console app that
-   joins a voice channel as a bot and plays a generated test tone. Proves
-   out Gateway -> Voice Gateway -> DAVE/MLS key exchange -> UDP IP
-   discovery -> encrypted RTP, confirmed by actually hearing the tone in
-   a real Discord voice channel.
-2. **`src/audio-engine`** (+ `src/audio-engine-test`) - **built,
-   mechanically verified.** Playlist (shuffle + crossfade) and soundboard
-   (overlapping one-shot triggers), summed and played to real speakers.
-   Confirmed via real runs: auto-crossfade fires on schedule, shuffle
-   order is genuinely random, soundboard triggers overlap correctly.
-   Not yet confirmed by ear - see `CLAUDE.md`.
-3. **`src/vst-hosting`** (+ `src/vst-hosting-test`) - **built,
-   mechanically verified.** VST3 scanning/loading and a live
-   mic -> plugin chain -> speakers path. Confirmed via real runs against
-   this machine's actual installed plugins: scan, load into a live
-   chain, remove while running, clean shutdown. Not yet confirmed by
-   ear - see `CLAUDE.md`.
-4. **`src/app`** - **built, mechanically verified locally, Discord
-   streaming not yet listened-to.** The actual combined application:
-   mic through the VST3 chain, mixed with playlist+soundboard, streamed
-   to Discord (or local-monitor-only if no Discord credentials are set).
-   Confirmed via a real run: VST scan/add/remove, playlist crossfade,
-   and soundboard triggers all working concurrently on one shared audio
-   callback. Not yet confirmed whether audio actually reaches Discord -
-   see `CLAUDE.md`.
-5. **`streamdeck-plugin/`** - **built, verified up to the hardware
-   boundary.** Maps Stream Deck buttons to skip/shuffle/soundboard/mute
-   via a new loopback-only control server (`src/app/ControlServer`) in
-   the main app. The control server side is fully verified with a real
-   external client; the plugin itself passes Elgato's own validator but
-   hasn't been pressed on a real device - see `streamdeck-plugin/README.md`.
-6. **Broader format support - done, verified with real files.** MP3 via
-   `dr_mp3` (`src/audio-engine/Mp3AudioFormat`); AAC/M4A and WMA via a
-   hand-written Windows Media Foundation reader
-   (`src/audio-engine/MediaFoundationAudioFormat`), since JUCE's own
-   bundled `WindowsMediaAudioFormat` uses the older WMA-only Windows
-   Media Format SDK and doesn't cover AAC at all. Verified against real
-   ffmpeg-generated MP3/AAC/WMA files: all three load, decode, and
-   crossfade correctly through the playlist engine.
-7. **Packaging/installer - done, verified end-to-end.** `installer/InkwyrdAudio.iss`
-   (Inno Setup 7) builds a per-user installer (no admin/UAC needed) that
-   bundles the app, its runtime DLLs, and licensing docs. Verified with a
-   real silent install/launch/uninstall cycle: installs cleanly with no
-   elevation prompt, the installed exe runs correctly, and the bundled
-   uninstaller removes everything (files, Start Menu shortcuts, registry
-   key) with nothing left behind. See `CLAUDE.md` for a build/output-name
-   gotcha currently in play (a leftover locked file from an earlier
-   failed test).
+> Windows will likely show a **"Windows protected your PC"** SmartScreen
+> warning the first time you run the installer. This is a small beta
+> project without a paid code-signing certificate yet, not a sign
+> anything is wrong - click **More info -> Run anyway** to continue.
 
-## Dev environment setup
+## Setting up your Discord bot
 
-- **Visual Studio 2022** with the "Desktop development with C++" workload.
-- **CMake** 3.22+ (bundled with VS2022, or install separately).
-- **vcpkg**, bootstrapped at `C:\vcpkg`, with `VCPKG_ROOT` set as a user
-  environment variable pointing there. Manifest mode is used (`vcpkg.json`
-  in the repo root) - `opus`, `libsodium`, and `ixwebsocket` install
-  automatically on first CMake configure, no manual `vcpkg install` needed.
-- JUCE is **not** a shared local checkout - it's fetched fresh per-build via
-  CMake `FetchContent` (pinned to a tagged JUCE release in the top-level
-  `CMakeLists.txt`), so there's nothing extra to install for it.
+Inkwyrd Audio connects to Discord as its own bot, so everyone running it
+needs their own bot application. It's free and takes about five minutes.
 
-### Configuring and building
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+   and sign in with your Discord account.
+2. Click **New Application**, give it a name (e.g. "Table Audio"), and
+   create it.
+3. Open the **Bot** tab on the left. Click **Reset Token** and copy the
+   token that appears - this is your `DISCORD_BOT_TOKEN`. Keep it
+   private; anyone with it can control the bot.
+4. You don't need to enable any of the privileged "Gateway Intents" -
+   the bot only joins voice channels, it never reads messages.
+5. Open the **OAuth2** tab, then **URL Generator**. Under **Scopes**,
+   check `bot`. Under **Bot Permissions**, check `Connect` and `Speak`.
+   Copy the URL generated at the bottom of the page.
+6. Paste that URL into your browser, pick your Discord server from the
+   dropdown, and click **Authorize**. The bot now shows up in your
+   server's member list (it'll show offline until the app connects it).
+7. Back in Discord, turn on Developer Mode: **User Settings -> Advanced
+   -> Developer Mode**. Then right-click your server's icon and
+   **Copy Server ID** (this is `DISCORD_GUILD_ID`), and right-click the
+   voice channel you want the bot to join and **Copy Channel ID** (this
+   is `DISCORD_CHANNEL_ID`).
 
-```
-cmake --preset windows-vs2022
-cmake --build --preset windows-vs2022
-```
+You should now have three values: a bot token, a server ID, and a voice
+channel ID.
 
-The first configure will take a while - vcpkg builds `opus` and `libsodium`
-from source, and FetchContent clones JUCE. Subsequent configures are fast.
+## Installing and running
 
-Or open the folder directly in Visual Studio 2022 (File > Open > CMake...)
-and let its built-in CMake integration pick up `CMakePresets.json`.
+1. Install and run the app as described under [Download](#download).
+2. Set the required environment variables. The easiest way on Windows:
+   search the Start menu for **"Edit environment variables for your
+   account"** and add them there (or use `setx NAME "value"` in a
+   terminal). At minimum you need:
+   - `PLAYLIST_FOLDER` - a folder of music files (WAV, AIFF, FLAC,
+     Ogg Vorbis, MP3, AAC/M4A, or WMA).
 
-### Running the Discord voice spike
+   To actually stream to Discord, also set the three values from the bot
+   setup above:
+   - `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`
 
-Needs a Discord bot application (Developer Portal), invited to a test
-server with voice permissions. Set these before running:
+   Optional:
+   - `SOUNDBOARD_FOLDER` - a folder of short one-shot sound effect files.
 
-```
-setx DISCORD_BOT_TOKEN "your-bot-token"
-setx DISCORD_GUILD_ID "your-test-server-id"
-setx DISCORD_CHANNEL_ID "the-voice-channel-id-to-join"
-```
+   Without the Discord variables set, the app still runs fine in
+   **local-monitor-only mode** - mic, playlist, and soundboard mixed and
+   played through your own speakers, nothing sent to Discord. That's a
+   good way to try it out before setting up a bot at all.
 
-Then run `build/src/discord-spike/Debug/DiscordVoiceSpike.exe` (path may
-vary slightly by generator/config). It should join the channel and play a
-3-second 440Hz test tone, logging each protocol stage as it goes.
+   > Environment variables set this way need a fresh terminal/Explorer
+   > session to take effect. If the app doesn't pick them up on the
+   > first try, sign out and back in (or reboot) and try again.
+3. Launch **Inkwyrd Audio** from the Start Menu. It opens a console
+   window and connects to Discord automatically if the three Discord
+   variables are set.
+4. **Wear headphones.** Mic input is mixed live into the same output as
+   the music and soundboard, so without headphones you'll get feedback.
 
-**Verified working** against a real Discord voice channel - the tone was
-audible, not just "the code ran without errors."
+### Commands
 
-Note that Discord requires **DAVE (end-to-end encryption)** for all voice
-connections as of March 2026, so this isn't just Opus-in-RTP: there's a
-full MLS group key exchange (via Discord's own
-[libdave](https://github.com/discord/libdave), fetched automatically by
-CMake) before any audio can be sent. `docs/dave-protocol-notes.md` covers
-that protocol and the non-obvious parts that cost real debugging time -
-**read it before touching the voice code**, particularly the notes on
-keeping the endpoint's port and on `transition_id = 0`.
+Once it's running, type these into the console window and press Enter:
 
-### Running the full app
+| Command | Action |
+|---|---|
+| `s` | Skip to the next track (crossfades) |
+| `h` | Toggle shuffle on/off |
+| `t` | Show what's currently playing |
+| `m` | Toggle mic mute |
+| `p` | List VST3 plugins found on your system |
+| `a <index>` | Add a plugin (from the `p` list) to your live mic chain |
+| `r <index>` | Remove a plugin from the chain |
+| `l` | List the plugins currently in your chain |
+| a number | Trigger that soundboard sound (numbers are shown at startup) |
+| `q` | Quit (leaves the Discord voice channel cleanly first) |
 
-```
-setx PLAYLIST_FOLDER "path\to\your\music"
-setx SOUNDBOARD_FOLDER "path\to\your\sound-effects"
-```
+VST3 plugins are picked up automatically from your system's standard
+VST3 folder (usually `C:\Program Files\Common Files\VST3`) - nothing to
+configure.
 
-Supports WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A, and WMA.
-`SOUNDBOARD_FOLDER` is optional. Add the same `DISCORD_BOT_TOKEN` /
-`DISCORD_GUILD_ID` / `DISCORD_CHANNEL_ID` as the spike above to actually
-stream to Discord - without them the app runs in local-monitor-only mode
-(mic + playlist + soundboard through your speakers, nothing sent
-anywhere), which is a fine way to test the audio engine and VST3 chain
-without any Discord setup at all.
+## Features
 
-Then run `build/src/app/Debug/InkwyrdAudioApp.exe` (path may vary by
-generator/config). Commands once running: `s` skip/crossfade, `h` toggle
-shuffle, `t` now playing, `m` toggle mic mute, `p` list found VST3
-plugins, `a <index>` / `r <index>` add/remove a plugin from the live
-voice chain, `l` list the chain, a number triggers a soundboard sound,
-`q` quits (cleanly leaves the Discord channel first, if connected).
+- Local music playlists with shuffle and equal-power crossfade between
+  tracks - no manual DJing during a session.
+- An on-demand soundboard for sound effects, layered independently of
+  the music (up to 16 sounds can overlap at once).
+- Live microphone processing through your own VST3 plugin chain (EQ,
+  compression, noise gates - whatever you already own), added and
+  removed on the fly while a session is running.
+- Everything - music, soundboard, and processed mic - is mixed in one
+  place and streamed to Discord through the app's own bot connection.
+  No virtual audio cable, no separate DAW routing.
+- Broad format support: WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A, and
+  WMA.
+- Fully implements Discord's mandatory end-to-end-encrypted voice
+  protocol (DAVE), the same one the official Discord client uses.
+- Optional Elgato Stream Deck integration - map physical buttons to
+  skip/shuffle/soundboard/mic-mute (see `streamdeck-plugin/README.md`;
+  currently build-from-source only, not included in the installer).
 
-**Wear headphones when testing** - mic input runs live to your speakers
-through the VST3 chain, and speaker-to-mic feedback is exactly as
-unpleasant as it sounds.
+## Known limitations (beta)
 
-It also opens a loopback-only control server on port 39231, which
-`streamdeck-plugin/` connects to - see that directory's own README for
-building and installing the Stream Deck plugin.
+- Console-only interface for now - everything is typed commands in a
+  terminal window, no graphical UI yet.
+- The installer isn't code-signed, so Windows SmartScreen will flag it
+  on first run (see [Download](#download) above).
+- The Stream Deck plugin needs to be built from source and requires
+  physical Stream Deck hardware to fully test.
+- Changing `PLAYLIST_FOLDER`/`SOUNDBOARD_FOLDER` currently means editing
+  the environment variable and restarting the app - there's no in-app
+  way to change folders yet.
+
+If you hit a bug, please open an issue on this repo with what you were
+doing and (if possible) the console output.
+
+---
+
+### For developers
+
+See `CLAUDE.md` for the full dev environment setup, architecture notes,
+and build order; `docs/design-brief.md` for the original design brief.
