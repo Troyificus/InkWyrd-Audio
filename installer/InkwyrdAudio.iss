@@ -1,7 +1,7 @@
 ; Inno Setup script for Inkwyrd Audio.
 ;
-; Packages the current build of InkwyrdAudioApp (a console app for now -
-; see README.md and CLAUDE.md for status) plus its runtime DLLs. Does
+; Packages the current build of InkwyrdAudioApp (a GUI app - see
+; README.md and CLAUDE.md for status) plus its runtime DLLs. Does
 ; NOT install the Stream Deck plugin, which has its own separate install
 ; flow via `@elgato/cli` and requires Elgato's own Stream Deck software
 ; to already be present - see streamdeck-plugin/README.md.
@@ -13,7 +13,11 @@
 #define MyAppName "Inkwyrd Audio"
 #define MyAppVersion "0.1.0"
 #define MyAppPublisher "Troy"
-#define MyAppExeName "InkwyrdAudioApp.exe"
+; The CMake target is named InkwyrdAudioApp, but juce_add_gui_app names
+; the actual output binary after PRODUCT_NAME ("Inkwyrd Audio") - unlike
+; juce_add_console_app, which used the target name. Confirmed by building
+; and listing the real artefact directory, not assumed.
+#define MyAppExeName "Inkwyrd Audio.exe"
 #define ReleaseDir "..\build\src\app\InkwyrdAudioApp_artefacts\Release"
 
 [Setup]
@@ -67,9 +71,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Run]
-; Unchecked by default and clearly labelled - InkwyrdAudioApp is
-; currently a console app that needs PLAYLIST_FOLDER (and optionally
-; DISCORD_BOT_TOKEN/DISCORD_GUILD_ID/DISCORD_CHANNEL_ID/SOUNDBOARD_FOLDER)
-; set first; launching it blind here would just print that requirement
-; and exit. See README.txt.
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now (needs environment variables set first - see README.txt)"; Flags: nowait postinstall skipifsilent unchecked
+; InkwyrdAudioApp is now a GUI app that walks the user through setup
+; (folder picker, optional Discord bot fields) on first launch - no
+; preconditions needed, so this is checked by default.
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now"; Flags: nowait postinstall skipifsilent

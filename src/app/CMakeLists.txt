@@ -1,4 +1,4 @@
-juce_add_console_app(InkwyrdAudioApp
+juce_add_gui_app(InkwyrdAudioApp
     PRODUCT_NAME "Inkwyrd Audio"
 )
 
@@ -10,9 +10,28 @@ target_sources(InkwyrdAudioApp PRIVATE
     MasterEngine.h
     DiscordAudioSender.h
     ControlServer.h
+    gui/InkwyrdAudioApplication.cpp
+    gui/InkwyrdAudioApplication.h
+    gui/MainWindow.cpp
+    gui/MainWindow.h
+    gui/SetupComponent.cpp
+    gui/SetupComponent.h
+    gui/PlayerComponent.cpp
+    gui/PlayerComponent.h
+    gui/AppSettings.cpp
+    gui/AppSettings.h
+    gui/DiscordConnector.cpp
+    gui/DiscordConnector.h
 )
 
+# So gui/*.cpp (in a subdirectory) can #include "MasterEngine.h" etc.
+# unqualified, same as Main.cpp always could when everything lived
+# directly in this directory.
+target_include_directories(InkwyrdAudioApp PRIVATE .)
+
 target_compile_definitions(InkwyrdAudioApp PRIVATE
+    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:InkwyrdAudioApp,JUCE_PRODUCT_NAME>"
+    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:InkwyrdAudioApp,JUCE_VERSION>"
     JUCE_STANDALONE_APPLICATION=1
     JUCE_USE_CURL=0
     JUCE_WEB_BROWSER=0
@@ -30,6 +49,7 @@ target_link_libraries(InkwyrdAudioApp PRIVATE
     AudioEngine
     VstHosting
     juce::juce_audio_utils
+    juce::juce_gui_basics
 )
 
 inkwyrd_copy_dave_dll(InkwyrdAudioApp)

@@ -198,7 +198,7 @@ unknown):
    "Format support" section above for the full detail (including a real
    bug worth reading about: `StringArray` has no tokenizing constructor).
 7. **Packaging/installer - done, verified end-to-end.** Inno Setup 7
-   script (`installer/InkwyrdAudio.iss`) bundling `InkwyrdAudioApp.exe`
+   script (`installer/InkwyrdAudio.iss`) bundling `Inkwyrd Audio.exe`
    + its 3 runtime DLLs (`libdave`, `libsodium`, `opus`) + a licensing
    readme (`docs/THIRD_PARTY_LICENSES.md`, shown as `ThirdPartyNotices.txt`
    pre-install) + `README.md`.
@@ -250,6 +250,128 @@ unknown):
    Fixed by driving `Start-Process`/Inno Setup invocations through the
    PowerShell tool instead of Bash for anything with `/`-prefixed
    arguments.
+
+## GUI conversion (post-beta) - done, verified end-to-end
+
+After the first public beta shipped console-only (env-var configuration,
+typed single-letter commands), real user feedback rejected that
+entirely: testers shouldn't have to touch environment variables or a
+terminal at all, just click Browse and point at a folder. `src/app` was
+converted from a `juce_add_console_app` to a real `juce_add_gui_app` -
+the console interface is gone completely, not just supplemented.
+
+**New files, all under `src/app/gui/`**: `AppSettings` (typed wrapper
+around `juce::ApplicationProperties`/`PropertiesFile`, persists to
+`%APPDATA%\Inkwyrd Audio\Inkwyrd Audio.settings` as plain XML - same
+pragmatic-security tradeoff as `ControlServer`'s unauthenticated
+loopback socket, the bot token is not encrypted at rest), `DiscordConnector`
+(the old `Main.cpp` `DiscordConnection`/`attemptDiscordConnection` join
+sequence, unchanged step-for-step, moved onto a background `std::thread`
+with `callAsync`-marshaled status/complete callbacks - required, since
+every `GatewayClient`/`VoiceGatewayClient` readiness wait is a blocking
+poll with no async variant), `SetupComponent` (folder Browse buttons via
+`juce::FileChooser::launchAsync` + Discord credential fields, prefilled
+from `AppSettings`), `PlayerComponent` (now-playing/skip/shuffle/mute,
+soundboard buttons, VST3 plugin list with Add, live chain list with
+Remove), `MainWindow` (thin `DocumentWindow` swapping Setup/Player
+content), `InkwyrdAudioApplication` (the actual `JUCEApplication`,
+owns every engine object for the app's lifetime). `Main.cpp` is now
+just `START_JUCE_APPLICATION(InkwyrdAudioApplication)`.
+
+`PlaylistEngine`/`SoundboardEngine`/`PluginScanner`/`PluginChain`/
+`MasterEngine`/`DiscordAudioSender`/`ControlServer` are all reused
+completely unchanged - `ControlServer`'s constructor signature and
+`start(39231)`/`stop()` contract were deliberately preserved exactly so
+the already-shipped Stream Deck plugin keeps working with zero changes,
+confirmed by regression-testing it against the running GUI app (see
+below).
+
+**Mid-session Settings behavior, deliberate**: folder changes (playlist/
+soundboard) hot-swap immediately - `playlist.stop()` → `loadFolder()` →
+`start()`. Discord credential changes persist to disk but do **not**
+live-reconnect; the status label shows "Restart to apply" instead. The
+DAVE/MLS handshake has only ever been verified via the connect-once-
+then-shutdown path documented above - a live reconnect-while-connected
+path would be new, unverified surface, and this project's whole
+discipline is "verified against the real thing," not "the logic looks
+right."
+
+### Real bugs found only by actually building and running it (not just reading the code)
+
+- **`juce_add_gui_app` names the output binary after `PRODUCT_NAME`,
+  not the CMake target name.** The console app's `juce_add_console_app`
+  used the target name (`InkwyrdAudioApp.exe`) despite having the same
+  `PRODUCT_NAME "Inkwyrd Audio"` set; switching to `juce_add_gui_app`
+  silently changed the real output filename to `Inkwyrd Audio.exe`.
+  Confirmed by listing the actual artefact directory, not assumed - a
+  guess here would have shipped an installer pointing at a file that
+  doesn't exist. Fixed in `installer/InkwyrdAudio.iss`'s
+  `MyAppExeName` define.
+- **`JUCE_APPLICATION_NAME_STRING`/`JUCE_APPLICATION_VERSION_STRING`
+  are not auto-defined by `juce_add_gui_app`** the way a first guess
+  (or even some JUCE example comments) might suggest - they have to be
+  injected explicitly via `target_compile_definitions` using
+  `$<TARGET_PROPERTY:InkwyrdAudioApp,JUCE_PRODUCT_NAME>`/
+  `JUCE_VERSION` generator expressions. Confirmed against JUCE's own
+  `examples/CMake/GuiApp/CMakeLists.txt` in the fetched source rather
+  than guessed - the example's own comment says as much.
+- **`DocumentWindow::setContentOwned(component, true)` resizes the
+  *window* to fit the *content component's own size*** - and neither
+  `SetupComponent` nor `PlayerComponent` called `setSize()` in their
+  constructors, so the window silently collapsed to a ~128x128 stub on
+  first real launch (confirmed via a real screenshot, not just "should
+  work" reasoning - the window was genuinely there, just tiny). Fixed
+  by giving each top-level content component an explicit `setSize(...)`
+  call at the end of its own constructor.
+- **VST3 scanning is genuinely slow enough to matter for a GUI**
+  (~15-20s on this dev machine's real plugin folder) - it runs
+  synchronously in `initialise()` before the window is even created,
+  which is fine (matches the console app's own behavior) but is worth
+  knowing before assuming a launched process that hasn't shown a window
+  yet has hung.
+- **The mute/shuffle button labels didn't reflect state changes made
+  by the Stream Deck plugin.** `ControlServer` mutates
+  `MasterEngine`/`PlaylistEngine` state directly (an atomic store /
+  direct call) with no notification back to `PlayerComponent` - a real
+  Stream Deck `toggleMute` command genuinely muted the mic (confirmed:
+  the audio-thread behavior was always correct) but the button kept
+  reading "Mic: Live" until the user happened to click something else.
+  Only caught by actually running `streamdeck-plugin/test-control-client.mjs`
+  against the live GUI app and screenshotting the result, exactly as
+  the plan's verification step called for - reading the code would not
+  have caught this, since each half (ControlServer's mutation,
+  PlayerComponent's button text) is independently correct in isolation.
+  Fixed by having the existing ~500ms polling `Timer` (already refreshing
+  "Now playing") also refresh both button labels every tick.
+- **A settings-resave with no Discord fields ever touched showed
+  "Restart Inkwyrd Audio to apply changed Discord settings."** - the
+  mid-session-Settings code only checked "has a connect attempt already
+  happened this run," not "are Discord credentials actually configured,"
+  so a beta tester who only ever changes their music folder would see a
+  confusing Discord-specific message. Fixed by gating that message on
+  `settings.hasDiscordCredentials()`.
+
+### Verified via real upload/run/click testing, not just compiling
+
+Real Windows GUI, real screenshots (window found and captured via
+`EnumWindows`/`GetWindowRect`, not assumed on-screen), real files:
+first-run Setup with no prior settings file, Browse to a real folder via
+the actual native Windows folder picker (typed a real path into it, not
+scripted around it), label updates to the chosen path, Save & Launch
+enabling correctly, transition to the Player view with a real track
+actually playing (`PlaylistEngine` genuinely loaded and started),
+soundboard buttons appearing for a real folder of sound files, the real
+VST3 scan populating the plugin list with this machine's actually-
+installed plugins, Add/Remove on the live chain, Settings reopening
+prefilled with the just-saved values, a second Save & Launch hot-
+swapping the playlist folder live, clean shutdown via the window's close
+button (process actually exits, no hang), and the existing Stream Deck
+`test-control-client.mjs` driving `toggleMute`/`toggleShuffle`/
+`skipTrack` against the running GUI app with each change visibly
+reflected on screen. **Not yet verified**: an actual Discord connection
+from the GUI (needs a real bot token/guild/channel, not exercised in
+this pass) and the Settings "restart to apply changed Discord settings"
+message's accuracy across a real restart.
 
 ## Dev environment
 

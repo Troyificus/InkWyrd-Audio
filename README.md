@@ -51,54 +51,35 @@ channel ID.
 ## Installing and running
 
 1. Install and run the app as described under [Download](#download).
-2. Set the required environment variables. The easiest way on Windows:
-   search the Start menu for **"Edit environment variables for your
-   account"** and add them there (or use `setx NAME "value"` in a
-   terminal). At minimum you need:
-   - `PLAYLIST_FOLDER` - a folder of music files (WAV, AIFF, FLAC,
-     Ogg Vorbis, MP3, AAC/M4A, or WMA).
+2. **First run:** a Setup screen appears. Click **Browse...** and point
+   it at a folder of music files (WAV, AIFF, FLAC, Ogg Vorbis, MP3,
+   AAC/M4A, or WMA) - that's the only required field. Optionally Browse
+   to a folder of short sound-effect files for the soundboard, and paste
+   in the three values from the [Discord bot setup](#setting-up-your-discord-bot)
+   above if you want to actually stream to Discord. Then click
+   **Save & Launch**.
 
-   To actually stream to Discord, also set the three values from the bot
-   setup above:
-   - `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`
-
-   Optional:
-   - `SOUNDBOARD_FOLDER` - a folder of short one-shot sound effect files.
-
-   Without the Discord variables set, the app still runs fine in
-   **local-monitor-only mode** - mic, playlist, and soundboard mixed and
+   Leaving the Discord fields blank is fine - the app runs in
+   **local-monitor-only mode**: mic, playlist, and soundboard mixed and
    played through your own speakers, nothing sent to Discord. That's a
-   good way to try it out before setting up a bot at all.
-
-   > Environment variables set this way need a fresh terminal/Explorer
-   > session to take effect. If the app doesn't pick them up on the
-   > first try, sign out and back in (or reboot) and try again.
-3. Launch **Inkwyrd Audio** from the Start Menu. It opens a console
-   window and connects to Discord automatically if the three Discord
-   variables are set.
-4. **Wear headphones.** Mic input is mixed live into the same output as
+   good way to try it out before setting up a bot at all. Everything you
+   enter is saved, so this screen only needs filling in once - a
+   **Settings** button on the main screen brings it back later if you
+   want to change folders or Discord details.
+3. **Wear headphones.** Mic input is mixed live into the same output as
    the music and soundboard, so without headphones you'll get feedback.
 
-### Commands
+### Using it
 
-Once it's running, type these into the console window and press Enter:
-
-| Command | Action |
-|---|---|
-| `s` | Skip to the next track (crossfades) |
-| `h` | Toggle shuffle on/off |
-| `t` | Show what's currently playing |
-| `m` | Toggle mic mute |
-| `p` | List VST3 plugins found on your system |
-| `a <index>` | Add a plugin (from the `p` list) to your live mic chain |
-| `r <index>` | Remove a plugin from the chain |
-| `l` | List the plugins currently in your chain |
-| a number | Trigger that soundboard sound (numbers are shown at startup) |
-| `q` | Quit (leaves the Discord voice channel cleanly first) |
-
+The main screen has Skip / Shuffle / Mic mute buttons, a "Now playing"
+line, and a Discord connection status line. Below that: one button per
+soundboard sound (click to play it), a list of VST3 plugins found on
+your system (click **Add** to drop one into your live mic chain), and
+the live chain itself (click **Remove** to take a plugin back out) -
 VST3 plugins are picked up automatically from your system's standard
-VST3 folder (usually `C:\Program Files\Common Files\VST3`) - nothing to
-configure.
+VST3 folder, nothing to configure. Changing a Discord bot token/server/
+channel via Settings takes effect on the next launch, not immediately -
+everything else (including switching folders) applies right away.
 
 ## Features
 
@@ -122,18 +103,17 @@ configure.
 
 ## Known limitations (beta)
 
-- Console-only interface for now - everything is typed commands in a
-  terminal window, no graphical UI yet.
 - The installer isn't code-signed, so Windows SmartScreen will flag it
   on first run (see [Download](#download) above).
 - The Stream Deck plugin needs to be built from source and requires
   physical Stream Deck hardware to fully test.
-- Changing `PLAYLIST_FOLDER`/`SOUNDBOARD_FOLDER` currently means editing
-  the environment variable and restarting the app - there's no in-app
-  way to change folders yet.
+- Changing your Discord bot token/server/channel via Settings takes
+  effect on the next launch, not immediately - the app won't drop an
+  active Discord connection to reconnect with new details mid-session.
+- No seek bar or track list yet - just a "Now playing" name.
 
 If you hit a bug, please open an issue on this repo with what you were
-doing and (if possible) the console output.
+doing and (if possible) a screenshot of the status line/error.
 
 ---
 
