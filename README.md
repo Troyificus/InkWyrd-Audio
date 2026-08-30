@@ -10,7 +10,9 @@ Kenku FM.
 ## Download
 
 Grab the latest installer from the
-[Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases/latest)
+[Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases)
+(the newest one at the top - GitHub's "latest" shortcut skips
+pre-releases entirely, so it doesn't work while this is still a beta)
 and run it. It installs just for your own Windows account - no admin
 rights needed.
 
