@@ -1,0 +1,29 @@
+# Build output
+/build/
+/out/
+/build-*/
+
+# CMake
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+
+# vcpkg (installed packages, not the manifest)
+/vcpkg_installed/
+
+# JUCE fetched source (via FetchContent)
+/externals/
+/_deps/
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.sln.docstates
+out/
+
+# Misc
+*.log
+.env
+
+# Synthetic audio generated for local engine testing - not project assets
+/test-media/
