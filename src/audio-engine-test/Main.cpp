@@ -13,6 +13,8 @@
 
 #include "PlaylistEngine.h"
 #include "SoundboardEngine.h"
+#include "Mp3AudioFormat.h"
+#include "MediaFoundationAudioFormat.h"
 
 namespace
 {
@@ -61,7 +63,9 @@ int main(int argc, char* argv[])
     juce::ScopedJuceInitialiser_GUI juceInitialiser;
 
     juce::AudioFormatManager formatManager;
-    formatManager.registerBasicFormats(); // WAV/AIFF/FLAC/Ogg Vorbis - MP3 comes in a later build step
+    formatManager.registerBasicFormats(); // WAV/AIFF/FLAC/Ogg Vorbis
+    formatManager.registerFormat(new Mp3AudioFormat(), false);
+    formatManager.registerFormat(new MediaFoundationAudioFormat(), false); // AAC/M4A + WMA
 
     PlaylistEngine playlist(formatManager);
     SoundboardEngine soundboard(formatManager);

@@ -34,6 +34,66 @@ src/
                                verified against real Discord (see below)
 ```
 
+## Format support
+
+`src/audio-engine/Mp3AudioFormat` (MP3, via `third_party/dr_mp3.h` -
+public domain/MIT-0, vendored directly rather than via vcpkg since it's
+a single header) and `src/audio-engine/MediaFoundationAudioFormat`
+(AAC/M4A + WMA, via `IMFSourceReader`) extend JUCE's built-in
+WAV/AIFF/FLAC/Ogg Vorbis support. Both registered via
+`formatManager.registerFormat(...)` after `registerBasicFormats()` in
+every `Main.cpp` that sets up an `AudioFormatManager`.
+
+Deliberately **not** using JUCE's own bundled `MP3AudioFormat` or
+`WindowsMediaAudioFormat`:
+- JUCE's `MP3AudioFormat` requires an explicit `JUCE_USE_MP3AUDIOFORMAT`
+  flag and ships with a real disclaimer from Raw Material Software
+  themselves ("NOT guaranteed to be free from infringements of 3rd-party
+  intellectual property... AT YOUR OWN RISK") - exactly the ambiguity
+  `dr_mp3` avoids (MP3's patents expired worldwide in 2017; the decoder
+  itself is public domain).
+- JUCE's `WindowsMediaAudioFormat` uses the older, WMA-only Windows
+  Media Format SDK (`IWMSyncReader`) - it doesn't cover AAC/M4A at all,
+  and isn't the modern Media Foundation API the design brief specifies.
+
+**`MediaFoundationAudioFormat` only reads real files, not arbitrary
+streams** - it recovers a file path from the `InputStream*` JUCE hands
+it (`dynamic_cast` to `FileInputStream`, then `getFile()`) and lets
+`MFCreateSourceReaderFromURL` open the file itself, rather than
+implementing a full `IMFByteStream` COM wrapper around
+`juce::InputStream`. This covers every real use in this app - playlist
+and soundboard always load from a `juce::File` - and was a deliberate
+scope call, not an oversight.
+
+**Requests float PCM output from Media Foundation** (`MFAudioFormat_Float`),
+not the int16 PCM the Microsoft tutorial this is based on uses (it's
+writing a WAV file, where int16 is the simpler target) - reuses the
+exact `usesFloatingPointData = true` + raw-bytes-memcpy-into-`int*`
+convention already verified against JUCE's own `OggVorbisAudioFormat`,
+rather than introduce a second, untested int-scaling conversion path.
+
+**A real bug worth not reintroducing**: `juce::StringArray` has no
+`StringArray(text, delimiter)` tokenizing constructor - it doesn't
+exist, despite reading like an obviously-supported thing to write. A
+call shaped like `StringArray(".m4a;.aac;.wma", ";")` silently compiles
+by binding to the variadic multi-value constructor instead, producing a
+**two**-element array of literally `".m4a;.aac;.wma"` and `";"` - neither
+of which matches any real extension. Discovered because AAC files
+never appeared during a real shuffle-playback test, while WMA (a
+different registration path at the time) did. Build the list with
+explicit `.add()` calls instead.
+
+`MFStartup`/`MFShutdown` are process-wide, reference-counted across
+reader instances (a static mutex-guarded counter) so one reader's
+destruction doesn't tear down Media Foundation while another is still
+using it. COM apartment state is per-*thread*, not per-process - and
+`readSamples()` runs on JUCE's read-ahead `TimeSliceThread`, not
+necessarily the thread that constructed the reader - so
+`CoInitializeEx` is called (idempotently, via a `thread_local` flag) on
+every thread that actually makes a Media Foundation call, and
+deliberately never paired with `CoUninitialize()` since this code
+doesn't own those threads' lifetimes.
+
 ## Build order status
 
 Per the design brief's suggested build order (front-load the riskiest
@@ -100,8 +160,43 @@ unknown):
    shutdown. **Not yet verified:** whether audio actually reaches
    Discord through `DiscordAudioSender` - needs a real bot token and a
    listening test, same as steps 1-3's own audio quality.
-5. Stream Deck integration - not started.
-6. Broader format support (dr_mp3, Media Foundation for AAC/WMA) - not started.
+5. **Stream Deck integration - built, verified up to the hardware
+   boundary.** Two halves:
+   - `src/app/ControlServer` - a loopback-only (`127.0.0.1:39231`)
+     `ix::WebSocketServer` inside `InkwyrdAudioApp` accepting plain JSON
+     commands (`skipTrack`, `toggleShuffle`, `triggerSoundboard`,
+     `toggleMute`). Commands land on the websocket server's own thread
+     and are marshalled onto the message thread via `callAsync`, same
+     pattern as everywhere else engine methods are called from outside
+     the message thread. **Fully verified**: a real external Node.js
+     websocket client (`streamdeck-plugin/test-control-client.mjs`)
+     sent real commands to a real running `InkwyrdAudioApp`; the app's
+     own log confirmed receipt and the resulting state change (e.g.
+     `mic muted = true`).
+   - `streamdeck-plugin/` - the actual Stream Deck plugin (TypeScript,
+     bundled via esbuild, Elgato's official `@elgato/streamdeck` SDK).
+     Passes Elgato's own `streamdeck validate`. **Not fully verified**:
+     this machine has no physical Stream Deck attached, so Elgato's
+     software never actually launches the plugin process (it only does
+     when one of its actions is visible on a connected device) - a real
+     keyDown reaching the app is the one thing that needs actual
+     hardware to confirm.
+
+   Two real things caught along the way, worth not re-learning:
+   - The `elgatosf/streamdeck-plugin-template` repo (shows up first in
+     search results) is **archived** - its manifest format may be
+     stale. Used `elgatosf/streamdeck-plugin-samples` instead (current,
+     actively maintained) as the reference for manifest fields and the
+     bootstrap/action-class pattern.
+   - `@elgato/streamdeck`'s `@action(...)` decorator is typed for the
+     newer Stage-3 ECMAScript decorators, not TypeScript's legacy
+     `experimentalDecorators`. Turning that tsconfig option on breaks
+     the build (`TS1238`) - only caught by actually running
+     `tsc --noEmit`, since esbuild alone transpiles without
+     type-checking and would have built "successfully" anyway.
+6. **Broader format support - done, verified with real files.** See the
+   "Format support" section above for the full detail (including a real
+   bug worth reading about: `StringArray` has no tokenizing constructor).
 7. Packaging/installer - not started.
 
 ## Dev environment

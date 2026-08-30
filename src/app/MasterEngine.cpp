@@ -47,6 +47,9 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
         else
             micBuffer.clear(ch, 0, numSamples);
     }
+    if (micMuted.load())
+        micBuffer.clear();
+
     scratchMidi.clear();
     voiceChain.processBlock(micBuffer, scratchMidi);
 

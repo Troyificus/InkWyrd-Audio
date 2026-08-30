@@ -25,6 +25,13 @@ public:
     // audio thread, never dereferenced for mutation here.
     void setDiscordSender(DiscordAudioSender* sender);
 
+    // Silences the mic before it reaches the VST chain - affects both
+    // local monitoring and whatever's sent to Discord. Safe to call
+    // from any thread (Stream Deck control commands land on the
+    // message thread; this is read on the audio thread).
+    void setMicMuted(bool muted) { micMuted.store(muted); }
+    bool isMicMuted() const { return micMuted.load(); }
+
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
                                            int numInputChannels,
                                            float* const* outputChannelData,
@@ -42,6 +49,7 @@ private:
     juce::MixerAudioSource musicMixer; // playlist + soundboard
 
     std::atomic<DiscordAudioSender*> discordSender { nullptr };
+    std::atomic<bool> micMuted { false };
 
     juce::AudioBuffer<float> micBuffer, masterBuffer;
     juce::MidiBuffer scratchMidi;

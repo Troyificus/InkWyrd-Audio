@@ -6,8 +6,10 @@ target_sources(InkwyrdAudioApp PRIVATE
     Main.cpp
     MasterEngine.cpp
     DiscordAudioSender.cpp
+    ControlServer.cpp
     MasterEngine.h
     DiscordAudioSender.h
+    ControlServer.h
 )
 
 target_compile_definitions(InkwyrdAudioApp PRIVATE

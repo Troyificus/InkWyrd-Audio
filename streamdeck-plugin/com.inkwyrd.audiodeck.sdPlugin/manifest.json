@@ -1,0 +1,64 @@
+{
+	"Name": "Inkwyrd Audio Deck",
+	"Version": "0.1.0.0",
+	"Author": "Troy",
+	"Actions": [
+		{
+			"Name": "Skip Track",
+			"UUID": "com.inkwyrd.audiodeck.skiptrack",
+			"Icon": "imgs/actions/skiptrack/icon",
+			"Tooltip": "Crossfades to the next playlist track.",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "imgs/actions/skiptrack/key", "TitleAlignment": "middle", "Title": "Skip" }
+			]
+		},
+		{
+			"Name": "Toggle Shuffle",
+			"UUID": "com.inkwyrd.audiodeck.toggleshuffle",
+			"Icon": "imgs/actions/toggleshuffle/icon",
+			"Tooltip": "Turns playlist shuffle on or off.",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "imgs/actions/toggleshuffle/key", "TitleAlignment": "middle", "Title": "Shuffle" }
+			]
+		},
+		{
+			"Name": "Soundboard",
+			"UUID": "com.inkwyrd.audiodeck.soundboard",
+			"Icon": "imgs/actions/soundboard/icon",
+			"Tooltip": "Triggers one soundboard sound. Set the sound's name in the button's settings.",
+			"PropertyInspectorPath": "ui/soundboard.html",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "imgs/actions/soundboard/key", "TitleAlignment": "middle" }
+			]
+		},
+		{
+			"Name": "Toggle Mic Mute",
+			"UUID": "com.inkwyrd.audiodeck.togglemute",
+			"Icon": "imgs/actions/togglemute/icon",
+			"Tooltip": "Mutes or unmutes the live mic input.",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "imgs/actions/togglemute/key", "TitleAlignment": "middle", "Title": "Mic" }
+			]
+		}
+	],
+	"Category": "Inkwyrd Audio Deck",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Controls Inkwyrd Audio's playlist, soundboard, and mic mute from a Stream Deck.",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 2,
+	"Software": {
+		"MinimumVersion": "6.5"
+	},
+	"OS": [
+		{ "Platform": "windows", "MinimumVersion": "10" }
+	],
+	"Nodejs": {
+		"Version": "20"
+	},
+	"UUID": "com.inkwyrd.audiodeck"
+}

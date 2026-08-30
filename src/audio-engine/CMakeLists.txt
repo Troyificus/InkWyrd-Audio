@@ -1,8 +1,12 @@
 add_library(AudioEngine STATIC
     PlaylistEngine.cpp
     SoundboardEngine.cpp
+    Mp3AudioFormat.cpp
+    MediaFoundationAudioFormat.cpp
     PlaylistEngine.h
     SoundboardEngine.h
+    Mp3AudioFormat.h
+    MediaFoundationAudioFormat.h
 )
 
 target_include_directories(AudioEngine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -25,4 +29,9 @@ target_link_libraries(AudioEngine PUBLIC
     juce::juce_audio_basics
     juce::juce_audio_devices
     juce::juce_audio_formats
+    # For MediaFoundationAudioFormat.cpp (AAC/M4A + WMA decode)
+    mfplat
+    mfreadwrite
+    mfuuid
+    ole32
 )

@@ -27,3 +27,7 @@ out/
 
 # Synthetic audio generated for local engine testing - not project assets
 /test-media/
+
+# Stream Deck plugin build output/dependencies - see streamdeck-plugin/README
+/streamdeck-plugin/node_modules/
+/streamdeck-plugin/com.inkwyrd.audiodeck.sdPlugin/bin/plugin.js

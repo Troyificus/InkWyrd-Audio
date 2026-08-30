@@ -21,10 +21,13 @@
 
 #include "PlaylistEngine.h"
 #include "SoundboardEngine.h"
+#include "Mp3AudioFormat.h"
+#include "MediaFoundationAudioFormat.h"
 #include "PluginScanner.h"
 #include "PluginChain.h"
 #include "MasterEngine.h"
 #include "DiscordAudioSender.h"
+#include "ControlServer.h"
 
 namespace
 {
@@ -201,7 +204,9 @@ int main(int argc, char* argv[])
     juce::ScopedJuceInitialiser_GUI juceInitialiser;
 
     juce::AudioFormatManager formatManager;
-    formatManager.registerBasicFormats();
+    formatManager.registerBasicFormats(); // WAV/AIFF/FLAC/Ogg Vorbis
+    formatManager.registerFormat(new Mp3AudioFormat(), false);
+    formatManager.registerFormat(new MediaFoundationAudioFormat(), false); // AAC/M4A + WMA
 
     PlaylistEngine playlist(formatManager);
     SoundboardEngine soundboard(formatManager);
@@ -217,6 +222,12 @@ int main(int argc, char* argv[])
     std::cout << "Found " << foundPlugins.size() << " plugin(s). Use 'p' to list them." << std::endl;
 
     MasterEngine masterEngine(playlist, soundboard, voiceChain);
+
+    ControlServer controlServer(playlist, soundboard, masterEngine);
+    constexpr int kControlServerPort = 39231; // matches streamdeck-plugin/src/audioAppClient.ts
+    if (!controlServer.start(kControlServerPort))
+        std::cout << "Warning: failed to start control server on port " << kControlServerPort
+                   << " (Stream Deck integration won't work this run)." << std::endl;
 
     juce::AudioDeviceManager deviceManager;
     auto openError = deviceManager.initialiseWithDefaultDevices(1, 2); // mic in, stereo out
@@ -247,7 +258,7 @@ int main(int argc, char* argv[])
         std::cout << "Discord connection failed - running in local-monitor-only mode." << std::endl;
     }
 
-    std::cout << "Commands: s = skip track, h = toggle shuffle, t = now playing, "
+    std::cout << "Commands: s = skip track, h = toggle shuffle, t = now playing, m = toggle mic mute, "
                  "p = list VST3 plugins, a <index> = add to voice chain, r <index> = remove from chain, "
                  "l = list chain";
     if (!soundNames.isEmpty())
@@ -293,6 +304,14 @@ int main(int argc, char* argv[])
                 {
                     std::cout << "Now playing: " << playlist.getCurrentTrackName()
                                << (playlist.isCrossfading() ? " (crossfading)" : "") << std::endl;
+                });
+            }
+            else if (line == "m")
+            {
+                juce::MessageManager::callAsync([&masterEngine]
+                {
+                    masterEngine.setMicMuted(!masterEngine.isMicMuted());
+                    std::cout << "Mic: " << (masterEngine.isMicMuted() ? "muted" : "unmuted") << std::endl;
                 });
             }
             else if (line == "p")
@@ -363,6 +382,7 @@ int main(int argc, char* argv[])
 
     deviceManager.removeAudioCallback(&masterEngine);
     playlist.stop();
+    controlServer.stop();
 
     ix::uninitNetSystem();
     return 0;

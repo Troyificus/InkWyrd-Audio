@@ -37,8 +37,20 @@ being built and proven first, in isolation, before the real audio engine:
    and soundboard triggers all working concurrently on one shared audio
    callback. Not yet confirmed whether audio actually reaches Discord -
    see `CLAUDE.md`.
-5. Stream Deck integration - not started.
-6. Broader format support (MP3 via dr_mp3, AAC/WMA via Media Foundation) - not started.
+5. **`streamdeck-plugin/`** - **built, verified up to the hardware
+   boundary.** Maps Stream Deck buttons to skip/shuffle/soundboard/mute
+   via a new loopback-only control server (`src/app/ControlServer`) in
+   the main app. The control server side is fully verified with a real
+   external client; the plugin itself passes Elgato's own validator but
+   hasn't been pressed on a real device - see `streamdeck-plugin/README.md`.
+6. **Broader format support - done, verified with real files.** MP3 via
+   `dr_mp3` (`src/audio-engine/Mp3AudioFormat`); AAC/M4A and WMA via a
+   hand-written Windows Media Foundation reader
+   (`src/audio-engine/MediaFoundationAudioFormat`), since JUCE's own
+   bundled `WindowsMediaAudioFormat` uses the older WMA-only Windows
+   Media Format SDK and doesn't cover AAC at all. Verified against real
+   ffmpeg-generated MP3/AAC/WMA files: all three load, decode, and
+   crossfade correctly through the playlist engine.
 7. Packaging/installer - not started.
 
 ## Dev environment setup
@@ -100,7 +112,7 @@ setx PLAYLIST_FOLDER "path\to\your\music"
 setx SOUNDBOARD_FOLDER "path\to\your\sound-effects"
 ```
 
-WAV/AIFF/FLAC/OGG only for now - MP3 is a later build step (see above).
+Supports WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A, and WMA.
 `SOUNDBOARD_FOLDER` is optional. Add the same `DISCORD_BOT_TOKEN` /
 `DISCORD_GUILD_ID` / `DISCORD_CHANNEL_ID` as the spike above to actually
 stream to Discord - without them the app runs in local-monitor-only mode
@@ -110,11 +122,15 @@ without any Discord setup at all.
 
 Then run `build/src/app/Debug/InkwyrdAudioApp.exe` (path may vary by
 generator/config). Commands once running: `s` skip/crossfade, `h` toggle
-shuffle, `t` now playing, `p` list found VST3 plugins, `a <index>` /
-`r <index>` add/remove a plugin from the live voice chain, `l` list the
-chain, a number triggers a soundboard sound, `q` quits (cleanly leaves
-the Discord channel first, if connected).
+shuffle, `t` now playing, `m` toggle mic mute, `p` list found VST3
+plugins, `a <index>` / `r <index>` add/remove a plugin from the live
+voice chain, `l` list the chain, a number triggers a soundboard sound,
+`q` quits (cleanly leaves the Discord channel first, if connected).
 
 **Wear headphones when testing** - mic input runs live to your speakers
 through the VST3 chain, and speaker-to-mic feedback is exactly as
 unpleasant as it sounds.
+
+It also opens a loopback-only control server on port 39231, which
+`streamdeck-plugin/` connects to - see that directory's own README for
+building and installing the Stream Deck plugin.
