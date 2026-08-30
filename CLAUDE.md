@@ -213,17 +213,20 @@ unknown):
    waiting on a UAC consent prompt a headless session can't answer -
    neither `Stop-Process` nor `taskkill` could kill it afterward ("Access
    is denied": a non-admin session can't touch an elevated process, even
-   one it spawned itself). **Those two zombie processes (PIDs 51104 the
-   setup exe, 32332 its `.tmp` child) are still running** as of this
-   writing and can't be cleared without a reboot or the user manually
-   ending them in Task Manager - this is *why* `OutputBaseFilename` in
-   the `.iss` is currently `InkwyrdAudio-Setup-v2-{#MyAppVersion}` rather
-   than the clean `InkwyrdAudio-Setup-{#MyAppVersion}`: the zombies still
-   hold the original output filename open, and recompiling under that
-   name fails with `Error 32: process cannot access the file` (confirmed
-   directly - reverted the name and re-tried the compile specifically to
-   check whether the lock had cleared; it hadn't). **Revert this once
-   those processes are gone.**
+   one it spawned itself). Those two zombie processes (PIDs 51104 the
+   setup exe, 32332 its `.tmp` child) are **still alive in a later
+   session**, still holding the original output filename open -
+   `OutputBaseFilename` is still `-v2-` suffixed as a result. A
+   `tasklist` check that seemed to show them gone was a false negative:
+   passing two `/FI "PID eq ..."` filters to one `tasklist` call ANDs
+   them together (a process can't match two different PIDs at once), so
+   it reports "no tasks" regardless of whether either PID individually
+   is still running - check each PID with its own separate `tasklist`
+   call. `taskkill /F` on either PID still fails with Access is denied
+   from this non-admin session. Revert `OutputBaseFilename` once they're
+   *actually* gone - confirmed via a real reboot or the user manually
+   ending them in Task Manager, not a repeat of this same false-negative
+   check.
 
    Switching to `PrivilegesRequired=lowest` fixed the actual bug: verified
    via a full real end-to-end cycle (Playwright-style discipline, not

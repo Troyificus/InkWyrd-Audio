@@ -35,14 +35,16 @@ DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=Output
-; NOTE: temporarily "-v2-" suffixed, not the clean
-; "InkwyrdAudio-Setup-{#MyAppVersion}" - two zombie elevated processes from
-; an earlier failed admin-install test (PIDs 51104/32332, from before the
-; PrivilegesRequired=lowest fix) are still holding the original filename's
-; output .exe open and can't be killed from this non-admin session (Access
-; is denied). Revert this once those processes are gone - a reboot, the
-; user manually ending them in Task Manager, or Windows eventually
-; reclaiming them.
+; Still "-v2-" suffixed, not the clean "InkwyrdAudio-Setup-{#MyAppVersion}" -
+; two zombie elevated processes (PIDs 51104/32332, from a UAC-hang test
+; predating the PrivilegesRequired=lowest fix) are STILL holding the
+; original filename open in a later session, `taskkill /F` on either PID
+; fails with Access is denied from this non-admin session - genuinely
+; can't be cleared without a real reboot or the user manually ending them
+; in Task Manager. Revert once they're actually gone (confirm with
+; `tasklist /FI "PID eq 51104"` and `/FI "PID eq 32332"` as TWO SEPARATE
+; calls, not one call with both filters - combined filters AND together
+; and can falsely report "no tasks" for either PID individually).
 OutputBaseFilename=InkwyrdAudio-Setup-v2-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
