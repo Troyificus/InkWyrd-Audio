@@ -39,9 +39,9 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
         logLine("[App] Warning: failed to start control server on port " + juce::String(kControlServerPort)
                  + " (Stream Deck integration won't work this run).");
 
-    auto openError = deviceManager.initialiseWithDefaultDevices(1, 2); // mic in, stereo out
-    if (openError.isNotEmpty())
-        logLine("[App] Failed to open audio device: " + openError);
+    audioDeviceError = deviceManager.initialiseWithDefaultDevices(1, 2); // mic in, stereo out
+    if (audioDeviceError.isNotEmpty())
+        logLine("[App] Failed to open audio device: " + audioDeviceError);
     else
         deviceManager.addAudioCallback(&masterEngine);
 
@@ -91,6 +91,11 @@ void InkwyrdAudioApplication::showPlayer()
 {
     mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins, soundNames,
                                 [this] { showSetup(); });
+
+    if (audioDeviceError.isNotEmpty())
+        if (auto* player = mainWindow->getPlayerComponent())
+            player->setAudioDeviceStatus("Audio device failed to open: " + audioDeviceError
+                                          + " - no sound (mic, playlist, or Discord) will work until this is fixed.");
 }
 
 void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result result)

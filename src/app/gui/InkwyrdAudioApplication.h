@@ -52,6 +52,7 @@ private:
 
     juce::Array<juce::PluginDescription> foundPlugins;
     juce::StringArray soundNames;
+    juce::String audioDeviceError; // non-empty if initialiseWithDefaultDevices() failed - see initialise()
 
     DiscordConnector discordConnector;
     std::unique_ptr<DiscordAudioSender> sender;

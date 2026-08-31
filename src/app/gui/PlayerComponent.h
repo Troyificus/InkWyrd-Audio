@@ -31,6 +31,12 @@ public:
     // callback fires (on the message thread, already marshaled there).
     void setDiscordStatus(const juce::String& text);
 
+    // Pushed once, right after construction, only if the audio device
+    // failed to open - previously this failure was logged and nothing
+    // else, silently explaining "no sound at all" with zero visible
+    // indication anywhere in the GUI. Empty text keeps the banner hidden.
+    void setAudioDeviceStatus(const juce::String& text);
+
 private:
     void timerCallback() override;
     void updateShuffleButtonText();
@@ -46,6 +52,7 @@ private:
 
     juce::Label nowPlayingLabel;
     juce::Label discordStatusLabel;
+    juce::Label audioDeviceStatusLabel; // hidden (zero height) unless setAudioDeviceStatus() is given non-empty text
 
     juce::TextButton skipButton { "Skip" };
     juce::TextButton shuffleButton;
