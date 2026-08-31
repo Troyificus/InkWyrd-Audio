@@ -11,7 +11,14 @@
 ; README.md's "Building the installer" section)
 
 #define MyAppName "Inkwyrd Audio"
-#define MyAppVersion "0.1.0"
+; The full beta-qualified version string - bump this at the top of
+; EVERY release, hotfix or feature (e.g. "0.1.0-beta.2.2"), not just
+; the GitHub release tag/filename. Feeds AppVersion below (so Windows'
+; "Installed apps" list actually shows which beta is installed - it
+; used to just say "0.1.0" for every beta, indistinguishable) AND
+; OutputBaseFilename further down, so there's one place to update per
+; release rather than two.
+#define MyAppVersion "0.1.0-beta.2.1"
 #define MyAppPublisher "Troy"
 ; The CMake target is named InkwyrdAudioApp, but juce_add_gui_app names
 ; the actual output binary after PRODUCT_NAME ("Inkwyrd Audio") - unlike

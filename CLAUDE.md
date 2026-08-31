@@ -376,6 +376,44 @@ from the GUI (needs a real bot token/guild/channel, not exercised in
 this pass) and the Settings "restart to apply changed Discord settings"
 message's accuracy across a real restart.
 
+## Beta release process
+
+Established during real beta testing, follow this for every future
+release:
+
+- **Version numbering**: hotfixes (bug fixes, diagnostics, no new
+  user-facing capability) bump the last dot only - `beta.2` ->
+  `beta.2.1` -> `beta.2.2`. Only bump to a new whole number
+  (`beta.2.x` -> `beta.3`) when an actual feature lands. This is a
+  user preference, not a technical constraint - don't infer feature-vs-
+  hotfix from the diff size, ask if it's ambiguous.
+- **`installer/InkwyrdAudio.iss`'s `#define MyAppVersion`** carries the
+  full beta-qualified string (e.g. `"0.1.0-beta.2.1"`) and must be
+  bumped to match every release tag - it feeds `AppVersion`, so Windows'
+  "Installed apps" list shows which beta is actually installed rather
+  than a static "0.1.0" for every one (a real gap: this used to be
+  disconnected from the release tag entirely). Bump it *before*
+  building the installer for a release, not after.
+- **Each release is its own GitHub Release** (a new tag per version,
+  e.g. `v0.1.0-beta.2.1`), not one release with its asset silently
+  swapped out - keeps a stable download link per version and a real
+  changelog per hotfix. Mark the previous release's notes with a
+  one-line "Superseded by vX" pointer so anyone landing on an old
+  release page finds the current one.
+- **Always verify the installer for real before publishing**: silent
+  install to a scratch directory (`/VERYSILENT /SUPPRESSMSGBOXES
+  /DIR=...`), confirm the file layout and the exe's file size actually
+  changed vs. the previous build (catches "forgot to rebuild before
+  compiling the installer"), launch it and confirm the main window
+  actually appears (poll for the window, don't just fire-and-wait a
+  fixed sleep - VST scanning alone can take 15-25s), then uninstall via
+  the bundled `unins000.exe`. See the git history around the beta.2 and
+  beta.2.1 releases for the exact commands used.
+- The `OutputBaseFilename`'s `-v2-` workaround (see the `.iss` comment
+  near it) is unrelated to the beta version number - don't confuse the
+  two. It's purely about a still-unresolved locked-file conflict with
+  two old zombie processes.
+
 ## Dev environment
 
 - **VCPKG_ROOT** is set as a user env var, pointing at `C:\vcpkg`
