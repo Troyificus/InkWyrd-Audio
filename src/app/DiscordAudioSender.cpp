@@ -8,7 +8,7 @@ DiscordAudioSender::DiscordAudioSender(VoiceGatewayClient& voiceGatewayToUse, Vo
     int error = 0;
     opusEncoder = opus_encoder_create(kDiscordSampleRate, 2, OPUS_APPLICATION_AUDIO, &error);
     if (error == OPUS_OK && opusEncoder != nullptr)
-        opus_encoder_ctl(opusEncoder, OPUS_SET_BITRATE(128000)); // higher than the mono spike's 64k - this carries music, not just speech
+        opus_encoder_ctl(opusEncoder, OPUS_SET_BITRATE(kDefaultBitrate));
 }
 
 DiscordAudioSender::~DiscordAudioSender()

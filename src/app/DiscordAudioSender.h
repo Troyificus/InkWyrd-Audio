@@ -49,6 +49,14 @@ private:
     static constexpr int kFrameSamples = 960; // 20ms at 48kHz
     static constexpr int kFrameMs = 20;
 
+    // Matches what Discord's own client typically uses. This carries
+    // music rather than just speech, so 128k was tried first - but that
+    // is a lot of sustained upstream for a home connection, and the host
+    // is usually also in the call sending their own voice. Kept modest
+    // by default; making it host-selectable is a planned setting (see
+    // CLAUDE.md's deferred list), which is why it's a named constant.
+    static constexpr int kDefaultBitrate = 64000;
+
     // Latency guard for the sender loop: if the queue ever backs up
     // past ~240ms, drop down to ~60ms (3 frames) of jitter headroom
     // rather than letting the delay grow and stay grown.

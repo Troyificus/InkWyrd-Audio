@@ -376,6 +376,18 @@ from the GUI (needs a real bot token/guild/channel, not exercised in
 this pass) and the Settings "restart to apply changed Discord settings"
 message's accuracy across a real restart.
 
+## Agreed but not yet built
+
+- **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`
+  is currently a fixed 64000 (dropped from 128000 during beta testing -
+  128k is a lot of sustained upstream for a home connection, and the
+  host is usually also in the call sending their own voice). The user
+  explicitly wants this exposed as a setting when the feature pass
+  happens, so the host can pick their own quality/bandwidth tradeoff.
+  It's a named constant specifically so that's a small change.
+- **Playlist building options** - the next feature area, requested
+  immediately after the audio fixes settled. Nothing designed yet.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future
