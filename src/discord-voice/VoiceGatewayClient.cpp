@@ -322,7 +322,6 @@ void VoiceGatewayClient::onMessage(const juce::String& text)
     {
         logLine("[VoiceGateway] Hello received");
         auto interval = (int) d.getProperty("heartbeat_interval", 5000);
-        startHeartbeatThread(interval);
 
         auto* identifyD = new juce::DynamicObject();
         identifyD->setProperty("server_id", guildId);
@@ -337,6 +336,24 @@ void VoiceGatewayClient::onMessage(const juce::String& text)
         logLine("[VoiceGateway] sending Identify (max_dave_protocol_version="
                  + juce::String((int) daveMaxSupportedProtocolVersion()) + ")");
         sendJson(juce::var(obj));
+
+        // Heartbeats start only AFTER Identify is on the wire. The
+        // heartbeat thread sends its first beat immediately (send, then
+        // sleep), so starting it before this point raced the Identify -
+        // and the VOICE gateway closes with 4003 "Not authenticated" if
+        // any payload reaches it before Identify. Confirmed from a real
+        // beta log: "sending Identify" followed straight by
+        // "closed: code=4003 reason=Not authenticated".
+        //
+        // Intermittent by nature, and the GUI conversion made it far
+        // likelier to lose the race: the connect sequence used to run on
+        // a console app's idle main thread, and now runs on a background
+        // thread while the message thread is busy.
+        //
+        // NOTE: GatewayClient (the MAIN gateway) deliberately still
+        // starts its heartbeat before Identify - Discord's main gateway
+        // accepts heartbeats while unauthenticated, unlike the voice one.
+        startHeartbeatThread(interval);
         return;
     }
 
