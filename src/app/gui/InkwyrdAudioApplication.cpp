@@ -149,7 +149,7 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
         // would misleadingly imply a Discord setting changed too.
         if (settings.hasDiscordCredentials())
             player->setDiscordStatus(discordConnector.isConnected()
-                                          ? "Connected to Discord. Restart to apply changed Discord settings."
+                                          ? "Connected - streaming to Discord. Restart to apply changed Discord settings."
                                           : "Restart Inkwyrd Audio to apply changed Discord settings.");
         else
             player->setDiscordStatus("Local monitor only - no Discord credentials configured.");

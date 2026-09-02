@@ -107,7 +107,11 @@ void DiscordConnector::runConnectSequence(juce::String botToken, juce::String gu
         // joined is completely normal for a DM. Stay in the channel and
         // keep waiting instead; audio starts the moment it completes.
         logLine("[DiscordConnector] DAVE not ready yet - staying in the channel and waiting.");
-        reportStatus("In the voice channel - waiting for someone to join before audio can start.");
+        // Careful with this wording: playback has already started by now,
+        // it just isn't being transmitted. Saying "audio can't start"
+        // reads as a contradiction when the Now Playing line is visibly
+        // advancing (real beta feedback).
+        reportStatus("In the voice channel - nobody else here yet, so nothing is being sent to Discord.");
 
         while (!shouldAbort.load())
             if (voiceGateway->waitForDaveReady(2000))
@@ -126,7 +130,7 @@ void DiscordConnector::runConnectSequence(juce::String botToken, juce::String gu
     connected = true;
 
     logLine("[DiscordConnector] Connected and streaming to Discord.");
-    reportStatus("Connected to Discord.");
+    reportStatus("Connected - streaming to Discord.");
 
     if (onComplete)
         juce::MessageManager::callAsync([onComplete] { onComplete(true); });
