@@ -84,6 +84,32 @@ This applies to `transition_id = 0` arriving via opcode 21, via
 `dave_mls_announce_commit_transition (29)`, or via
 `dave_mls_welcome (30)`.
 
+## The recognized-user-id set must include your OWN user id
+
+`ProcessWelcome`/`ProcessProposals` take a set of recognized user ids,
+and libdave verifies every member listed in the group against it. **The
+group includes you**, so leaving your own id out fails with:
+
+```
+MLS failure in discord::dave::mls::Session::VerifyWelcomeState:
+Welcome message lists unrecognized user ID
+```
+
+`clients_connect (11)` only ever lists the **other** members, so nothing
+adds your own id for you - `DaveSession` seeds it in its constructor.
+
+**Why this hid for so long:** which path Discord uses depends on who was
+in the channel first.
+
+| Situation | Path taken | Hits the bug? |
+|---|---|---|
+| Channel already has members when the bot joins | proposals (27) → commit welcome (28) → **announce_commit_transition (29)** | No - no Welcome is processed |
+| Bot joins an EMPTY channel, someone joins later | proposals (27) → commit welcome (28) → **dave_mls_welcome (30)** | Yes - always failed |
+
+So the whole feature worked perfectly whenever a human was already
+sitting in the channel, and never worked when the bot got there first -
+which is the normal way a DM actually starts a session.
+
 ## Binary opcode framing differs by direction
 
 DAVE opcodes 25-30 are binary websocket frames, not JSON, and the header

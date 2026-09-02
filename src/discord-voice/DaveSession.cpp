@@ -24,6 +24,20 @@ namespace
 DaveSession::DaveSession(juce::String selfUserIdIn) : selfUserId(std::move(selfUserIdIn))
 {
     session = daveSessionCreate(nullptr, nullptr, &onMlsFailure, this);
+
+    // Our OWN user id has to be in the recognized set. An MLS Welcome
+    // lists every member of the group - us included - and libdave's
+    // VerifyWelcomeState rejects the whole Welcome if any listed id
+    // isn't recognized ("Welcome message lists unrecognized user ID").
+    // clients_connect only ever lists the OTHER members, so without this
+    // nothing ever adds us.
+    //
+    // This only bites on the Welcome path, which is why it went
+    // unnoticed: joining a channel that already has people in it gets us
+    // added by proposals + announce_commit_transition instead, and never
+    // processes a Welcome at all. Joining an EMPTY channel and waiting
+    // for someone else takes the Welcome path, and always failed.
+    recognizedUserIds.addIfNotAlreadyThere(selfUserId);
 }
 
 DaveSession::~DaveSession()
@@ -74,7 +88,11 @@ void DaveSession::onClientsConnect(const juce::StringArray& userIds)
 
 void DaveSession::onClientDisconnect(const juce::String& userId)
 {
-    recognizedUserIds.removeString(userId);
+    // Never drop ourselves from the set - see the constructor. Discord
+    // shouldn't send our own id here, but losing it would break every
+    // later Welcome in a way that's tedious to trace back to this.
+    if (userId != selfUserId)
+        recognizedUserIds.removeString(userId);
 }
 
 std::vector<const char*> DaveSession::recognizedUserIdPtrs() const
