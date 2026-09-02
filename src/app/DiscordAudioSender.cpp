@@ -87,12 +87,37 @@ void DiscordAudioSender::senderThreadLoop()
     std::vector<float> interleaved((size_t) kFrameSamples * 2);
     std::vector<uint8_t> encodedBuf(4000);
 
+    // Frames are paced against an absolute deadline that advances by
+    // exactly one frame each time, NOT by sleeping 20ms per iteration.
+    // A per-iteration sleep makes each pass cost 20ms *plus* the Opus
+    // encode, DAVE encrypt and UDP send, so the loop drains slower than
+    // the audio callback fills - the FIFO then grows until it hits its
+    // ~2s capacity and parks there. That was a real beta report of
+    // "severely delayed" mic audio. Windows makes it worse: the default
+    // timer granularity is ~15.6ms, so sleep_for(20ms) commonly sleeps
+    // ~31ms. An accumulating deadline self-corrects, because an overrun
+    // on one frame simply shortens (or skips) the next sleep.
+    auto nextFrameTime = std::chrono::steady_clock::now();
+
     while (running.load())
     {
         if (fifo.getNumReady() < kFrameSamples)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            // Nothing to send, so don't accrue a backlog of "missed"
+            // frame deadlines to burst through once audio resumes.
+            nextFrameTime = std::chrono::steady_clock::now();
             continue;
+        }
+
+        // Bound end-to-end latency. Device-rate -> 48kHz resampling is
+        // not sample-exact, so a long session can still drift into a
+        // growing backlog; discarding the excess costs one audible seam
+        // instead of permanently delaying everything behind it.
+        if (auto backlog = fifo.getNumReady(); backlog > kMaxBacklogSamples)
+        {
+            fifo.finishedRead(backlog - kTargetBacklogSamples);
+            nextFrameTime = std::chrono::steady_clock::now();
         }
 
         int start1, size1, start2, size2;
@@ -122,6 +147,7 @@ void DiscordAudioSender::senderThreadLoop()
                 udp.sendOpusFrame(encrypted.data(), (int) encrypted.size());
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        nextFrameTime += std::chrono::milliseconds(kFrameMs);
+        std::this_thread::sleep_until(nextFrameTime);
     }
 }

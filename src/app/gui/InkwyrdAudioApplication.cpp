@@ -92,10 +92,22 @@ void InkwyrdAudioApplication::showPlayer()
     mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins, soundNames,
                                 [this] { showSetup(); });
 
-    if (audioDeviceError.isNotEmpty())
-        if (auto* player = mainWindow->getPlayerComponent())
-            player->setAudioDeviceStatus("Audio device failed to open: " + audioDeviceError
-                                          + " - no sound (mic, playlist, or Discord) will work until this is fixed.");
+    if (auto* player = mainWindow->getPlayerComponent())
+    {
+        // Both of these otherwise produce silence with no visible reason.
+        juce::StringArray warnings;
+
+        if (audioDeviceError.isNotEmpty())
+            warnings.add("Audio device failed to open: " + audioDeviceError
+                          + " - no sound (mic, playlist or Discord) will work until this is fixed.");
+
+        if (settings.isPlaylistFolderSet() && playlist.getNumTracks() == 0)
+            warnings.add("No playable audio files found in "
+                          + settings.getPlaylistFolder().getFullPathName()
+                          + " - pick a folder containing WAV, AIFF, FLAC, Ogg, MP3, AAC/M4A or WMA files.");
+
+        player->setWarningBanner(warnings.joinIntoString("  |  "));
+    }
 }
 
 void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result result)

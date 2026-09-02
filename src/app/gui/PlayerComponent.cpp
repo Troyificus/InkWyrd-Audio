@@ -32,9 +32,9 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse, SoundboardEngine
     discordStatusLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible(discordStatusLabel);
 
-    audioDeviceStatusLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
-    audioDeviceStatusLabel.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
-    addAndMakeVisible(audioDeviceStatusLabel);
+    warningBannerLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
+    warningBannerLabel.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
+    addAndMakeVisible(warningBannerLabel);
 
     addAndMakeVisible(skipButton);
     skipButton.onClick = [this] { playlist.skipToNext(); };
@@ -102,9 +102,9 @@ void PlayerComponent::setDiscordStatus(const juce::String& text)
     discordStatusLabel.setText(text, juce::dontSendNotification);
 }
 
-void PlayerComponent::setAudioDeviceStatus(const juce::String& text)
+void PlayerComponent::setWarningBanner(const juce::String& text)
 {
-    audioDeviceStatusLabel.setText(text, juce::dontSendNotification);
+    warningBannerLabel.setText(text, juce::dontSendNotification);
     resized(); // the banner's presence changes how much height everything below it gets
 }
 
@@ -160,14 +160,14 @@ void PlayerComponent::resized()
     discordStatusLabel.setBounds(area.removeFromTop(22));
     area.removeFromTop(12);
 
-    if (audioDeviceStatusLabel.getText().isNotEmpty())
+    if (warningBannerLabel.getText().isNotEmpty())
     {
-        audioDeviceStatusLabel.setBounds(area.removeFromTop(22));
+        warningBannerLabel.setBounds(area.removeFromTop(22));
         area.removeFromTop(12);
     }
     else
     {
-        audioDeviceStatusLabel.setBounds(0, 0, 0, 0);
+        warningBannerLabel.setBounds(0, 0, 0, 0);
     }
 
     auto buttonRow = area.removeFromTop(32);

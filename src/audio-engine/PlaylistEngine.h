@@ -23,9 +23,14 @@ public:
     explicit PlaylistEngine(juce::AudioFormatManager& formatManagerToUse);
     ~PlaylistEngine() override;
 
-    // Scans a folder (non-recursive) for files the format manager can
+    // Scans a folder *recursively* for files the format manager can
     // read and builds a fresh (optionally shuffled) play order from them.
     void loadFolder(const juce::File& folder);
+
+    // How many playable files loadFolder() actually found. Callers use
+    // this to tell the user when a chosen folder yielded nothing, rather
+    // than sitting silently producing no audio.
+    int getNumTracks() const { return playOrder.size(); }
 
     void setShuffle(bool shouldShuffle);
     bool isShuffleEnabled() const { return shuffleEnabled; }

@@ -47,6 +47,13 @@ private:
 
     static constexpr int kDiscordSampleRate = 48000;
     static constexpr int kFrameSamples = 960; // 20ms at 48kHz
+    static constexpr int kFrameMs = 20;
+
+    // Latency guard for the sender loop: if the queue ever backs up
+    // past ~240ms, drop down to ~60ms (3 frames) of jitter headroom
+    // rather than letting the delay grow and stay grown.
+    static constexpr int kMaxBacklogSamples = kFrameSamples * 12;
+    static constexpr int kTargetBacklogSamples = kFrameSamples * 3;
     static constexpr int kResampleScratchCapacity = 8192; // generous vs. any real device block size
 
     juce::LagrangeInterpolator resamplers[2];

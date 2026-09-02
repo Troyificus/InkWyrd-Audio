@@ -30,7 +30,11 @@ void PlaylistEngine::loadFolder(const juce::File& folder)
     playOrder.clear();
     nextOrderIndex = 0;
 
-    for (const auto& entry : juce::RangedDirectoryIterator(folder, false, "*", juce::File::findFiles))
+    // Recursive: people point this at an album or library folder whose
+    // audio lives a level or two down. Real beta report - the chosen
+    // folder held only cover art at the top level and 26 tracks in
+    // per-track subfolders, so nothing played and nothing said why.
+    for (const auto& entry : juce::RangedDirectoryIterator(folder, true, "*", juce::File::findFiles))
     {
         auto file = entry.getFile();
         if (formatManager.findFormatForFileExtension(file.getFileExtension()) != nullptr)
