@@ -6,9 +6,6 @@
 
 DiscordConnector::~DiscordConnector()
 {
-    if (connectThread != nullptr && connectThread->joinable())
-        connectThread->join();
-
     disconnect();
 }
 
@@ -91,9 +88,39 @@ void DiscordConnector::runConnectSequence(juce::String botToken, juce::String gu
 
     udp.setSecretKey(session.secretKey, voiceReady.ssrc);
 
-    reportStatus("Waiting for DAVE encryption handshake...");
+    // From here the bot is genuinely sitting in the voice channel, so it
+    // has to be disconnected cleanly on quit even if the handshake below
+    // never completes.
+    voiceSessionUp = true;
+
+    reportStatus("Waiting for encryption handshake...");
     if (!voiceGateway->waitForDaveReady(15000))
-        return fail("Timed out waiting for the DAVE handshake.");
+    {
+        // Not a failure. DAVE is an MLS *group* key exchange, and
+        // Discord only forms the group once there's someone else in the
+        // channel - a bot that joins an empty channel simply never gets
+        // proposals or a welcome. Observed exactly that in a real log:
+        // key package sent, then nothing at all.
+        //
+        // Hanging up here (which is what used to happen) is the worst
+        // possible response, because starting the app before anyone has
+        // joined is completely normal for a DM. Stay in the channel and
+        // keep waiting instead; audio starts the moment it completes.
+        logLine("[DiscordConnector] DAVE not ready yet - staying in the channel and waiting.");
+        reportStatus("In the voice channel - waiting for someone to join before audio can start.");
+
+        while (!shouldAbort.load())
+            if (voiceGateway->waitForDaveReady(2000))
+                break;
+
+        if (shouldAbort.load())
+        {
+            logLine("[DiscordConnector] Aborted while waiting for DAVE.");
+            return;
+        }
+
+        logLine("[DiscordConnector] DAVE became ready once the channel had another member.");
+    }
 
     voiceGateway->sendSpeaking(voiceReady.ssrc, true);
     connected = true;
@@ -107,7 +134,17 @@ void DiscordConnector::runConnectSequence(juce::String botToken, juce::String gu
 
 void DiscordConnector::disconnect()
 {
-    if (!connected.load())
+    // Stop the connect thread first - it may be parked in the
+    // wait-for-DAVE loop, and tearing the sockets out from under it
+    // would race. The join costs at most one 2s poll interval.
+    shouldAbort = true;
+    if (connectThread != nullptr && connectThread->joinable())
+        connectThread->join();
+    connectThread.reset();
+
+    // voiceSessionUp, not connected: the bot can be sitting in the
+    // channel waiting for DAVE, and still needs to leave properly.
+    if (!voiceSessionUp.exchange(false))
         return;
 
     gateway->requestJoinVoiceChannel(guildIdForDisconnect, "");

@@ -54,7 +54,16 @@ private:
     std::unique_ptr<GatewayClient> gateway;
     std::unique_ptr<VoiceGatewayClient> voiceGateway;
     VoiceUdpSocket udp;
+
+    // connected      = fully ready, DAVE done, audio can be sent.
+    // voiceSessionUp = bot is actually sitting in the voice channel.
+    // These differ while waiting for the DAVE handshake to become
+    // possible (see runConnectSequence) - during that window the bot is
+    // in the channel and must still be cleanly disconnected on quit,
+    // even though no audio is flowing yet.
     std::atomic<bool> connected { false };
+    std::atomic<bool> voiceSessionUp { false };
+    std::atomic<bool> shouldAbort { false };
     juce::String guildIdForDisconnect;
 
     std::unique_ptr<std::thread> connectThread;

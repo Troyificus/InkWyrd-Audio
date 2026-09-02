@@ -55,6 +55,14 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse, SoundboardEngine
         updateMuteButtonText();
     };
 
+    updateMonitorButtonText();
+    addAndMakeVisible(monitorButton);
+    monitorButton.onClick = [this]
+    {
+        masterEngine.setLocalMonitoring(!masterEngine.isLocalMonitoring());
+        updateMonitorButtonText();
+    };
+
     addAndMakeVisible(settingsButton);
     settingsButton.onClick = [onSettingsClickedToUse] { if (onSettingsClickedToUse) onSettingsClickedToUse(); };
 
@@ -116,10 +124,9 @@ void PlayerComponent::timerCallback()
     nowPlayingLabel.setText(text, juce::dontSendNotification);
 
     // Shuffle/mute can also change via the Stream Deck plugin's
-    // ControlServer commands, not just this component's own buttons -
-    // refresh both labels here so an external change shows up too.
-    updateShuffleButtonText();
-    updateMuteButtonText();
+    // ControlServer commands, and monitoring flips off when Discord
+    // connects - refresh the labels here so external changes show up.
+    refreshToggleStates();
 }
 
 void PlayerComponent::updateShuffleButtonText()
@@ -130,6 +137,18 @@ void PlayerComponent::updateShuffleButtonText()
 void PlayerComponent::updateMuteButtonText()
 {
     muteButton.setButtonText(masterEngine.isMicMuted() ? "Mic: Muted" : "Mic: Live");
+}
+
+void PlayerComponent::updateMonitorButtonText()
+{
+    monitorButton.setButtonText(masterEngine.isLocalMonitoring() ? "Monitor: On" : "Monitor: Off");
+}
+
+void PlayerComponent::refreshToggleStates()
+{
+    updateShuffleButtonText();
+    updateMuteButtonText();
+    updateMonitorButtonText();
 }
 
 void PlayerComponent::rebuildChainListUI()
@@ -176,6 +195,8 @@ void PlayerComponent::resized()
     shuffleButton.setBounds(buttonRow.removeFromLeft(110));
     buttonRow.removeFromLeft(8);
     muteButton.setBounds(buttonRow.removeFromLeft(100));
+    buttonRow.removeFromLeft(8);
+    monitorButton.setBounds(buttonRow.removeFromLeft(120));
     settingsButton.setBounds(buttonRow.removeFromRight(90));
     area.removeFromTop(20);
 

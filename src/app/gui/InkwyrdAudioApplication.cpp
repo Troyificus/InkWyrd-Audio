@@ -180,6 +180,13 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
             sender = std::make_unique<DiscordAudioSender>(*discordConnector.getVoiceGateway(), discordConnector.getUdpSocket());
             sender->start();
             masterEngine.setDiscordSender(sender.get());
+
+            // The host is in the Discord call too, so they hear this mix
+            // via the bot. Playing it locally as well doubles everything
+            // with a slight offset, which reads as an annoying delay.
+            masterEngine.setLocalMonitoring(false);
+            if (auto* player = mainWindow->getPlayerComponent())
+                player->refreshToggleStates();
         });
 }
 

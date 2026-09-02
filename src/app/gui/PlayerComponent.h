@@ -37,10 +37,16 @@ public:
     // playable files. Empty text keeps the banner hidden.
     void setWarningBanner(const juce::String& text);
 
+    // Re-reads the engines' current shuffle/mute/monitor state into the
+    // button labels, for when something outside this component changes
+    // it (connecting to Discord turns local monitoring off).
+    void refreshToggleStates();
+
 private:
     void timerCallback() override;
     void updateShuffleButtonText();
     void updateMuteButtonText();
+    void updateMonitorButtonText();
     void rebuildChainListUI();
 
     PlaylistEngine& playlist;
@@ -57,6 +63,7 @@ private:
     juce::TextButton skipButton { "Skip" };
     juce::TextButton shuffleButton;
     juce::TextButton muteButton;
+    juce::TextButton monitorButton;
     juce::TextButton settingsButton { "Settings" };
 
     juce::Label soundboardCaption { {}, "Soundboard" };

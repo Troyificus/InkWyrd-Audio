@@ -63,16 +63,22 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
     masterBuffer.addFrom(0, 0, micBuffer, 0, 0, numSamples);
     masterBuffer.addFrom(1, 0, micBuffer, 1, 0, numSamples);
 
+    // 4. Local speakers. Silenced while streaming to Discord - the host
+    // is in the call too and hears the bot's stream there, so playing it
+    // locally as well doubles everything with a slight offset.
+    auto monitorLocally = localMonitoring.load();
     for (int ch = 0; ch < numOutputChannels; ++ch)
     {
         if (outputChannelData[ch] == nullptr)
             continue;
-        if (ch < 2)
+        if (ch < 2 && monitorLocally)
             juce::FloatVectorOperations::copy(outputChannelData[ch], masterBuffer.getReadPointer(ch), numSamples);
         else
             juce::FloatVectorOperations::clear(outputChannelData[ch], numSamples);
     }
 
+    // Unaffected by local monitoring - what Discord receives is the same
+    // master mix either way.
     if (auto* sender = discordSender.load())
         sender->pushSamples(masterBuffer, currentSampleRate);
 }

@@ -8,7 +8,10 @@ namespace
 SoundboardEngine::SoundboardEngine(juce::AudioFormatManager& formatManagerToUse)
     : formatManager(formatManagerToUse)
 {
-    readAheadThread.startThread();
+    // Above normal priority: this thread refills the streaming buffers
+    // ahead of the real-time audio callback, and losing the CPU to
+    // ordinary background work is exactly what produces dropouts.
+    readAheadThread.startThread(juce::Thread::Priority::high);
 }
 
 SoundboardEngine::~SoundboardEngine()

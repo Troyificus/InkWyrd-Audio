@@ -11,7 +11,10 @@ namespace
 PlaylistEngine::PlaylistEngine(juce::AudioFormatManager& formatManagerToUse)
     : formatManager(formatManagerToUse)
 {
-    readAheadThread.startThread();
+    // Above normal priority: this thread refills the streaming buffers
+    // ahead of the real-time audio callback, and losing the CPU to
+    // ordinary background work is exactly what produces dropouts.
+    readAheadThread.startThread(juce::Thread::Priority::high);
     mixer.addInputSource(&decks[0].transport, false);
     mixer.addInputSource(&decks[1].transport, false);
 }

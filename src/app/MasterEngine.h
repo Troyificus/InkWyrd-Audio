@@ -32,6 +32,15 @@ public:
     void setMicMuted(bool muted) { micMuted.store(muted); }
     bool isMicMuted() const { return micMuted.load(); }
 
+    // Whether the master mix is also played out of the host's own
+    // speakers. Off while streaming to Discord: the host is in the call
+    // too, so they'd otherwise hear everything twice - once locally and
+    // again (slightly later) via the bot's stream, which sounds like a
+    // delay/echo. Left on when there's no Discord connection, so the
+    // app is still usable/testable standalone. Safe from any thread.
+    void setLocalMonitoring(bool shouldMonitor) { localMonitoring.store(shouldMonitor); }
+    bool isLocalMonitoring() const { return localMonitoring.load(); }
+
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
                                            int numInputChannels,
                                            float* const* outputChannelData,
@@ -50,6 +59,7 @@ private:
 
     std::atomic<DiscordAudioSender*> discordSender { nullptr };
     std::atomic<bool> micMuted { false };
+    std::atomic<bool> localMonitoring { true };
 
     juce::AudioBuffer<float> micBuffer, masterBuffer;
     juce::MidiBuffer scratchMidi;
