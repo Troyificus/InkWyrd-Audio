@@ -55,7 +55,8 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
         if (settings.getSoundboardFolder().isDirectory())
             soundNames = registerSoundboardFolder(settings.getSoundboardFolder());
 
-        showPlayer();
+        applyDefaultLocalMonitoring();
+        showPlayer(); // after the above, so the Monitor button opens showing the right state
 
         discordConnectAttempted = true;
         startDiscordConnectIfConfigured();
@@ -85,6 +86,21 @@ void InkwyrdAudioApplication::shutdown()
 void InkwyrdAudioApplication::showSetup()
 {
     mainWindow->showSetupView(settings, [this](SetupComponent::Result result) { completeSetupAndLaunch(result); });
+}
+
+void InkwyrdAudioApplication::applyDefaultLocalMonitoring()
+{
+    // Off by default whenever Discord is configured. The host is
+    // normally already in the call when they open the app, so playing
+    // locally as well means hearing every track twice, slightly offset.
+    // Waiting until the connection completes to switch it off isn't good
+    // enough - the doubling happens during the connect window, which can
+    // last indefinitely while waiting for someone to join the channel.
+    //
+    // With no Discord configured, local output is the only way to hear
+    // anything at all, so it stays on - otherwise "local monitor only"
+    // mode would be completely silent with nothing explaining why.
+    masterEngine.setLocalMonitoring(!settings.hasDiscordCredentials());
 }
 
 void InkwyrdAudioApplication::showPlayer()
@@ -130,6 +146,12 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
     soundNames.clear();
     if (result.soundboardFolder.isDirectory())
         soundNames = registerSoundboardFolder(result.soundboardFolder);
+
+    // Only on the first pass through setup. Re-applying it on every save
+    // would silently undo a monitor toggle the user had deliberately
+    // flipped, just because they went in to change a folder.
+    if (!discordConnectAttempted)
+        applyDefaultLocalMonitoring();
 
     showPlayer();
 

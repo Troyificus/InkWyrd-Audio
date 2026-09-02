@@ -37,6 +37,7 @@ private:
     void showPlayer();
     void completeSetupAndLaunch(SetupComponent::Result result);
     void startDiscordConnectIfConfigured();
+    void applyDefaultLocalMonitoring();
     juce::StringArray registerSoundboardFolder(const juce::File& folder);
 
     AppSettings settings;
