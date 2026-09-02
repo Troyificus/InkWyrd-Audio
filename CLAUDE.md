@@ -495,6 +495,39 @@ applies to bots. It's implemented via Discord's own `discord/libdave`
 (MIT), fetched as a prebuilt Windows binary since upstream's build is
 Make-based with no CMake/MSVC path.
 
+### Reading the app's real log/settings from a Claude Code session (MSIX redirection)
+
+**Claude Code's Bash/PowerShell tools run inside the Claude desktop
+app's MSIX package (`Claude_pzs8sxrjxfjjc`), so their `%APPDATA%` access
+is redirected into
+`%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\...`.**
+An app the *user* launched normally (parent process `explorer.exe`)
+writes to the **real** `%APPDATA%`, so the two diverge and a session can
+sit there reading a stale sandbox copy of `log.txt`/`Inkwyrd Audio.settings`
+while insisting the user's run "wrote nothing".
+
+This cost real time once already: a beta report was nearly misdiagnosed
+as "logging is broken" when the real log was 1406 bytes of perfectly
+good diagnostics and the sandbox copy was a stale 63-byte leftover from
+an earlier in-session smoke test. The attachment the user pasted was
+*also* resolved through the sandbox, so it showed the stale copy too -
+matching contents are NOT confirmation you're looking at the right file.
+
+To read the real files, spawn a process without package identity via
+WMI (the WMI service host is unpackaged, so the child isn't redirected)
+and copy them somewhere unredirected, e.g. the repo drive:
+
+```powershell
+Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+  CommandLine = 'cmd.exe /c copy /Y "C:\Users\<user>\AppData\Roaming\Inkwyrd Audio\log.txt" "G:\Inkwyrd-Audio\_real_log.txt"' }
+```
+
+Check `Get-CimInstance Win32_Process` → `ParentProcessId` to tell which
+context a running instance is in. And **delete any copied
+`Inkwyrd Audio.settings` immediately** - it stores the Discord bot token
+in plaintext by design, so a copy inside the repo is a live credential
+sitting in the working tree.
+
 ## Testing discipline
 
 The Discord voice spike was debugged entirely through real, live runs
