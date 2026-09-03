@@ -1,29 +1,30 @@
 #include "PlayerComponent.h"
+#include "VoiceFxComponent.h"
 
 namespace
 {
-    constexpr int kRowHeight = 28;
-    constexpr int kRowSpacing = 4;
-
-    void layoutRows(juce::Component& panel, juce::OwnedArray<juce::TextButton>& buttons, int width)
-    {
-        width = juce::jmax(0, width);
-        int y = 0;
-        for (auto* button : buttons)
-        {
-            button->setBounds(0, y, width, kRowHeight);
-            y += kRowHeight + kRowSpacing;
-        }
-        panel.setSize(width, juce::jmax(kRowHeight, y));
-    }
+    constexpr int kMargin = 16;
+    constexpr int kLeftColumnWidth = 440;
+    constexpr int kColumnGap = 16;
 }
 
-PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse,
-                                  MasterEngine& masterEngineToUse, PluginScanner& scannerToUse,
-                                  PluginChain& voiceChainToUse, juce::Array<juce::PluginDescription> availablePluginsToUse,
-                                  juce::StringArray soundNamesToUse, std::function<void()> onSettingsClickedToUse)
-    : playlist(playlistToUse), soundboard(soundboardToUse), masterEngine(masterEngineToUse),
-      scanner(scannerToUse), voiceChain(voiceChainToUse), availablePlugins(std::move(availablePluginsToUse))
+PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
+                                  SoundboardEngine& soundboardToUse,
+                                  MasterEngine& masterEngineToUse,
+                                  PluginScanner& scannerToUse,
+                                  PluginChain& voiceChainToUse,
+                                  juce::Array<juce::PluginDescription> availablePluginsToUse,
+                                  PlaylistLibrary& libraryToUse,
+                                  std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
+                                  std::function<void()> onSettingsClickedToUse)
+    : playlist(playlistToUse),
+      soundboard(soundboardToUse),
+      masterEngine(masterEngineToUse),
+      scanner(scannerToUse),
+      voiceChain(voiceChainToUse),
+      availablePlugins(std::move(availablePluginsToUse)),
+      playlistPanel(libraryToUse, playlistToUse, std::move(onActivatePlaylistToUse), [] {}),
+      soundboardGrid(soundboardToUse)
 {
     nowPlayingLabel.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));
     addAndMakeVisible(nowPlayingLabel);
@@ -63,46 +64,26 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse, SoundboardEngine
         updateMonitorButtonText();
     };
 
+    addAndMakeVisible(voiceFxButton);
+    voiceFxButton.onClick = [this] { showVoiceFxWindow(); };
+
     addAndMakeVisible(settingsButton);
     settingsButton.onClick = [onSettingsClickedToUse] { if (onSettingsClickedToUse) onSettingsClickedToUse(); };
 
-    addAndMakeVisible(soundboardCaption);
-    soundboardViewport.setViewedComponent(&soundboardPanel, false);
-    addAndMakeVisible(soundboardViewport);
-    for (const auto& name : soundNamesToUse)
-    {
-        auto* button = soundboardButtons.add(new juce::TextButton(name));
-        soundboardPanel.addAndMakeVisible(button);
-        button->onClick = [this, name] { soundboard.trigger(name); };
-    }
-
-    addAndMakeVisible(pluginListCaption);
-    pluginListViewport.setViewedComponent(&pluginListPanel, false);
-    addAndMakeVisible(pluginListViewport);
-    for (int i = 0; i < availablePlugins.size(); ++i)
-    {
-        auto description = availablePlugins.getReference(i);
-        auto* button = addPluginButtons.add(new juce::TextButton("Add: " + description.name));
-        pluginListPanel.addAndMakeVisible(button);
-        button->onClick = [this, description]
-        {
-            juce::String error;
-            if (!voiceChain.addPlugin(scanner, description, error))
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Couldn't add plugin", error);
-            rebuildChainListUI();
-        };
-    }
-
-    addAndMakeVisible(chainListCaption);
-    chainListViewport.setViewedComponent(&chainListPanel, false);
-    addAndMakeVisible(chainListViewport);
-    rebuildChainListUI();
+    addAndMakeVisible(playlistPanel);
+    addAndMakeVisible(soundboardGrid);
 
     startTimer(500);
 
     // setContentOwned(..., true) resizes the window to fit this
     // component's own size, so an explicit size here IS the window size.
-    setSize(900, 620);
+    setSize(1200, 760);
+}
+
+PlayerComponent::~PlayerComponent()
+{
+    if (voiceFxWindow != nullptr)
+        delete voiceFxWindow.getComponent();
 }
 
 void PlayerComponent::setDiscordStatus(const juce::String& text)
@@ -116,12 +97,52 @@ void PlayerComponent::setWarningBanner(const juce::String& text)
     resized(); // the banner's presence changes how much height everything below it gets
 }
 
+void PlayerComponent::setSoundNames(const juce::StringArray& names)
+{
+    soundboardGrid.setSoundNames(names);
+}
+
+void PlayerComponent::setPlayingPlaylistId(const juce::Uuid& id)
+{
+    playlistPanel.setPlayingPlaylistId(id);
+}
+
+void PlayerComponent::showVoiceFxWindow()
+{
+    if (voiceFxWindow != nullptr)
+    {
+        // Already open - focus it rather than stacking a second copy.
+        voiceFxWindow->toFront(true);
+        return;
+    }
+
+    juce::DialogWindow::LaunchOptions options;
+    options.dialogTitle = "Voice FX";
+    options.content.setOwned(new VoiceFxComponent(scanner, voiceChain, availablePlugins));
+    options.componentToCentreAround = this;
+    options.dialogBackgroundColour = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar = true;
+    options.resizable = true;
+
+    voiceFxWindow = options.launchAsync();
+}
+
 void PlayerComponent::timerCallback()
 {
     auto text = "Now playing: " + playlist.getCurrentTrackName();
     if (playlist.isCrossfading())
         text += " (crossfading)";
     nowPlayingLabel.setText(text, juce::dontSendNotification);
+
+    // Only repaint the track list when the track actually changed - this
+    // ticks twice a second and the list can be long.
+    auto current = playlist.getCurrentTrackFile();
+    if (current != lastSeenTrack)
+    {
+        lastSeenTrack = current;
+        playlistPanel.repaint();
+    }
 
     // Shuffle/mute can also change via the Stream Deck plugin's
     // ControlServer commands, and monitoring flips off when Discord
@@ -151,38 +172,21 @@ void PlayerComponent::refreshToggleStates()
     updateMonitorButtonText();
 }
 
-void PlayerComponent::rebuildChainListUI()
-{
-    removeChainButtons.clear();
-
-    auto n = voiceChain.getNumPlugins();
-    for (int i = 0; i < n; ++i)
-    {
-        auto* button = removeChainButtons.add(new juce::TextButton("Remove: " + voiceChain.getPluginName(i)));
-        chainListPanel.addAndMakeVisible(button);
-        button->onClick = [this, i]
-        {
-            if (i < voiceChain.getNumPlugins())
-                voiceChain.removePlugin(i);
-            rebuildChainListUI();
-        };
-    }
-
-    layoutRows(chainListPanel, removeChainButtons, chainListViewport.getWidth() - chainListViewport.getScrollBarThickness());
-}
-
 void PlayerComponent::resized()
 {
-    auto area = getLocalBounds().reduced(24);
+    auto area = getLocalBounds().reduced(kMargin);
 
-    nowPlayingLabel.setBounds(area.removeFromTop(28));
+    auto headerRow = area.removeFromTop(28);
+    settingsButton.setBounds(headerRow.removeFromRight(90));
+    nowPlayingLabel.setBounds(headerRow);
+
     discordStatusLabel.setBounds(area.removeFromTop(22));
-    area.removeFromTop(12);
+    area.removeFromTop(8);
 
     if (warningBannerLabel.getText().isNotEmpty())
     {
         warningBannerLabel.setBounds(area.removeFromTop(22));
-        area.removeFromTop(12);
+        area.removeFromTop(8);
     }
     else
     {
@@ -197,27 +201,10 @@ void PlayerComponent::resized()
     muteButton.setBounds(buttonRow.removeFromLeft(100));
     buttonRow.removeFromLeft(8);
     monitorButton.setBounds(buttonRow.removeFromLeft(120));
-    settingsButton.setBounds(buttonRow.removeFromRight(90));
-    area.removeFromTop(20);
+    voiceFxButton.setBounds(buttonRow.removeFromRight(110));
+    area.removeFromTop(16);
 
-    auto listsArea = area;
-    auto columnWidth = (listsArea.getWidth() - 24) / 3;
-
-    auto soundboardColumn = listsArea.removeFromLeft(columnWidth);
-    listsArea.removeFromLeft(12);
-    auto pluginColumn = listsArea.removeFromLeft(columnWidth);
-    listsArea.removeFromLeft(12);
-    auto chainColumn = listsArea;
-
-    soundboardCaption.setBounds(soundboardColumn.removeFromTop(22));
-    soundboardViewport.setBounds(soundboardColumn);
-    layoutRows(soundboardPanel, soundboardButtons, soundboardViewport.getWidth() - soundboardViewport.getScrollBarThickness());
-
-    pluginListCaption.setBounds(pluginColumn.removeFromTop(22));
-    pluginListViewport.setBounds(pluginColumn);
-    layoutRows(pluginListPanel, addPluginButtons, pluginListViewport.getWidth() - pluginListViewport.getScrollBarThickness());
-
-    chainListCaption.setBounds(chainColumn.removeFromTop(22));
-    chainListViewport.setBounds(chainColumn);
-    layoutRows(chainListPanel, removeChainButtons, chainListViewport.getWidth() - chainListViewport.getScrollBarThickness());
+    playlistPanel.setBounds(area.removeFromLeft(kLeftColumnWidth));
+    area.removeFromLeft(kColumnGap);
+    soundboardGrid.setBounds(area);
 }

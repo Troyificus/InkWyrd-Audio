@@ -376,6 +376,85 @@ from the GUI (needs a real bot token/guild/channel, not exercised in
 this pass) and the Settings "restart to apply changed Discord settings"
 message's accuracy across a real restart.
 
+## Playlist library + two-column player (drop 1 of 3)
+
+Replaced the single music folder with a real playlist library, and
+rebuilt the main screen as playlist-left / soundboard-right. Design
+decisions were put to the user and answered; see the "Agreed but not yet
+built" section below for what's deliberately still outstanding.
+
+- **`src/audio-engine/PlaylistLibrary.{h,cpp}`** - `PlaylistEntry` /
+  `Playlist` / `PlaylistLibrary`, persisted one JSON file per playlist
+  under `%APPDATA%\Inkwyrd Audio\Playlists\`. Deliberately NOT in the
+  settings XML: the user wanted them individually backup-able and
+  shareable. An entry is a single file, a **live** folder link
+  (re-scanned on use, so files added later appear), or a folder
+  **snapshot** (frozen at import so tracks can be removed individually).
+  A snapshot is a folder entry with `live=false` carrying its own list,
+  so it stays one removable row instead of exploding into N file rows.
+- **It lives in the AudioEngine lib, not the app**, specifically so the
+  console harness can exercise it headlessly - that's what made 26
+  automated checks possible for a feature that's otherwise GUI-bound.
+- Writes are **atomic** (`juce::TemporaryFile`); a **newer**
+  `schemaVersion` is skipped, left untouched on disk and reported rather
+  than being rewritten by older code; missing files are reported via
+  `ResolvedPlaylist::missingPaths`, never deleted from the JSON (an
+  unplugged drive must not destroy a playlist).
+- **`PlaylistEngine` stays single-list.** The app resolves a playlist to
+  a `juce::Array<juce::File>` and hands it over. This is why
+  `ControlServer.cpp` needed *no changes at all* - its four commands
+  still mean "the current list". New API: `setTracks` (no playback side
+  effects, so editing the list you're listening to doesn't restart it),
+  `crossfadeToTracks`, `crossfadeToTrackInCurrentList`,
+  `setShuffleChangedCallback`.
+- **`start()` was hardened.** It used to reset `activeDeck = 0` without
+  stopping deck 1, so using it to switch lists mid-playback left two
+  decks running over each other. It now stops both first, and the header
+  says to use `crossfadeToTracks()` for live switching.
+- **`skipToNext()` no longer no-ops mid-crossfade** - it collapses the
+  in-flight fade and starts the next one, so hammering Skip (or a Stream
+  Deck button) stops dropping presses. Flagged to the user as an
+  audible behaviour change to judge by ear.
+- **`SoundboardEngine` gained the API it never had**: `hasSound`,
+  `getRegisteredNames`, `removeSound`, `clearSounds`, `stopAllVoices`.
+  This fixed a real leak - changing the soundboard folder cleared the
+  GUI's parallel `soundNames` array but never the engine's map, so old
+  sounds stayed triggerable from the Stream Deck while invisible in the
+  app. That parallel array is now deleted entirely; the grid reads
+  `getRegisteredNames()`.
+- **Removed `jassertfalse` from `trigger()`** on an unknown name. Stream
+  Deck buttons carry free-text names, so a typo is ordinary user error -
+  it was aborting Debug builds.
+- **Stream Deck compatibility is the acceptance criterion**: sound names
+  stay `getFileNameWithoutExtension()` and stay the trigger key, so
+  every already-shipped plugin button keeps matching.
+- **Migration**: guarded by an explicit `playlistLibraryMigrated`
+  setting (not "is the library empty?", so deleting every playlist
+  doesn't resurrect the old one), the previous single music folder
+  becomes a playlist with one live recursive folder link - exactly what
+  `loadFolder` used to do.
+- **VST panel moved verbatim** into `VoiceFxComponent` behind a
+  `Voice FX...` button. A pure move, not a redesign - the user deferred
+  designing its permanent home on the main screen.
+
+### Verified
+
+26 headless checks via `INKWYRD_SELFTEST=1` on the console harness
+(JSON round-trip, dedup across a linked folder and a file inside it,
+missing files reported, duplicate names suffixed, future schemaVersion
+skipped and left intact, garbage JSON survived, rename collision
+refused, and the engine's "crossfade to an empty list is refused"
+guarantee). Plus a real launch against a synthetic legacy settings file
+confirming migration produced the right JSON and the right UI.
+
+**GUI click automation proved unreliable here** - `SetForegroundWindow`
+silently fails (Windows blocks foreground stealing), so `CopyFromScreen`
+captured whatever window was actually on top instead of the app. Use
+**`PrintWindow` with `PW_RENDERFULLCONTENT` (flag 2)**, which captures a
+window's own pixels even when occluded. Synthetic clicks also minimised
+the window once, so treat click-driving as best-effort and prefer
+headless verification for anything load-bearing.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`
@@ -385,8 +464,25 @@ message's accuracy across a real restart.
   explicitly wants this exposed as a setting when the feature pass
   happens, so the host can pick their own quality/bandwidth tradeoff.
   It's a named constant specifically so that's a small change.
-- **Playlist building options** - the next feature area, requested
-  immediately after the audio fixes settled. Nothing designed yet.
+- **Drag and drop from Explorer** into playlists (drop 2). No model or
+  engine changes needed: `PlaylistPanel` implements
+  `juce::FileDragAndDropTarget` and reuses the same `addFiles` /
+  link-vs-snapshot prompt the buttons already call.
+- **Assignable Stream-Deck-style soundboard slots** (drop 3) - a fixed
+  grid you drop sounds onto, rename and recolour, persisted to
+  `soundboard.json`. `SoundboardGridComponent::setSoundNames()` becomes
+  `setSlots()`; the grid geometry doesn't move. The enumeration/removal
+  API added in drop 1 is what makes this small. Default slot names must
+  stay `getFileNameWithoutExtension()` or existing Stream Deck buttons
+  stop matching.
+- **Per-playlist track position across restarts.** Currently
+  session-only (`lastPlayedByPlaylistId` in the app, keyed by id and
+  storing a FILE not an index, because shuffle reshuffles the order on
+  wrap). A `"lastPlayed"` field is an additive, schema-v1-compatible
+  change.
+- **Crossfade duration** is a `const` member and doubles as the
+  end-of-track look-ahead, so per-playlist fade times need care around a
+  live ramp.
 
 ## Beta release process
 

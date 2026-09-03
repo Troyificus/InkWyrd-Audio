@@ -18,7 +18,9 @@ public:
 
     void showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soundboard, MasterEngine& masterEngine,
                          PluginScanner& scanner, PluginChain& voiceChain,
-                         juce::Array<juce::PluginDescription> availablePlugins, juce::StringArray soundNames,
+                         juce::Array<juce::PluginDescription> availablePlugins,
+                         PlaylistLibrary& library,
+                         std::function<void(const juce::Uuid&)> onActivatePlaylist,
                          std::function<void()> onSettingsClicked);
 
     // nullptr if the Setup view is currently showing.

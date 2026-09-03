@@ -1,4 +1,5 @@
 #include "PlaylistEngine.h"
+#include "PlaylistLibrary.h"
 
 #include <cmath>
 
@@ -30,19 +31,17 @@ PlaylistEngine::~PlaylistEngine()
 
 void PlaylistEngine::loadFolder(const juce::File& folder)
 {
-    playOrder.clear();
-    nextOrderIndex = 0;
-
     // Recursive: people point this at an album or library folder whose
     // audio lives a level or two down. Real beta report - the chosen
     // folder held only cover art at the top level and 26 tracks in
     // per-track subfolders, so nothing played and nothing said why.
-    for (const auto& entry : juce::RangedDirectoryIterator(folder, true, "*", juce::File::findFiles))
-    {
-        auto file = entry.getFile();
-        if (formatManager.findFormatForFileExtension(file.getFileExtension()) != nullptr)
-            playOrder.add(file);
-    }
+    setTracks(inkwyrd::scanFolderForAudio(folder, formatManager, true));
+}
+
+void PlaylistEngine::setTracks(const juce::Array<juce::File>& tracks)
+{
+    playOrder = tracks;
+    nextOrderIndex = 0;
 
     if (shuffleEnabled)
         for (int i = playOrder.size() - 1; i > 0; --i)
@@ -51,7 +50,18 @@ void PlaylistEngine::loadFolder(const juce::File& folder)
 
 void PlaylistEngine::setShuffle(bool shouldShuffle)
 {
+    if (shuffleEnabled == shouldShuffle)
+        return;
+
     shuffleEnabled = shouldShuffle;
+
+    if (shuffleChangedCallback)
+        shuffleChangedCallback(shuffleEnabled);
+}
+
+void PlaylistEngine::setShuffleChangedCallback(std::function<void(bool)> callback)
+{
+    shuffleChangedCallback = std::move(callback);
 }
 
 juce::File PlaylistEngine::pickNextFile()
@@ -84,6 +94,15 @@ void PlaylistEngine::loadIntoDeck(Deck& deck, const juce::File& file)
 
 void PlaylistEngine::start()
 {
+    // Stop everything first. This used to reset activeDeck to 0 while
+    // leaving deck 1 running at whatever gain a crossfade had left it
+    // at, so any future caller who used start() to change lists got two
+    // decks playing over each other. crossfadeToTracks() is the
+    // supported way to switch while audio is live.
+    stop();
+    decks[0].transport.setGain(1.0f);
+    decks[1].transport.setGain(0.0f);
+
     auto file = pickNextFile();
     if (file == juce::File())
         return;
@@ -95,6 +114,62 @@ void PlaylistEngine::start()
     currentTrackFile = file;
 }
 
+bool PlaylistEngine::isAnyDeckPlaying() const
+{
+    return decks[0].transport.isPlaying() || decks[1].transport.isPlaying();
+}
+
+void PlaylistEngine::seekOrderTo(const juce::File& file)
+{
+    nextOrderIndex = 0;
+    if (file == juce::File())
+        return;
+
+    auto index = playOrder.indexOf(file);
+    if (index >= 0)
+        nextOrderIndex = index;
+}
+
+void PlaylistEngine::crossfadeToTracks(const juce::Array<juce::File>& tracks, const juce::File& startFrom)
+{
+    // Never swap in an empty list - silence mid-session is worse than
+    // staying on the list that's already playing.
+    if (tracks.isEmpty())
+        return;
+
+    if (!isAnyDeckPlaying())
+    {
+        setTracks(tracks);
+        seekOrderTo(startFrom);
+        start();
+        return;
+    }
+
+    // Collapse any fade already in flight first, so the incoming track
+    // fades in from a settled state rather than a half-faded one.
+    finishCrossfadeNow();
+    setTracks(tracks);
+    seekOrderTo(startFrom);
+    beginCrossfadeTo(pickNextFile());
+}
+
+void PlaylistEngine::crossfadeToTrackInCurrentList(const juce::File& file)
+{
+    if (!playOrder.contains(file))
+        return;
+
+    seekOrderTo(file);
+
+    if (!isAnyDeckPlaying())
+    {
+        start();
+        return;
+    }
+
+    finishCrossfadeNow();
+    beginCrossfadeTo(pickNextFile());
+}
+
 void PlaylistEngine::stop()
 {
     decks[0].transport.stop();
@@ -104,13 +179,34 @@ void PlaylistEngine::stop()
 
 void PlaylistEngine::skipToNext()
 {
-    if (!crossfading)
-        beginCrossfade();
+    // A skip during an existing crossfade used to be silently swallowed,
+    // so hammering Skip (or a Stream Deck button) dropped presses. Cut
+    // the fade short and start the next one instead.
+    finishCrossfadeNow();
+    beginCrossfade();
 }
 
 void PlaylistEngine::beginCrossfade()
 {
-    auto file = pickNextFile();
+    beginCrossfadeTo(pickNextFile());
+}
+
+void PlaylistEngine::finishCrossfadeNow()
+{
+    if (!crossfading)
+        return;
+
+    decks[activeDeck].transport.stop();
+    decks[activeDeck].transport.setGain(1.0f); // leave it clean for reuse
+    activeDeck = 1 - activeDeck;
+    decks[activeDeck].transport.setGain(1.0f); // snap the incoming deck to full
+    currentTrackFile = incomingTrackFile;
+    crossfading = false;
+    crossfadeElapsedSeconds = 0.0;
+}
+
+void PlaylistEngine::beginCrossfadeTo(const juce::File& file)
+{
     if (file == juce::File())
         return;
 
@@ -144,12 +240,8 @@ void PlaylistEngine::timerCallback()
         applyCrossfadeGains();
 
         if (crossfadeElapsedSeconds >= crossfadeDurationSeconds)
-        {
-            decks[activeDeck].transport.stop();
-            activeDeck = 1 - activeDeck;
-            currentTrackFile = incomingTrackFile;
-            crossfading = false;
-        }
+            finishCrossfadeNow();
+
         return;
     }
 

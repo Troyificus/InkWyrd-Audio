@@ -16,7 +16,23 @@ public:
     ~SoundboardEngine() override;
 
     void registerSound(const juce::String& name, const juce::File& file);
+
+    // A name that isn't registered is a no-op, not an error - Stream Deck
+    // buttons carry free-text names typed by the user, so a mismatch is
+    // ordinary user error rather than a programming mistake.
     void trigger(const juce::String& name);
+
+    bool hasSound(const juce::String& name) const;
+    juce::File getSoundFile(const juce::String& name) const; // {} if not registered
+    juce::StringArray getRegisteredNames() const;            // alphabetical (std::map order)
+
+    void removeSound(const juce::String& name);
+
+    // Safe to call while sounds are playing: each voice owns its own
+    // reader, independent of this map.
+    void clearSounds();
+
+    void stopAllVoices();
 
     // juce::AudioSource
     void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override;

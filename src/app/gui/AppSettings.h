@@ -33,6 +33,17 @@ public:
     juce::String getChannelId() const;
     void setChannelId(const juce::String& channelId);
 
+    // Which playlist was last activated, so the app comes back up on it.
+    juce::String getActivePlaylistId() const;
+    void setActivePlaylistId(const juce::String& id);
+
+    // Whether the one-time "wrap the old single music folder as a
+    // playlist" migration has run. An explicit flag rather than
+    // "is the library empty?", so deleting every playlist doesn't
+    // resurrect the legacy one on the next launch.
+    bool isPlaylistLibraryMigrated() const;
+    void setPlaylistLibraryMigrated(bool migrated);
+
     bool isPlaylistFolderSet() const;
     bool hasDiscordCredentials() const;
 

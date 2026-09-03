@@ -27,14 +27,48 @@ void SoundboardEngine::registerSound(const juce::String& name, const juce::File&
     registeredSounds[name] = file;
 }
 
+bool SoundboardEngine::hasSound(const juce::String& name) const
+{
+    return registeredSounds.find(name) != registeredSounds.end();
+}
+
+juce::File SoundboardEngine::getSoundFile(const juce::String& name) const
+{
+    auto it = registeredSounds.find(name);
+    return it == registeredSounds.end() ? juce::File() : it->second;
+}
+
+juce::StringArray SoundboardEngine::getRegisteredNames() const
+{
+    juce::StringArray names;
+    for (const auto& pair : registeredSounds)
+        names.add(pair.first);
+    return names;
+}
+
+void SoundboardEngine::removeSound(const juce::String& name)
+{
+    registeredSounds.erase(name);
+}
+
+void SoundboardEngine::clearSounds()
+{
+    // Voices keep playing whatever they already loaded - each owns its
+    // own reader, created per trigger, independent of this map.
+    registeredSounds.clear();
+}
+
+void SoundboardEngine::stopAllVoices()
+{
+    for (auto* voice : voices)
+        voice->transport.stop();
+}
+
 void SoundboardEngine::trigger(const juce::String& name)
 {
     auto it = registeredSounds.find(name);
     if (it == registeredSounds.end())
-    {
-        jassertfalse; // triggered a sound that was never registered
-        return;
-    }
+        return; // unknown name is ordinary user error - see the header
 
     auto* reader = formatManager.createReaderFor(it->second);
     if (reader == nullptr)

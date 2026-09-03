@@ -18,6 +18,12 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/SetupComponent.h
     gui/PlayerComponent.cpp
     gui/PlayerComponent.h
+    gui/PlaylistPanel.cpp
+    gui/PlaylistPanel.h
+    gui/SoundboardGridComponent.cpp
+    gui/SoundboardGridComponent.h
+    gui/VoiceFxComponent.cpp
+    gui/VoiceFxComponent.h
     gui/AppSettings.cpp
     gui/AppSettings.h
     gui/DiscordConnector.cpp

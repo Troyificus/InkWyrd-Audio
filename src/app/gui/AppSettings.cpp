@@ -7,6 +7,8 @@ namespace
     constexpr const char* kBotTokenKey = "discordBotToken";
     constexpr const char* kGuildIdKey = "discordGuildId";
     constexpr const char* kChannelIdKey = "discordChannelId";
+    constexpr const char* kActivePlaylistIdKey = "activePlaylistId";
+    constexpr const char* kPlaylistLibraryMigratedKey = "playlistLibraryMigrated";
 }
 
 AppSettings::AppSettings()
@@ -73,6 +75,26 @@ juce::String AppSettings::getChannelId() const
 void AppSettings::setChannelId(const juce::String& channelId)
 {
     settings()->setValue(kChannelIdKey, channelId);
+}
+
+juce::String AppSettings::getActivePlaylistId() const
+{
+    return settings()->getValue(kActivePlaylistIdKey);
+}
+
+void AppSettings::setActivePlaylistId(const juce::String& id)
+{
+    settings()->setValue(kActivePlaylistIdKey, id);
+}
+
+bool AppSettings::isPlaylistLibraryMigrated() const
+{
+    return settings()->getBoolValue(kPlaylistLibraryMigratedKey, false);
+}
+
+void AppSettings::setPlaylistLibraryMigrated(bool migrated)
+{
+    settings()->setValue(kPlaylistLibraryMigratedKey, migrated);
 }
 
 bool AppSettings::isPlaylistFolderSet() const

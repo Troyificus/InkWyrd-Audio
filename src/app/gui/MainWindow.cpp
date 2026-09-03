@@ -18,11 +18,14 @@ void MainWindow::showSetupView(AppSettings& settings, std::function<void(SetupCo
 
 void MainWindow::showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soundboard, MasterEngine& masterEngine,
                                  PluginScanner& scanner, PluginChain& voiceChain,
-                                 juce::Array<juce::PluginDescription> availablePlugins, juce::StringArray soundNames,
+                                 juce::Array<juce::PluginDescription> availablePlugins,
+                                 PlaylistLibrary& library,
+                                 std::function<void(const juce::Uuid&)> onActivatePlaylist,
                                  std::function<void()> onSettingsClicked)
 {
     auto* component = new PlayerComponent(playlist, soundboard, masterEngine, scanner, voiceChain,
-                                           std::move(availablePlugins), std::move(soundNames),
+                                           std::move(availablePlugins), library,
+                                           std::move(onActivatePlaylist),
                                            std::move(onSettingsClicked));
     playerComponent = component;
     setContentOwned(component, true);

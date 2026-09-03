@@ -45,18 +45,34 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     else
         deviceManager.addAudioCallback(&masterEngine);
 
+    // Persist per-playlist shuffle, including when the Stream Deck
+    // toggles it - the app can't just watch its own button for that.
+    playlist.setShuffleChangedCallback([this](bool shuffleOn)
+    {
+        if (!activePlaylistId.isNull())
+            library.setShuffle(activePlaylistId, shuffleOn);
+    });
+
+    library.loadAll();
+    migratePlaylistLibraryIfNeeded();
+
     mainWindow = std::make_unique<MainWindow>(getApplicationName());
 
-    if (settings.isPlaylistFolderSet())
+    if (!library.isEmpty() || settings.isPlaylistFolderSet())
     {
-        playlist.loadFolder(settings.getPlaylistFolder());
-        playlist.start();
-
         if (settings.getSoundboardFolder().isDirectory())
-            soundNames = registerSoundboardFolder(settings.getSoundboardFolder());
+            registerSoundboardFolder(settings.getSoundboardFolder());
 
         applyDefaultLocalMonitoring();
         showPlayer(); // after the above, so the Monitor button opens showing the right state
+
+        // Come back up on whichever playlist was last in use.
+        auto* startupPlaylist = library.findById(juce::Uuid(settings.getActivePlaylistId()));
+        if (startupPlaylist == nullptr)
+            startupPlaylist = library.getPlaylist(0);
+
+        if (startupPlaylist != nullptr)
+            activatePlaylist(startupPlaylist->id);
 
         discordConnectAttempted = true;
         startDiscordConnectIfConfigured();
@@ -65,6 +81,62 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     {
         showSetup();
     }
+}
+
+void InkwyrdAudioApplication::migratePlaylistLibraryIfNeeded()
+{
+    if (settings.isPlaylistLibraryMigrated())
+        return;
+
+    // Upgrading from the single-music-folder version: wrap that folder as
+    // a live recursive folder link, which is exactly what the old
+    // loadFolder() did, so the user's setup keeps working untouched.
+    if (settings.isPlaylistFolderSet())
+    {
+        auto& migrated = library.createFromLegacyFolder(settings.getPlaylistFolder());
+        settings.setActivePlaylistId(migrated.id.toDashedString());
+        logLine("[App] Migrated existing music folder into playlist \"" + migrated.name + "\"");
+    }
+
+    settings.setPlaylistLibraryMigrated(true);
+    settings.save(); // AppSettings has no autosave - this call is mandatory
+}
+
+void InkwyrdAudioApplication::activatePlaylist(const juce::Uuid& id)
+{
+    auto* target = library.findById(id);
+    if (target == nullptr)
+        return;
+
+    // Remember where the outgoing playlist got to, so coming back to it
+    // resumes instead of starting over.
+    if (!activePlaylistId.isNull() && activePlaylistId != id)
+    {
+        auto current = playlist.getCurrentTrackFile();
+        if (current != juce::File())
+            lastPlayedByPlaylistId[activePlaylistId.toDashedString()] = current;
+    }
+
+    activePlaylistId = id;
+    settings.setActivePlaylistId(id.toDashedString());
+    settings.save();
+
+    playlist.setShuffle(target->shuffle);
+
+    auto resolved = library.resolve(*target);
+
+    juce::File resumeFrom;
+    auto remembered = lastPlayedByPlaylistId.find(id.toDashedString());
+    if (remembered != lastPlayedByPlaylistId.end())
+        resumeFrom = remembered->second;
+
+    // Crossfades if something is already playing, plain-starts if not.
+    playlist.crossfadeToTracks(resolved.files, resumeFrom);
+
+    if (auto* player = mainWindow->getPlayerComponent())
+        player->setPlayingPlaylistId(id);
+
+    updateWarningBanner();
 }
 
 void InkwyrdAudioApplication::shutdown()
@@ -105,25 +177,50 @@ void InkwyrdAudioApplication::applyDefaultLocalMonitoring()
 
 void InkwyrdAudioApplication::showPlayer()
 {
-    mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins, soundNames,
+    mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins,
+                                library,
+                                [this](const juce::Uuid& id) { activatePlaylist(id); },
                                 [this] { showSetup(); });
 
     if (auto* player = mainWindow->getPlayerComponent())
     {
-        // Both of these otherwise produce silence with no visible reason.
-        juce::StringArray warnings;
-
-        if (audioDeviceError.isNotEmpty())
-            warnings.add("Audio device failed to open: " + audioDeviceError
-                          + " - no sound (mic, playlist or Discord) will work until this is fixed.");
-
-        if (settings.isPlaylistFolderSet() && playlist.getNumTracks() == 0)
-            warnings.add("No playable audio files found in "
-                          + settings.getPlaylistFolder().getFullPathName()
-                          + " - pick a folder containing WAV, AIFF, FLAC, Ogg, MP3, AAC/M4A or WMA files.");
-
-        player->setWarningBanner(warnings.joinIntoString("  |  "));
+        player->setSoundNames(soundboard.getRegisteredNames());
+        if (!activePlaylistId.isNull())
+            player->setPlayingPlaylistId(activePlaylistId);
     }
+
+    updateWarningBanner();
+}
+
+void InkwyrdAudioApplication::updateWarningBanner()
+{
+    auto* player = mainWindow != nullptr ? mainWindow->getPlayerComponent() : nullptr;
+    if (player == nullptr)
+        return;
+
+    // All of these otherwise produce silence, or a missing playlist, with
+    // no visible reason at all.
+    juce::StringArray warnings;
+
+    if (audioDeviceError.isNotEmpty())
+        warnings.add("Audio device failed to open: " + audioDeviceError
+                      + " - no sound (mic, playlist or Discord) will work until this is fixed.");
+
+    if (auto* active = library.findById(activePlaylistId))
+    {
+        auto resolved = library.resolve(*active);
+
+        if (resolved.files.isEmpty())
+            warnings.add("\"" + active->name + "\" has no playable audio files - add files or a folder "
+                          "containing WAV, AIFF, FLAC, Ogg, MP3, AAC/M4A or WMA.");
+        else if (!resolved.missingPaths.isEmpty())
+            warnings.add(juce::String(resolved.missingPaths.size())
+                          + " track(s) in \"" + active->name + "\" are missing from disk and were skipped.");
+    }
+
+    warnings.addArray(library.getLoadWarnings());
+
+    player->setWarningBanner(warnings.joinIntoString("  |  "));
 }
 
 void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result result)
@@ -135,17 +232,27 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
     settings.setChannelId(result.channelId);
     settings.save();
 
-    // Folder changes hot-swap immediately - loadFolder() only rebuilds
-    // the internal play order, and start() cleanly (re)loads deck 0, so
-    // this is safe to do live. One playback interruption is expected -
-    // the user just asked to change the folder.
-    playlist.stop();
-    playlist.loadFolder(result.playlistFolder);
-    playlist.start();
+    // The Setup screen's music folder now seeds a playlist rather than
+    // being the one and only source. Idempotent: re-saving Settings
+    // without changing the folder must not pile up duplicate playlists.
+    if (result.playlistFolder.isDirectory())
+    {
+        Playlist* existing = nullptr;
+        for (int i = 0; i < library.getNumPlaylists() && existing == nullptr; ++i)
+        {
+            auto* candidate = library.getPlaylist(i);
+            for (const auto& entry : candidate->entries)
+                if (entry.kind == PlaylistEntry::Kind::folder && entry.path == result.playlistFolder)
+                    existing = candidate;
+        }
 
-    soundNames.clear();
-    if (result.soundboardFolder.isDirectory())
-        soundNames = registerSoundboardFolder(result.soundboardFolder);
+        if (existing == nullptr)
+            existing = &library.createFromLegacyFolder(result.playlistFolder);
+
+        activatePlaylist(existing->id);
+    }
+
+    registerSoundboardFolder(result.soundboardFolder);
 
     // Only on the first pass through setup. Re-applying it on every save
     // would silently undo a monitor toggle the user had deliberately
@@ -212,17 +319,26 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
         });
 }
 
-juce::StringArray InkwyrdAudioApplication::registerSoundboardFolder(const juce::File& folder)
+void InkwyrdAudioApplication::registerSoundboardFolder(const juce::File& folder)
 {
-    juce::StringArray names;
+    // Clear first. This used to leak: changing the soundboard folder
+    // emptied the GUI's list but left every old sound registered in the
+    // engine, so the Stream Deck could still trigger sounds the app no
+    // longer showed anywhere.
+    soundboard.clearSounds();
+
+    if (!folder.isDirectory())
+        return;
+
     for (const auto& entry : juce::RangedDirectoryIterator(folder, false, "*", juce::File::findFiles))
     {
         auto file = entry.getFile();
         if (formatManager.findFormatForFileExtension(file.getFileExtension()) == nullptr)
             continue;
-        auto name = file.getFileNameWithoutExtension();
-        soundboard.registerSound(name, file);
-        names.add(name);
+
+        // Name stays the bare filename: existing Stream Deck buttons
+        // carry these strings, and changing the scheme would silently
+        // stop every one of them matching.
+        soundboard.registerSound(file.getFileNameWithoutExtension(), file);
     }
-    return names;
 }

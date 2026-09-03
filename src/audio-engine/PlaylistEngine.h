@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -27,14 +29,43 @@ public:
     // read and builds a fresh (optionally shuffled) play order from them.
     void loadFolder(const juce::File& folder);
 
-    // How many playable files loadFolder() actually found. Callers use
+    // Replaces the play order outright. Deliberately has NO playback side
+    // effects: editing the list you're currently listening to shouldn't
+    // restart or interrupt the track that's playing. Callers decide
+    // separately whether to start() or crossfadeToTracks().
+    void setTracks(const juce::Array<juce::File>& tracks);
+
+    // Switches to a different list AND crossfades into it from whatever
+    // is playing, using the same equal-power fade as an end-of-track
+    // transition. startFrom picks the track to land on ({} = first in
+    // order). Safe to call mid-crossfade. No-op on an empty list, so a
+    // mis-click can't leave the room in silence.
+    void crossfadeToTracks(const juce::Array<juce::File>& tracks, const juce::File& startFrom = {});
+
+    // Jump to a track already in the current list, crossfading into it.
+    // Playback continues sequentially from there.
+    void crossfadeToTrackInCurrentList(const juce::File& file);
+
+    // How many playable files the current list actually has. Callers use
     // this to tell the user when a chosen folder yielded nothing, rather
     // than sitting silently producing no audio.
     int getNumTracks() const { return playOrder.size(); }
 
+    juce::File getCurrentTrackFile() const { return currentTrackFile; }
+
+    // Fires on the message thread when shuffle actually changes value -
+    // including via ControlServer's toggleShuffle, which is why the app
+    // can't just watch its own button. Used to persist per-playlist
+    // shuffle state. Must not call back into this engine.
+    void setShuffleChangedCallback(std::function<void(bool)> callback);
+
     void setShuffle(bool shouldShuffle);
     bool isShuffleEnabled() const { return shuffleEnabled; }
 
+    // Only valid from a stopped or freshly-constructed state. To change
+    // lists while audio is playing use crossfadeToTracks() - start()
+    // deliberately stops everything first, so calling it mid-playback
+    // cuts rather than fades.
     void start();
     void stop();
 
@@ -61,6 +92,10 @@ private:
     void loadIntoDeck(Deck& deck, const juce::File& file);
     juce::File pickNextFile();
     void beginCrossfade();
+    void beginCrossfadeTo(const juce::File& file);
+    void finishCrossfadeNow();
+    bool isAnyDeckPlaying() const;
+    void seekOrderTo(const juce::File& file);
     void applyCrossfadeGains();
 
     juce::AudioFormatManager& formatManager;
@@ -83,6 +118,7 @@ private:
 
     bool shuffleEnabled = true;
     juce::Random random;
+    std::function<void(bool)> shuffleChangedCallback;
 
     double currentSampleRate = 44100.0;
     bool prepared = false;

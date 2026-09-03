@@ -73,20 +73,35 @@ channel ID.
 
 ### Using it
 
-The main screen has Skip / Shuffle / Mic mute buttons, a "Now playing"
-line, and a Discord connection status line. Below that: one button per
-soundboard sound (click to play it), a list of VST3 plugins found on
-your system (click **Add** to drop one into your live mic chain), and
-the live chain itself (click **Remove** to take a plugin back out) -
-VST3 plugins are picked up automatically from your system's standard
-VST3 folder, nothing to configure. Changing a Discord bot token/server/
-channel via Settings takes effect on the next launch, not immediately -
-everything else (including switching folders) applies right away.
+Across the top: a "Now playing" line, the Discord connection status,
+and Skip / Shuffle / Mic mute / Monitor buttons.
+
+**Left - your playlists.** Keep as many as you like (one per scene, mood
+or session). Click one to look at its tracks; **double-click, or hit
+Play, to switch to it** - the music crossfades across rather than
+cutting. **Add folder...** either keeps the folder linked (files you add
+to it later show up automatically) or takes a one-time copy of what's in
+it, and **Add files...** adds individual tracks. Shuffle is remembered
+per playlist and only ever picks from that list. Playlists are stored as
+readable JSON files - **Open folder** shows you where.
+
+**Right - the soundboard.** One button per sound in your soundboard
+folder; click to fire it. Sounds can overlap.
+
+**Voice FX...** opens your VST3 plugin list and the live mic chain -
+plugins are found automatically in the standard VST3 folder, nothing to
+configure.
+
+Changing a Discord bot token/server/channel via Settings takes effect on
+the next launch, not immediately - everything else applies right away.
 
 ## Features
 
-- Local music playlists with shuffle and equal-power crossfade between
-  tracks - no manual DJing during a session.
+- As many named playlists as you like, with equal-power crossfade both
+  between tracks and when you jump from one playlist to another - no
+  manual DJing during a session. Shuffle is per-playlist.
+- Build playlists from linked folders (which stay up to date as you add
+  files), one-off folder imports, or individual tracks.
 - An on-demand soundboard for sound effects, layered independently of
   the music (up to 16 sounds can overlap at once).
 - Live microphone processing through your own VST3 plugin chain (EQ,
@@ -112,7 +127,10 @@ everything else (including switching folders) applies right away.
 - Changing your Discord bot token/server/channel via Settings takes
   effect on the next launch, not immediately - the app won't drop an
   active Discord connection to reconnect with new details mid-session.
-- No seek bar or track list yet - just a "Now playing" name.
+- No seek bar yet, and no drag-and-drop from Explorer into playlists
+  (both planned).
+- The soundboard fills itself from your soundboard folder; assignable
+  Stream-Deck-style buttons you arrange yourself are planned.
 
 If you hit a bug, please open an issue on this repo with what you were
 doing and (if possible) a screenshot of the status line/error.

@@ -5,25 +5,34 @@
 
 #include "MasterEngine.h"
 #include "PlaylistEngine.h"
-#include "SoundboardEngine.h"
+#include "PlaylistLibrary.h"
+#include "PlaylistPanel.h"
 #include "PluginChain.h"
 #include "PluginScanner.h"
+#include "SoundboardEngine.h"
+#include "SoundboardGridComponent.h"
 
-// Main playback screen: now-playing/skip/shuffle/mute, one button per
-// soundboard sound, a scanned-VST3-plugin list with per-row "Add", and
-// the live voice chain with per-row "Remove". Calls straight into the
-// engine objects from button onClick handlers - unlike the old console
-// app's stdin thread, JUCE button callbacks already run on the message
-// thread, so none of this needs callAsync marshaling.
+// Main screen: status and transport across the top, then the playlist
+// library and its tracks on the left, the SFX board on the right.
+//
+// Calls straight into the engine objects from button handlers - JUCE
+// button callbacks already run on the message thread, which is the
+// thread every engine method here expects.
 class PlayerComponent : public juce::Component,
                          private juce::Timer
 {
 public:
-    PlayerComponent(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse, MasterEngine& masterEngineToUse,
-                     PluginScanner& scannerToUse, PluginChain& voiceChainToUse,
+    PlayerComponent(PlaylistEngine& playlistToUse,
+                     SoundboardEngine& soundboardToUse,
+                     MasterEngine& masterEngineToUse,
+                     PluginScanner& scannerToUse,
+                     PluginChain& voiceChainToUse,
                      juce::Array<juce::PluginDescription> availablePluginsToUse,
-                     juce::StringArray soundNamesToUse,
+                     PlaylistLibrary& libraryToUse,
+                     std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
                      std::function<void()> onSettingsClickedToUse);
+
+    ~PlayerComponent() override;
 
     void resized() override;
 
@@ -32,9 +41,9 @@ public:
     void setDiscordStatus(const juce::String& text);
 
     // Prominent warning banner for things that silently produce "no
-    // sound" and previously had no visible indication at all: the audio
-    // device failing to open, or a chosen music folder yielding zero
-    // playable files. Empty text keeps the banner hidden.
+    // sound" and would otherwise have no visible indication: the audio
+    // device failing to open, a playlist yielding zero playable files,
+    // unreadable playlist files. Empty text keeps the banner hidden.
     void setWarningBanner(const juce::String& text);
 
     // Re-reads the engines' current shuffle/mute/monitor state into the
@@ -42,12 +51,16 @@ public:
     // it (connecting to Discord turns local monitoring off).
     void refreshToggleStates();
 
+    void setSoundNames(const juce::StringArray& names);
+    void setPlayingPlaylistId(const juce::Uuid& id);
+    PlaylistPanel& getPlaylistPanel() { return playlistPanel; }
+
 private:
     void timerCallback() override;
     void updateShuffleButtonText();
     void updateMuteButtonText();
     void updateMonitorButtonText();
-    void rebuildChainListUI();
+    void showVoiceFxWindow();
 
     PlaylistEngine& playlist;
     SoundboardEngine& soundboard;
@@ -58,26 +71,20 @@ private:
 
     juce::Label nowPlayingLabel;
     juce::Label discordStatusLabel;
-    juce::Label warningBannerLabel; // hidden (zero height) unless setWarningBanner() is given non-empty text
+    juce::Label warningBannerLabel; // hidden (zero height) unless given non-empty text
 
     juce::TextButton skipButton { "Skip" };
     juce::TextButton shuffleButton;
     juce::TextButton muteButton;
     juce::TextButton monitorButton;
+    juce::TextButton voiceFxButton { "Voice FX..." };
     juce::TextButton settingsButton { "Settings" };
 
-    juce::Label soundboardCaption { {}, "Soundboard" };
-    juce::Viewport soundboardViewport;
-    juce::Component soundboardPanel;
-    juce::OwnedArray<juce::TextButton> soundboardButtons;
+    PlaylistPanel playlistPanel;
+    SoundboardGridComponent soundboardGrid;
 
-    juce::Label pluginListCaption { {}, "Available VST3 plugins" };
-    juce::Viewport pluginListViewport;
-    juce::Component pluginListPanel;
-    juce::OwnedArray<juce::TextButton> addPluginButtons;
+    juce::File lastSeenTrack; // so the track list only repaints when it changes
 
-    juce::Label chainListCaption { {}, "Live voice chain" };
-    juce::Viewport chainListViewport;
-    juce::Component chainListPanel;
-    juce::OwnedArray<juce::TextButton> removeChainButtons;
+    // Non-modal, so the user can keep driving the session while it's open.
+    juce::Component::SafePointer<juce::DialogWindow> voiceFxWindow;
 };
