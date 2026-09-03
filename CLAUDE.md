@@ -699,6 +699,25 @@ release:
   near it) is unrelated to the beta version number - don't confuse the
   two. It's purely about a still-unresolved locked-file conflict with
   two old zombie processes.
+- **The uninstall registry key is NOT visible from a Claude Code session
+  on this machine, and reading it will lie to you.** Confirmed directly
+  during the beta.5 release: `HKCU:\...\Uninstall\{CA652386-...}_is1`
+  reads as absent, while
+  `%LOCALAPPDATA%\Programs\Inkwyrd Audio\` contains a complete
+  install including `unins000.exe`. The app is installed; the registry
+  view isn't the real one. Since the AppId is fixed, running the
+  documented silent-install-then-uninstall verification would therefore
+  **deregister the user's actual installed copy**, leaving orphaned
+  files and no entry in "Installed apps".
+
+  So: **don't run that cycle from a Claude Code session here.** The
+  failure mode it exists to catch - "forgot to rebuild before compiling
+  the installer" - can be covered safely instead by checking that the
+  freshly built `Inkwyrd Audio.exe`'s SIZE actually differs from the
+  currently installed one, and that the installer's mtime is later than
+  the build's. Both are a couple of `Get-Item` calls. Do that, record
+  the installer's SHA-256, and say plainly in the handover that the full
+  install/uninstall cycle was skipped and why.
 
 ## Dev environment
 
