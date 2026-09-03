@@ -21,11 +21,13 @@ void MainWindow::showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soun
                                  juce::Array<juce::PluginDescription> availablePlugins,
                                  PlaylistLibrary& library,
                                  std::function<void(const juce::Uuid&)> onActivatePlaylist,
+                                 std::function<void(const juce::Uuid&)> onPlaylistEdited,
                                  std::function<void()> onSettingsClicked)
 {
     auto* component = new PlayerComponent(playlist, soundboard, masterEngine, scanner, voiceChain,
                                            std::move(availablePlugins), library,
                                            std::move(onActivatePlaylist),
+                                           std::move(onPlaylistEdited),
                                            std::move(onSettingsClicked));
     playerComponent = component;
     setContentOwned(component, true);

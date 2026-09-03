@@ -48,6 +48,54 @@ void PlaylistEngine::setTracks(const juce::Array<juce::File>& tracks)
             playOrder.swap(i, random.nextInt(i + 1));
 }
 
+void PlaylistEngine::updateTracksPreservingOrder(const juce::Array<juce::File>& tracks)
+{
+    // With shuffle off the list's own order IS the play order, so take it
+    // outright and simply resume after whatever is playing right now.
+    if (!shuffleEnabled)
+    {
+        playOrder = tracks;
+
+        auto index = playOrder.indexOf(currentTrackFile);
+        nextOrderIndex = index >= 0 ? index + 1
+                                     : juce::jmin(nextOrderIndex, playOrder.size());
+        return;
+    }
+
+    // Shuffled: the existing order is a permutation we must NOT rebuild -
+    // doing so would re-randomise what's still to come and could replay
+    // tracks already heard this cycle. Keep the surviving entries in place
+    // and splice the new ones into the not-yet-played remainder, so a
+    // track dropped in mid-session can still come up this time round.
+    juce::Array<juce::File> retained;
+    int survivingBeforeCursor = 0;
+
+    for (int i = 0; i < playOrder.size(); ++i)
+    {
+        if (!tracks.contains(playOrder[i]))
+            continue; // gone from the playlist - drop it
+
+        if (i < nextOrderIndex)
+            ++survivingBeforeCursor;
+
+        retained.add(playOrder[i]);
+    }
+
+    juce::Array<juce::File> additions;
+    for (const auto& file : tracks)
+        if (!retained.contains(file))
+            additions.add(file);
+
+    playOrder = std::move(retained);
+    nextOrderIndex = juce::jmin(survivingBeforeCursor, playOrder.size());
+
+    for (const auto& file : additions)
+    {
+        auto span = playOrder.size() - nextOrderIndex; // never negative
+        playOrder.insert(nextOrderIndex + random.nextInt(span + 1), file);
+    }
+}
+
 void PlaylistEngine::setShuffle(bool shouldShuffle)
 {
     if (shuffleEnabled == shouldShuffle)

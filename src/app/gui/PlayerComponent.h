@@ -30,6 +30,7 @@ public:
                      juce::Array<juce::PluginDescription> availablePluginsToUse,
                      PlaylistLibrary& libraryToUse,
                      std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
+                     std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
                      std::function<void()> onSettingsClickedToUse);
 
     ~PlayerComponent() override;

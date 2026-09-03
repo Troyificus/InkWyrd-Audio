@@ -21,6 +21,7 @@ public:
                          juce::Array<juce::PluginDescription> availablePlugins,
                          PlaylistLibrary& library,
                          std::function<void(const juce::Uuid&)> onActivatePlaylist,
+                         std::function<void(const juce::Uuid&)> onPlaylistEdited,
                          std::function<void()> onSettingsClicked);
 
     // nullptr if the Setup view is currently showing.

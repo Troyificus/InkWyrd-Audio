@@ -455,6 +455,91 @@ window's own pixels even when occluded. Synthetic clicks also minimised
 the window once, so treat click-driving as best-effort and prefer
 headless verification for anything load-bearing.
 
+## Drag and drop from Explorer (drop 2) - shipped
+
+`PlaylistPanel` implements `juce::FileDragAndDropTarget`. Two things
+about JUCE's Win32 file-drop path were **read out of
+`juce_ComponentPeer.cpp` rather than assumed**, and both shape the
+design:
+
+- `findDragAndDropTarget()` hit-tests to the component under the pointer
+  and then walks **up** through `getParentComponent()`. So implementing
+  the interface once on the panel catches drops over the playlist list,
+  the track list and the buttons alike - there is no need to make either
+  `ListBox` a target, and a drop that lands in the gap between them
+  still does something sensible instead of being swallowed.
+- The `x, y` handed to `fileDragMove`/`filesDropped` are already in the
+  **target component's** coordinate space (`newTarget->getLocalPoint`),
+  not the window's. `playlistRowAt()` converts panel coords to ListBox
+  coords before calling `getRowContainingPosition`.
+- `filesDropped` is delivered via `MessageManager::callAsync`, so it's
+  safe to open a modal dialog from it (which the folder path does).
+
+Behaviour: dropping onto a playlist ROW targets that playlist even if
+it isn't the selected one; dropping anywhere else targets the selected
+one; dropping when the library is empty creates a playlist named after
+what was dropped rather than being a dead end. Non-playable files are
+filtered via the new `PlaylistLibrary::isPlayableFile()` (shared with
+`addFiles`, so the UI can't drift out of step with the engine about
+what's playable), and a drop containing *nothing* playable says so
+rather than silently doing nothing. Dropped folders go through the same
+link-vs-snapshot prompt the "Add folder..." button uses - now factored
+into `addFoldersWithPrompt()`, which asks **once** for a whole batch
+rather than once per folder.
+
+### The real bug drop 2 exposed: editing the list you're listening to
+
+`setTracks()` resets `nextOrderIndex` to 0 and reshuffles. That is
+correct for a deliberate switch to a different playlist and **wrong**
+for an in-place edit: dropping one track onto the playlist that's
+currently playing would have sent it back to the top of the list (with
+shuffle off) or re-randomised everything still to come (with shuffle
+on). The plan for drop 2 said to just call `setTracks()`; that would
+have shipped the bug.
+
+New `PlaylistEngine::updateTracksPreservingOrder()` instead:
+- **Shuffle off** - take the playlist's own order outright and resume
+  immediately after whatever is playing.
+- **Shuffle on** - keep the existing permutation, drop entries that are
+  gone, and splice new ones into the part of the order that *hasn't
+  played yet* (so a track dropped in mid-session can still come up this
+  cycle) while leaving the already-played part untouched.
+- Removing a track that had already played slides the cursor back with
+  it, so the not-yet-played set stays correct.
+
+Wired up as `PlaylistPanel`'s `onPlaylistEdited(Uuid)` ->
+`InkwyrdAudioApplication::handlePlaylistEdited()`, which ignores edits
+to any playlist that isn't the active one. The **Refresh button now
+fires it too** - re-scanning a linked folder previously updated the
+track list on screen while the thing actually playing carried on with
+the old files.
+
+Two smaller fixes made while in here:
+- The `onLibraryChanged` callback `PlayerComponent` passed to
+  `PlaylistPanel` was an empty lambda, and the add-files/add-folder
+  buttons only called `refreshTracks()` - so **adding tracks through the
+  buttons never reached the engine either**. Same fix covers both.
+- Every async `FileChooser`/`AlertWindow` callback in the panel captured
+  a raw `this`. Hitting **Settings** while one was open destroys the
+  `PlayerComponent` (and with it the panel), so answering the dialog
+  afterwards would use freed memory. All five now capture a
+  `juce::Component::SafePointer` and bail if the panel is gone.
+
+### Verification
+
+`PlaylistPanel.cpp` is compiled into the **AudioEngineTest** target so
+the self-test can drive `filesDropped()` directly - a JUCE Component
+doesn't need a peer or a desktop window to be laid out and receive the
+call. Real Explorer drags can't be automated from outside the process
+(JUCE registers an OLE `IDropTarget` via `RegisterDragDrop`; there's no
+`WM_DROPFILES` handler to post to, and the `IDropTarget` pointer from
+`GetProp` is only valid inside the owning process), so the OS handoff
+itself is the one part left for manual confirmation. Everything from
+`isInterestedInFileDrag` inward is covered headlessly, including the
+row-targeting coordinate maths and the write-to-disk.
+
+`INKWYRD_SELFTEST=1` is now **48 checks** (was 26).
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`
@@ -464,10 +549,6 @@ headless verification for anything load-bearing.
   explicitly wants this exposed as a setting when the feature pass
   happens, so the host can pick their own quality/bandwidth tradeoff.
   It's a named constant specifically so that's a small change.
-- **Drag and drop from Explorer** into playlists (drop 2). No model or
-  engine changes needed: `PlaylistPanel` implements
-  `juce::FileDragAndDropTarget` and reuses the same `addFiles` /
-  link-vs-snapshot prompt the buttons already call.
 - **Assignable Stream-Deck-style soundboard slots** (drop 3) - a fixed
   grid you drop sounds onto, rename and recolour, persisted to
   `soundboard.json`. `SoundboardGridComponent::setSoundNames()` becomes
@@ -483,6 +564,41 @@ headless verification for anything load-bearing.
 - **Crossfade duration** is a `const` member and doubles as the
   end-of-track look-ahead, so per-playlist fade times need care around a
   live ramp.
+- **Winamp-style detachable window layout** - the user's chosen next
+  direction after drop 3, decided with reference screenshots of Winamp
+  and AIMP. Main window = player head + the playing playlist; SFX and
+  Voice FX become **satellite windows** that can pop out, be moved
+  anywhere, and snap magnetically to each other and to the main window
+  (dragging the main window drags anything flush-attached to it).
+  Sequenced explicitly as **layout first, custom skin as its own later
+  drop** - the user wants to see the layout working before art time is
+  spent on it.
+
+  Feasibility notes from reading the current code:
+  - The panels are already standalone components taking engine
+    references and owning no window state, and **`Voice FX...` already
+    opens in its own free-floating resizable window** - so the pattern
+    is proven in-app. Reparenting a JUCE component between the main
+    window and a satellite is cheap; `PlayerComponent` can keep owning
+    it either way, so `setSoundNames`/`setPlayingPlaylistId` keep
+    working regardless of where it's displayed.
+  - **JUCE ships no docking framework.** `MultiDocumentPanel` is
+    tabbed/tiled MDI, not floating snap. The magnetic snapping and
+    move-as-a-group behaviour is custom - a manager every top-level
+    window registers with, snapping edges within ~10px on drag. Fully
+    testable headlessly (it's pure geometry).
+  - **Known crash to design around up front**: Settings calls
+    `setContentOwned`, which deletes `PlayerComponent` and with it the
+    panels a satellite would be pointing at. Satellites must be torn
+    down first. Same class of bug as the `SafePointer` fix in drop 2.
+  - A skinned non-native title bar costs Windows snap layouts, Aero
+    shake and native accessibility, so it should be optional rather
+    than mandatory. Any skin must be original artwork in that visual
+    spirit - Winamp's own skin bitmaps are copyrighted.
+  - Winamp shows ONE playlist with a "Playlist Selection" dropdown,
+    whereas today's panel stacks the library list above the track list.
+    Going this route probably means the library becomes a dropdown or
+    its own satellite. That's a real design decision, not a detail.
 
 ## Beta release process
 

@@ -35,6 +35,19 @@ public:
     // separately whether to start() or crossfadeToTracks().
     void setTracks(const juce::Array<juce::File>& tracks);
 
+    // Re-applies an EDITED version of the list that's already playing -
+    // e.g. after files are dropped into the active playlist, or a linked
+    // folder is re-scanned. Unlike setTracks() this keeps the play
+    // position: tracks that are gone are dropped, new ones are spliced
+    // into the part of the order that hasn't played yet, and what's left
+    // to play this cycle is otherwise left exactly as it was.
+    //
+    // setTracks() deliberately resets to the top of the order and
+    // reshuffles, which is right for a deliberate switch to a different
+    // list and wrong for an in-place edit - adding one track at the end
+    // of the list you're listening to shouldn't send it back to track 1.
+    void updateTracksPreservingOrder(const juce::Array<juce::File>& tracks);
+
     // Switches to a different list AND crossfades into it from whatever
     // is playing, using the same equal-power fade as an end-of-track
     // transition. startFrom picks the track to land on ({} = first in
@@ -52,6 +65,13 @@ public:
     int getNumTracks() const { return playOrder.size(); }
 
     juce::File getCurrentTrackFile() const { return currentTrackFile; }
+
+    // The resolved play order, and how far through it playback has got.
+    // Read-only. Mainly here so the ordering guarantees above can actually
+    // be asserted in the self-test - "it didn't crash" is not evidence
+    // that an in-place edit preserved the order.
+    const juce::Array<juce::File>& getPlayOrder() const { return playOrder; }
+    int getNextOrderIndex() const { return nextOrderIndex; }
 
     // Fires on the message thread when shuffle actually changes value -
     // including via ControlServer's toggleShuffle, which is why the app

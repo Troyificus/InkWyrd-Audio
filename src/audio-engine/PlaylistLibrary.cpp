@@ -268,6 +268,11 @@ void PlaylistLibrary::deletePlaylist(const juce::Uuid& id)
     }
 }
 
+bool PlaylistLibrary::isPlayableFile(const juce::File& file) const
+{
+    return formatManager.findFormatForFileExtension(file.getFileExtension()) != nullptr;
+}
+
 void PlaylistLibrary::addFiles(const juce::Uuid& id, const juce::Array<juce::File>& files)
 {
     auto* playlist = findById(id);
@@ -276,7 +281,7 @@ void PlaylistLibrary::addFiles(const juce::Uuid& id, const juce::Array<juce::Fil
 
     for (const auto& file : files)
     {
-        if (formatManager.findFormatForFileExtension(file.getFileExtension()) == nullptr)
+        if (!isPlayableFile(file))
             continue;
 
         PlaylistEntry entry;

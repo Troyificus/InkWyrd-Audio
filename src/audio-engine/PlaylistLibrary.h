@@ -84,6 +84,12 @@ public:
     bool renamePlaylist(const juce::Uuid& id, const juce::String& newName);
     void deletePlaylist(const juce::Uuid& id);
 
+    // Whether this file's extension is one the shared AudioFormatManager
+    // can actually read. Public so the UI can filter a drag-and-drop the
+    // same way addFiles() filters, instead of keeping its own list of
+    // extensions that could drift out of step with the engine's.
+    bool isPlayableFile(const juce::File& file) const;
+
     void addFiles(const juce::Uuid& id, const juce::Array<juce::File>& files);
     void addFolderLink(const juce::Uuid& id, const juce::File& folder, bool recursive);
     void addFolderSnapshot(const juce::Uuid& id, const juce::File& folder, bool recursive);

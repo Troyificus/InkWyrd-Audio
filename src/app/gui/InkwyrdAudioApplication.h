@@ -44,6 +44,11 @@ private:
     void registerSoundboardFolder(const juce::File& folder);
     void migratePlaylistLibraryIfNeeded();
     void activatePlaylist(const juce::Uuid& id);
+
+    // A playlist's contents changed (files dropped in, a folder added, a
+    // linked folder re-scanned). Only matters to the engine if it's the
+    // one currently playing.
+    void handlePlaylistEdited(const juce::Uuid& id);
     void updateWarningBanner();
 
     AppSettings settings;

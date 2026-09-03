@@ -81,9 +81,16 @@ or session). Click one to look at its tracks; **double-click, or hit
 Play, to switch to it** - the music crossfades across rather than
 cutting. **Add folder...** either keeps the folder linked (files you add
 to it later show up automatically) or takes a one-time copy of what's in
-it, and **Add files...** adds individual tracks. Shuffle is remembered
-per playlist and only ever picks from that list. Playlists are stored as
-readable JSON files - **Open folder** shows you where.
+it, and **Add files...** adds individual tracks. You can also **drag
+files and folders straight in from Windows Explorer** - drop them on a
+playlist in the list to add them to that one, or anywhere else on the
+left-hand side to add them to whichever playlist is selected. Shuffle is
+remembered per playlist and only ever picks from that list. Playlists are
+stored as readable JSON files - **Open folder** shows you where.
+
+Adding tracks to the playlist you're currently listening to never
+interrupts it: the track playing carries on, and the new tracks join the
+running order without it jumping back to the top.
 
 **Right - the soundboard.** One button per sound in your soundboard
 folder; click to fire it. Sounds can overlap.
@@ -101,7 +108,8 @@ the next launch, not immediately - everything else applies right away.
   between tracks and when you jump from one playlist to another - no
   manual DJing during a session. Shuffle is per-playlist.
 - Build playlists from linked folders (which stay up to date as you add
-  files), one-off folder imports, or individual tracks.
+  files), one-off folder imports, or individual tracks - added through
+  the buttons or dragged in from Windows Explorer.
 - An on-demand soundboard for sound effects, layered independently of
   the music (up to 16 sounds can overlap at once).
 - Live microphone processing through your own VST3 plugin chain (EQ,
@@ -127,8 +135,7 @@ the next launch, not immediately - everything else applies right away.
 - Changing your Discord bot token/server/channel via Settings takes
   effect on the next launch, not immediately - the app won't drop an
   active Discord connection to reconnect with new details mid-session.
-- No seek bar yet, and no drag-and-drop from Explorer into playlists
-  (both planned).
+- No seek bar yet (planned).
 - The soundboard fills itself from your soundboard folder; assignable
   Stream-Deck-style buttons you arrange yourself are planned.
 

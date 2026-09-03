@@ -16,6 +16,7 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
                                   juce::Array<juce::PluginDescription> availablePluginsToUse,
                                   PlaylistLibrary& libraryToUse,
                                   std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
+                                  std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
                                   std::function<void()> onSettingsClickedToUse)
     : playlist(playlistToUse),
       soundboard(soundboardToUse),
@@ -23,7 +24,8 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
       scanner(scannerToUse),
       voiceChain(voiceChainToUse),
       availablePlugins(std::move(availablePluginsToUse)),
-      playlistPanel(libraryToUse, playlistToUse, std::move(onActivatePlaylistToUse), [] {}),
+      playlistPanel(libraryToUse, playlistToUse, std::move(onActivatePlaylistToUse),
+                     std::move(onPlaylistEditedToUse)),
       soundboardGrid(soundboardToUse)
 {
     nowPlayingLabel.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));

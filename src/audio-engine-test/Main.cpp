@@ -11,8 +11,11 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_events/juce_events.h>
 
+#include <juce_gui_basics/juce_gui_basics.h>
+
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
+#include "PlaylistPanel.h"
 #include "SoundboardEngine.h"
 #include "Mp3AudioFormat.h"
 #include "MediaFoundationAudioFormat.h"
@@ -165,6 +168,181 @@ namespace
             shuffleCallbackFired = false;
             engine.setShuffle(true);
             check(!shuffleCallbackFired, "setting shuffle to its existing value doesn't re-notify");
+        }
+
+        {
+            // Editing the list that's already playing (files dropped in, a
+            // linked folder re-scanned). Synthetic paths: none of this
+            // touches audio, and start() sets currentTrackFile whether or
+            // not the file is readable, so the ordering rules can be
+            // asserted without depending on the test music folder.
+            juce::Array<juce::File> four, five, withoutSecond;
+            for (auto* name : { "a.wav", "b.wav", "c.wav", "d.wav" })
+                four.add(scratch.getChildFile(name));
+
+            five = four;
+            five.add(scratch.getChildFile("e.wav"));
+
+            withoutSecond = four;
+            withoutSecond.remove(1);
+
+            auto relativeOrderPreserved = [](const juce::Array<juce::File>& subset,
+                                              const juce::Array<juce::File>& order)
+            {
+                int last = -1;
+                for (const auto& file : subset)
+                {
+                    auto index = order.indexOf(file);
+                    if (index < 0 || index <= last)
+                        return false;
+                    last = index;
+                }
+                return true;
+            };
+
+            {
+                PlaylistEngine engine(formatManager);
+                engine.setShuffle(false);
+                engine.setTracks(four);
+                engine.start(); // currentTrackFile = four[0], cursor now at 1
+
+                check(engine.getNextOrderIndex() == 1, "start() advances the play cursor past the first track");
+
+                engine.setTracks(five);
+                check(engine.getNextOrderIndex() == 0,
+                       "setTracks() resets to the top of the order (the deliberate list-switch behaviour)");
+
+                engine.setTracks(four);
+                engine.start();
+                engine.updateTracksPreservingOrder(five);
+                check(engine.getPlayOrder() == five,
+                       "unshuffled in-place edit takes the playlist's own order");
+                check(engine.getNextOrderIndex() == 1,
+                       "unshuffled in-place edit resumes after the playing track, not from the top");
+
+                engine.updateTracksPreservingOrder(withoutSecond);
+                check(engine.getNumTracks() == withoutSecond.size(),
+                       "a track removed from the playlist leaves the play order");
+                check(engine.getNextOrderIndex() == 1,
+                       "removing a LATER track doesn't move the play cursor");
+            }
+
+            {
+                PlaylistEngine engine(formatManager);
+                engine.setShuffle(true);
+                engine.setTracks(four);
+                engine.start();
+
+                auto before = engine.getPlayOrder();
+                juce::Array<juce::File> stillToPlay;
+                for (int i = 1; i < before.size(); ++i)
+                    stillToPlay.add(before[i]);
+
+                engine.updateTracksPreservingOrder(five);
+                check(engine.getNumTracks() == 5, "shuffled in-place edit adds the new track");
+                check(engine.getPlayOrder()[0] == before[0],
+                       "shuffled in-place edit leaves the already-played part of the order alone");
+                check(relativeOrderPreserved(stillToPlay, engine.getPlayOrder()),
+                       "shuffled in-place edit does NOT re-randomise what's still to play");
+                check(engine.getPlayOrder().indexOf(scratch.getChildFile("e.wav")) >= 1,
+                       "a track added mid-session is spliced into the part that hasn't played yet");
+
+                // Drop the track that already played: everything left is
+                // still to come, so the cursor has to slide back to 0.
+                juce::Array<juce::File> withoutPlayed = five;
+                withoutPlayed.removeFirstMatchingValue(before[0]);
+                engine.updateTracksPreservingOrder(withoutPlayed);
+                check(engine.getNextOrderIndex() == 0,
+                       "removing an already-played track moves the cursor back with it");
+            }
+        }
+
+        {
+            // Explorer drag-and-drop, driven through the real
+            // PlaylistPanel. JUCE hands filesDropped() coordinates in the
+            // TARGET component's own space and finds that target by
+            // walking UP from the component under the pointer (both
+            // confirmed by reading juce_ComponentPeer.cpp, not assumed),
+            // so calling it directly with panel-local coordinates
+            // exercises everything except the OS's own drag handoff.
+            auto notAudio = scratch.getChildFile("notes.txt");
+            notAudio.replaceWithText("not an audio file");
+
+            PlaylistLibrary dropLibrary(formatManager);
+            dropLibrary.setDirectory(scratch.getChildFile("drop"));
+            dropLibrary.loadAll();
+
+            auto alphaId = dropLibrary.createPlaylist("Alpha").id;
+            auto betaId = dropLibrary.createPlaylist("Beta").id;
+
+            PlaylistEngine dropEngine(formatManager);
+            dropEngine.setShuffle(false);
+
+            juce::Uuid editedId;
+            int editCount = 0;
+
+            PlaylistPanel panel(dropLibrary, dropEngine,
+                                 [](const juce::Uuid&) {},
+                                 [&](const juce::Uuid& id)
+            {
+                editedId = id;
+                ++editCount;
+
+                // Exactly what InkwyrdAudioApplication::handlePlaylistEdited
+                // does, so the whole chain is under test and not just the
+                // panel's half of it.
+                if (auto* edited = dropLibrary.findById(id))
+                    dropEngine.updateTracksPreservingOrder(dropLibrary.resolve(*edited).files);
+            });
+
+            panel.setSize(440, 700);
+
+            check(panel.isInterestedInFileDrag({ folderTracks[0].getFullPathName() }),
+                   "a dragged audio file is accepted");
+            check(panel.isInterestedInFileDrag({ musicFolder.getFullPathName() }),
+                   "a dragged folder is accepted");
+            check(!panel.isInterestedInFileDrag({ notAudio.getFullPathName() }),
+                   "a drag of only non-audio files is refused outright");
+
+            // The panel selects the first playlist on construction, so a
+            // drop that lands away from the playlist rows goes to Alpha.
+            juce::StringArray mixedDrop;
+            mixedDrop.add(folderTracks[0].getFullPathName());
+            mixedDrop.add(notAudio.getFullPathName());
+            panel.filesDropped(mixedDrop, 100, 400);
+
+            check(dropLibrary.findById(alphaId)->entries.size() == 1,
+                   "a drop away from the playlist rows goes to the SELECTED playlist");
+            check(dropLibrary.resolve(*dropLibrary.findById(alphaId)).files.size() == 1,
+                   "a non-audio file in the drop is filtered out, not added");
+            check(editedId == alphaId && editCount == 1,
+                   "the drop reports which playlist changed, once");
+            check(dropEngine.getPlayOrder() == juce::Array<juce::File>({ folderTracks[0] }),
+                   "the dropped track reaches the engine, not just the playlist file");
+
+            // Row 1 of the playlist list: caption (22px) then the list
+            // box, 24px rows - so y=58 is the second row, Beta, which is
+            // NOT the selected one.
+            panel.filesDropped({ folderTracks[1].getFullPathName() }, 100, 58);
+
+            check(dropLibrary.findById(betaId)->entries.size() == 1,
+                   "a drop onto a playlist row goes to THAT playlist, not the selected one");
+            check(dropLibrary.findById(alphaId)->entries.size() == 1,
+                   "dropping onto another row leaves the previously edited playlist alone");
+            check(editedId == betaId, "the second drop reports the row it landed on");
+
+            // The engine follows the playlist it's actually playing.
+            check(dropEngine.getPlayOrder() == juce::Array<juce::File>({ folderTracks[1] }),
+                   "editing the playlist being played pushes the new track list into the engine");
+
+            {
+                PlaylistLibrary reloaded(formatManager);
+                reloaded.setDirectory(scratch.getChildFile("drop"));
+                reloaded.loadAll();
+                auto* beta = reloaded.findById(betaId);
+                check(beta != nullptr && reloaded.resolve(*beta).files.size() == 1,
+                       "a dropped file is saved to disk immediately, not just held in memory");
+            }
         }
 
         scratch.deleteRecursively();

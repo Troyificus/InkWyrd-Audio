@@ -139,6 +139,25 @@ void InkwyrdAudioApplication::activatePlaylist(const juce::Uuid& id)
     updateWarningBanner();
 }
 
+void InkwyrdAudioApplication::handlePlaylistEdited(const juce::Uuid& id)
+{
+    // Editing a playlist you aren't listening to is purely a UI matter -
+    // it gets picked up whenever it's next activated.
+    if (id != activePlaylistId)
+        return;
+
+    auto* target = library.findById(id);
+    if (target == nullptr)
+        return;
+
+    // Preserving order rather than setTracks(): this is an edit to the
+    // list that's already playing, so it must not restart the track,
+    // reshuffle what's left, or jump back to the top of the list.
+    playlist.updateTracksPreservingOrder(library.resolve(*target).files);
+
+    updateWarningBanner();
+}
+
 void InkwyrdAudioApplication::shutdown()
 {
     if (sender != nullptr)
@@ -180,6 +199,7 @@ void InkwyrdAudioApplication::showPlayer()
     mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins,
                                 library,
                                 [this](const juce::Uuid& id) { activatePlaylist(id); },
+                                [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
                                 [this] { showSetup(); });
 
     if (auto* player = mainWindow->getPlayerComponent())
