@@ -15,6 +15,7 @@
 #include "ControlServer.h"
 #include "PlaylistEngine.h"
 #include "SoundboardEngine.h"
+#include "SoundboardLayout.h"
 #include "PluginScanner.h"
 #include "PluginChain.h"
 
@@ -41,8 +42,12 @@ private:
     void completeSetupAndLaunch(SetupComponent::Result result);
     void startDiscordConnectIfConfigured();
     void applyDefaultLocalMonitoring();
-    void registerSoundboardFolder(const juce::File& folder);
+    // Re-registers the engine's sounds from the board layout. Called
+    // after anything changes a slot - the NAME is the engine's key, so a
+    // rename genuinely has to re-register, not just repaint.
+    void registerSoundboardLayout();
     void migratePlaylistLibraryIfNeeded();
+    void migrateSoundboardLayoutIfNeeded();
     void activatePlaylist(const juce::Uuid& id);
 
     // A playlist's contents changed (files dropped in, a folder added, a
@@ -63,6 +68,7 @@ private:
     juce::AudioDeviceManager deviceManager;
 
     PlaylistLibrary library { formatManager };
+    SoundboardLayout soundboardLayout { formatManager };
 
     juce::Array<juce::PluginDescription> foundPlugins;
     juce::String audioDeviceError; // non-empty if initialiseWithDefaultDevices() failed - see initialise()

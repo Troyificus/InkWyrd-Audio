@@ -16,6 +16,8 @@
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
+#include "SoundboardLayout.h"
+#include "SoundboardGridComponent.h"
 #include "SoundboardEngine.h"
 #include "Mp3AudioFormat.h"
 #include "MediaFoundationAudioFormat.h"
@@ -342,6 +344,208 @@ namespace
                 auto* beta = reloaded.findById(betaId);
                 check(beta != nullptr && reloaded.resolve(*beta).files.size() == 1,
                        "a dropped file is saved to disk immediately, not just held in memory");
+            }
+        }
+
+        {
+            // The assignable Stream-Deck-style soundboard.
+            auto boardFile = scratch.getChildFile("soundboard.json");
+
+            SoundboardLayout board(formatManager);
+            board.setFile(boardFile);
+            board.load();
+
+            check(board.getNumSlots() == SoundboardLayout::kDefaultSlotCount,
+                   "a soundboard with no saved file starts as a full grid of empty buttons");
+            check(board.getSlot(0).isEmpty(), "buttons start empty");
+
+            check(board.assign(0, folderTracks[0]), "a playable file can be assigned to a button");
+            check(board.getSlot(0).name == folderTracks[0].getFileNameWithoutExtension(),
+                   "a button's default name is the filename, which is what Stream Deck buttons send");
+            check(!board.assign(1, scratch.getChildFile("notes.txt")),
+                   "a non-audio file is refused rather than making a dead button");
+            check(board.getSlot(1).isEmpty(), "a refused assignment leaves the button alone");
+
+            // The same filename on two buttons would collide in the
+            // engine's name-keyed map, hiding one of them.
+            check(board.assign(1, folderTracks[0]), "the same sound can go on two buttons");
+            check(board.getSlot(1).name != board.getSlot(0).name,
+                   "a duplicate button name is auto-suffixed, so both stay triggerable");
+
+            check(!board.rename(1, board.getSlot(0).name),
+                   "renaming a button onto another button's name is refused");
+            check(!board.rename(1, "   "), "renaming a button to nothing is refused");
+            check(board.rename(1, "Thunder"), "renaming to a free name succeeds");
+
+            check(board.assign(SoundboardLayout::kDefaultSlotCount + 2, folderTracks[1]),
+                   "assigning past the end of the board grows it");
+            check(board.getNumSlots() == SoundboardLayout::kDefaultSlotCount + 3,
+                   "the board grows exactly far enough to hold the new button");
+
+            auto beforeShrink = board.getNumSlots();
+            check(board.setNumSlots(1) == SoundboardLayout::kDefaultSlotCount + 3,
+                   "shrinking never removes a button that has a sound on it");
+            check(board.getNumSlots() == beforeShrink, "the refused shrink changed nothing");
+
+            board.setColour(0, 0xff8c2f2f);
+
+            {
+                SoundboardLayout reloaded(formatManager);
+                reloaded.setFile(boardFile);
+                reloaded.load();
+
+                check(reloaded.getNumSlots() == board.getNumSlots(), "board size survives a round-trip");
+                check(reloaded.getSlot(0).file == folderTracks[0]
+                       && reloaded.getSlot(1).name == "Thunder",
+                       "button assignments and names survive a round-trip");
+                check(reloaded.getSlot(0).colourArgb == 0xff8c2f2f, "button colour survives a round-trip");
+                check(reloaded.getSlot(SoundboardLayout::kDefaultSlotCount + 2).file == folderTracks[1],
+                       "a button's POSITION survives a round-trip, not just its existence");
+                check(reloaded.getFilledSlots().size() == 3, "only the assigned buttons are stored");
+            }
+
+            {
+                // Importing must not duplicate or rearrange a board that
+                // someone has already set up by hand.
+                SoundboardLayout importer(formatManager);
+                importer.setFile(scratch.getChildFile("import.json"));
+                importer.load();
+
+                check(importer.importFolder(musicFolder) > 0, "importing a folder fills buttons");
+                check(importer.importFolder(musicFolder) == 0,
+                       "importing the same folder twice adds nothing - no duplicate buttons");
+
+                auto keptInPlace = importer.getSlot(1).file;
+                importer.clearSlot(0);
+                check(importer.importFolder(musicFolder) == 1,
+                       "re-importing after clearing one button restores just that one");
+                check(importer.getSlot(1).file == keptInPlace,
+                       "re-importing doesn't rearrange the buttons around it");
+            }
+
+            {
+                // A newer file must be left strictly alone, same rule as
+                // the playlist files.
+                auto futureFile = scratch.getChildFile("future-board.json");
+                futureFile.replaceWithText("{ \"schemaVersion\": 99, \"slotCount\": 4 }");
+                auto before = futureFile.loadFileAsString();
+
+                SoundboardLayout future(formatManager);
+                future.setFile(futureFile);
+                future.load();
+
+                check(!future.getLoadWarnings().isEmpty(), "a newer board schemaVersion is reported");
+                check(futureFile.loadFileAsString() == before,
+                       "a newer board file is left untouched on disk");
+
+                auto brokenFile = scratch.getChildFile("broken-board.json");
+                brokenFile.replaceWithText("{ this is not json");
+                SoundboardLayout broken(formatManager);
+                broken.setFile(brokenFile);
+                broken.load();
+                check(!broken.getLoadWarnings().isEmpty(),
+                       "an unreadable board file is reported rather than crashing");
+            }
+
+            {
+                // Exactly what InkwyrdAudioApplication does on startup:
+                // migrate the old sound-effects folder onto the board,
+                // then register every filled slot with the engine. The
+                // acceptance criterion for this whole change is that a
+                // Stream Deck button, which triggers by NAME, keeps
+                // working across the migration with the shipped plugin
+                // unmodified.
+                SoundboardLayout startupBoard(formatManager);
+                startupBoard.setFile(scratch.getChildFile("startup-board.json"));
+                startupBoard.load();
+                startupBoard.importFolder(musicFolder);
+
+                SoundboardEngine startupEngine(formatManager);
+                startupEngine.clearSounds();
+                for (const auto& slot : startupBoard.getFilledSlots())
+                    if (slot.file.existsAsFile())
+                        startupEngine.registerSound(slot.name, slot.file);
+
+                check(startupEngine.getRegisteredNames().size() == folderTracks.size(),
+                       "every migrated sound is registered with the engine");
+
+                bool everyOldNameStillWorks = true;
+                for (const auto& track : folderTracks)
+                    if (!startupEngine.hasSound(track.getFileNameWithoutExtension()))
+                        everyOldNameStillWorks = false;
+
+                check(everyOldNameStillWorks,
+                       "migrated buttons keep their old filename-based names, so existing Stream Deck "
+                       "buttons still match");
+
+                // A sound whose file has gone must stay ON the board (so
+                // the user can see what happened and fix it) but must NOT
+                // be registered, so pressing it is a no-op rather than a
+                // failed read mid-session.
+                auto vanishing = scratch.getChildFile("vanishing.wav");
+                folderTracks[0].copyFileTo(vanishing);
+
+                SoundboardLayout missingBoard(formatManager);
+                missingBoard.setFile(scratch.getChildFile("missing-board.json"));
+                missingBoard.load();
+                missingBoard.assign(0, vanishing);
+                vanishing.deleteFile();
+
+                SoundboardLayout afterDelete(formatManager);
+                afterDelete.setFile(scratch.getChildFile("missing-board.json"));
+                afterDelete.load();
+                check(!afterDelete.getSlot(0).isEmpty(),
+                       "a button whose file has gone stays on the board rather than vanishing");
+
+                SoundboardEngine missingEngine(formatManager);
+                for (const auto& slot : afterDelete.getFilledSlots())
+                    if (slot.file.existsAsFile())
+                        missingEngine.registerSound(slot.name, slot.file);
+
+                check(missingEngine.getRegisteredNames().isEmpty(),
+                       "a button whose file has gone is not registered, so pressing it does nothing");
+            }
+
+            {
+                // Dropping files onto a SPECIFIC button, through the real
+                // grid component. The width is forced narrow so the grid
+                // is one column and a row number IS a slot number, making
+                // the coordinate maths deterministic rather than
+                // dependent on the window size.
+                SoundboardLayout dropBoard(formatManager);
+                dropBoard.setFile(scratch.getChildFile("drop-board.json"));
+                dropBoard.load();
+
+                SoundboardEngine dropEngine(formatManager);
+                int layoutChanges = 0;
+
+                SoundboardGridComponent grid(dropEngine, dropBoard, [&] { ++layoutChanges; });
+                grid.setSize(200, 600);
+
+                // Caption row (26) + hint (18) + 4 gap, then 72px cells
+                // with 6px gaps - so row r is centred at 48 + r*78 + 36.
+                auto yForSlot = [](int slot) { return 48 + slot * 78 + 36; };
+
+                check(grid.isInterestedInFileDrag({ folderTracks[0].getFullPathName() }),
+                       "the board accepts a dragged file");
+
+                grid.filesDropped({ folderTracks[0].getFullPathName() }, 20, yForSlot(1));
+                check(dropBoard.getSlot(1).file == folderTracks[0],
+                       "a file dropped on a button lands on THAT button");
+                check(dropBoard.getSlot(0).isEmpty(),
+                       "a drop doesn't spill onto the buttons before it");
+                check(layoutChanges == 1, "a drop tells the app to re-register the sounds");
+
+                grid.filesDropped({ folderTracks[1].getFullPathName(),
+                                     folderTracks[2].getFullPathName() },
+                                   20, yForSlot(0));
+
+                check(dropBoard.getSlot(0).file == folderTracks[1],
+                       "dropping several files starts at the button aimed at");
+                check(dropBoard.getSlot(1).file == folderTracks[0],
+                       "the rest of a multi-file drop skips buttons already in use");
+                check(dropBoard.getSlot(2).file == folderTracks[2],
+                       "the rest of a multi-file drop fills the next FREE button");
             }
         }
 

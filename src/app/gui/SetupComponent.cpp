@@ -28,7 +28,8 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse, std::function<void(Re
     addAndMakeVisible(browseSoundboardButton);
     browseSoundboardButton.onClick = [this]
     {
-        browseForFolder(soundboardFolderValueLabel, chosenSoundboardFolder, "Choose your soundboard folder");
+        browseForFolder(soundboardFolderValueLabel, chosenSoundboardFolder,
+                         "Choose a folder of sound effects to import");
     };
 
     addAndMakeVisible(discordSectionCaption);

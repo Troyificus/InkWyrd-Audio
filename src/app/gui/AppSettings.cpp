@@ -9,6 +9,7 @@ namespace
     constexpr const char* kChannelIdKey = "discordChannelId";
     constexpr const char* kActivePlaylistIdKey = "activePlaylistId";
     constexpr const char* kPlaylistLibraryMigratedKey = "playlistLibraryMigrated";
+    constexpr const char* kSoundboardLayoutMigratedKey = "soundboardLayoutMigrated";
 }
 
 AppSettings::AppSettings()
@@ -95,6 +96,16 @@ bool AppSettings::isPlaylistLibraryMigrated() const
 void AppSettings::setPlaylistLibraryMigrated(bool migrated)
 {
     settings()->setValue(kPlaylistLibraryMigratedKey, migrated);
+}
+
+bool AppSettings::isSoundboardLayoutMigrated() const
+{
+    return settings()->getBoolValue(kSoundboardLayoutMigratedKey, false);
+}
+
+void AppSettings::setSoundboardLayoutMigrated(bool migrated)
+{
+    settings()->setValue(kSoundboardLayoutMigratedKey, migrated);
 }
 
 bool AppSettings::isPlaylistFolderSet() const

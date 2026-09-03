@@ -44,7 +44,11 @@ private:
     juce::TextButton browsePlaylistButton { "Browse..." };
     juce::File chosenPlaylistFolder;
 
-    juce::Label soundboardFolderCaption { {}, "Soundboard folder (optional)" };
+    // "Import" rather than "Soundboard folder": the board itself is the
+    // source of truth now, and saving this only ADDS anything new from
+    // the folder onto free buttons - it never rebuilds a board the user
+    // has arranged by hand.
+    juce::Label soundboardFolderCaption { {}, "Sound effects folder to import (optional)" };
     juce::Label soundboardFolderValueLabel { {}, "No folder chosen" };
     juce::TextButton browseSoundboardButton { "Browse..." };
     juce::File chosenSoundboardFolder;

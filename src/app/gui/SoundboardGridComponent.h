@@ -1,35 +1,84 @@
 #pragma once
 
+#include <functional>
+#include <memory>
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "SoundboardEngine.h"
+#include "SoundboardLayout.h"
 
-// The SFX board: a reflowing grid of buttons, one per registered sound.
+// The SFX board: a reflowing grid of assignable, Stream-Deck-style
+// buttons backed by SoundboardLayout.
 //
-// Drop 1 fills it straight from SoundboardEngine::getRegisteredNames(),
-// i.e. whatever's in the chosen soundboard folder - same behaviour as
-// before, new geometry. The assignable Stream-Deck-style version (fixed
-// slots you drop a sound onto, rename and recolour) replaces
-// setSoundNames() with a setSlots() taking the persisted layout; the
-// grid geometry below doesn't change when that happens.
-class SoundboardGridComponent : public juce::Component
+// Every button is a fixed SLOT, filled or empty. Left-click a filled one
+// to fire it, an empty one to assign a sound; right-click for rename,
+// colour, replace and clear. Audio files can also be dragged straight in
+// from Explorer onto a specific slot - the same JUCE file-drop mechanics
+// PlaylistPanel uses.
+//
+// The layout owns the truth and saves itself on every change; this
+// component just drives it and calls onLayoutChanged() so the app can
+// re-register the sounds with the engine.
+class SoundboardGridComponent : public juce::Component,
+                                 public juce::FileDragAndDropTarget
 {
 public:
-    explicit SoundboardGridComponent(SoundboardEngine& soundboardToUse);
+    SoundboardGridComponent(SoundboardEngine& soundboardToUse,
+                             SoundboardLayout& layoutToUse,
+                             std::function<void()> onLayoutChangedToUse);
 
-    void setSoundNames(const juce::StringArray& names);
+    // Defined in the .cpp - SlotButton is forward-declared here and an
+    // OwnedArray needs the complete type to destroy it.
+    ~SoundboardGridComponent() override;
+
+    // Rebuild the buttons from the layout. Called after anything changes
+    // the layout from outside this component (a folder import, say).
+    void refresh();
 
     void resized() override;
+    void paintOverChildren(juce::Graphics& g) override;
+
+    // juce::FileDragAndDropTarget
+    bool isInterestedInFileDrag(const juce::StringArray& files) override;
+    void fileDragEnter(const juce::StringArray& files, int x, int y) override;
+    void fileDragMove(const juce::StringArray& files, int x, int y) override;
+    void fileDragExit(const juce::StringArray& files) override;
+    void filesDropped(const juce::StringArray& files, int x, int y) override;
 
 private:
+    class SlotButton;
+
     void rebuildButtons();
+    void layOutGrid();
+
+    void slotClicked(int index);
+    void slotRightClicked(int index);
+    void assignToSlot(int index);
+    void renameSlot(int index);
+    void clearSlot(int index);
+    void importFolderIntoBoard();
+    void changeSlotCount(int delta);
+
+    int slotIndexAt(int x, int y) const;
+    void notifyChanged();
 
     SoundboardEngine& soundboard;
-    juce::StringArray soundNames;
+    SoundboardLayout& layout;
+    std::function<void()> onLayoutChanged;
 
     juce::Label caption { {}, "Soundboard" };
-    juce::Label emptyMessage;
+    juce::TextButton importButton { "Import folder..." };
+    juce::TextButton addSlotsButton { "+" };
+    juce::TextButton removeSlotsButton { "-" };
+    juce::Label hint;
+
     juce::Viewport viewport;
     juce::Component gridPanel;
-    juce::OwnedArray<juce::TextButton> buttons;
+    juce::OwnedArray<SlotButton> buttons;
+
+    std::unique_ptr<juce::FileChooser> activeChooser;
+
+    bool dragActive = false;
+    int dragTargetSlot = -1;
 };

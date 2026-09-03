@@ -44,6 +44,13 @@ public:
     bool isPlaylistLibraryMigrated() const;
     void setPlaylistLibraryMigrated(bool migrated);
 
+    // Same idea for the soundboard: whether the old "the board IS the
+    // contents of the sound-effects folder" behaviour has been converted
+    // into assignable slots. Explicit, so clearing every button doesn't
+    // re-import the folder on the next launch.
+    bool isSoundboardLayoutMigrated() const;
+    void setSoundboardLayoutMigrated(bool migrated);
+
     bool isPlaylistFolderSet() const;
     bool hasDiscordCredentials() const;
 

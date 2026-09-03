@@ -5,66 +5,454 @@ namespace
     constexpr int kMinCellWidth = 120;
     constexpr int kCellHeight = 72;
     constexpr int kCellGap = 6;
-    constexpr int kCaptionHeight = 22;
+    constexpr int kCaptionHeight = 26;
+    constexpr int kHintHeight = 18;
+    constexpr int kSlotStep = 8; // how many slots the +/- buttons add or remove
+
+    // A small fixed palette rather than a full ColourSelector: on a board
+    // meant to be scanned at a glance mid-session, a handful of clearly
+    // distinct colours is more useful than a colour wheel.
+    struct PresetColour { const char* name; juce::uint32 argb; };
+
+    const PresetColour kPresetColours[] = {
+        { "Slate",  0xff3a4a5a },
+        { "Red",    0xff8c2f2f },
+        { "Orange", 0xff9c5a1e },
+        { "Yellow", 0xff8a7a1e },
+        { "Green",  0xff2f6b3a },
+        { "Teal",   0xff1e6b6b },
+        { "Blue",   0xff2f4a8c },
+        { "Purple", 0xff5a2f8c },
+    };
 }
 
-SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToUse)
-    : soundboard(soundboardToUse)
+//==============================================================================
+// A TextButton that also reports right-clicks, so one button can be both
+// "fire this sound" and "open this slot's menu".
+class SoundboardGridComponent::SlotButton final : public juce::TextButton
+{
+public:
+    SlotButton(int slotIndex, std::function<void(int)> onRightClickToUse)
+        : index(slotIndex), onRightClick(std::move(onRightClickToUse))
+    {
+    }
+
+    void mouseDown(const juce::MouseEvent& event) override
+    {
+        if (event.mods.isPopupMenu())
+        {
+            // Deliberately NOT calling through to TextButton: letting it
+            // register a press here would fire the sound as well as open
+            // the menu.
+            if (onRightClick)
+                onRightClick(index);
+
+            return;
+        }
+
+        juce::TextButton::mouseDown(event);
+    }
+
+    int getSlotIndex() const { return index; }
+
+private:
+    int index;
+    std::function<void(int)> onRightClick;
+};
+
+//==============================================================================
+SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToUse,
+                                                  SoundboardLayout& layoutToUse,
+                                                  std::function<void()> onLayoutChangedToUse)
+    : soundboard(soundboardToUse),
+      layout(layoutToUse),
+      onLayoutChanged(std::move(onLayoutChangedToUse))
 {
     addAndMakeVisible(caption);
 
-    emptyMessage.setText("No sounds yet - pick a soundboard folder in Settings.",
-                          juce::dontSendNotification);
-    emptyMessage.setColour(juce::Label::textColourId, juce::Colours::grey);
-    emptyMessage.setJustificationType(juce::Justification::centredTop);
-    addAndMakeVisible(emptyMessage);
+    importButton.onClick = [this] { importFolderIntoBoard(); };
+    addSlotsButton.onClick = [this] { changeSlotCount(kSlotStep); };
+    removeSlotsButton.onClick = [this] { changeSlotCount(-kSlotStep); };
+
+    for (auto* button : { &importButton, &addSlotsButton, &removeSlotsButton })
+        addAndMakeVisible(button);
+
+    hint.setText("Click an empty button to assign a sound, or drag files in. "
+                  "Right-click to rename, recolour or clear.",
+                  juce::dontSendNotification);
+    hint.setColour(juce::Label::textColourId, juce::Colours::grey);
+    hint.setFont(juce::Font(juce::FontOptions(12.0f)));
+    addAndMakeVisible(hint);
 
     viewport.setViewedComponent(&gridPanel, false);
     viewport.setScrollBarsShown(true, false);
     addAndMakeVisible(viewport);
+
+    refresh();
 }
 
-void SoundboardGridComponent::setSoundNames(const juce::StringArray& names)
+SoundboardGridComponent::~SoundboardGridComponent() = default;
+
+void SoundboardGridComponent::refresh()
 {
-    soundNames = names;
     rebuildButtons();
     resized();
+}
+
+void SoundboardGridComponent::notifyChanged()
+{
+    if (onLayoutChanged)
+        onLayoutChanged();
+
+    refresh();
 }
 
 void SoundboardGridComponent::rebuildButtons()
 {
     buttons.clear();
 
-    for (const auto& name : soundNames)
+    for (int i = 0; i < layout.getNumSlots(); ++i)
     {
-        auto* button = buttons.add(new juce::TextButton(name));
+        const auto& slot = layout.getSlot(i);
+
+        auto* button = buttons.add(new SlotButton(i, [this](int index) { slotRightClicked(index); }));
         gridPanel.addAndMakeVisible(button);
-        button->onClick = [this, name]
+
+        if (slot.isEmpty())
         {
-            // Guarded rather than assumed: a name can go stale if the
-            // soundboard folder changed under us.
-            if (soundboard.hasSound(name))
-                soundboard.trigger(name);
-        };
+            button->setButtonText("+");
+            button->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a2a2a));
+            button->setColour(juce::TextButton::textColourOffId, juce::Colours::grey);
+        }
+        else
+        {
+            auto missing = !slot.file.existsAsFile();
+
+            // Say so on the button itself. A sound that silently does
+            // nothing when pressed mid-session is the worst outcome here.
+            button->setButtonText(missing ? slot.name + " (file missing)" : slot.name);
+            button->setColour(juce::TextButton::buttonColourId,
+                               missing ? juce::Colour(0xff4a3030) : juce::Colour(slot.colourArgb));
+            button->setColour(juce::TextButton::textColourOffId,
+                               missing ? juce::Colours::lightgrey : juce::Colours::white);
+        }
+
+        button->onClick = [this, i] { slotClicked(i); };
     }
 
-    emptyMessage.setVisible(soundNames.isEmpty());
-    viewport.setVisible(!soundNames.isEmpty());
+    removeSlotsButton.setEnabled(layout.getNumSlots() > 1);
 }
 
-void SoundboardGridComponent::resized()
+void SoundboardGridComponent::slotClicked(int index)
 {
-    auto area = getLocalBounds();
-    caption.setBounds(area.removeFromTop(kCaptionHeight));
-    area.removeFromTop(4);
+    const auto& slot = layout.getSlot(index);
 
-    if (soundNames.isEmpty())
+    if (slot.isEmpty())
     {
-        emptyMessage.setBounds(area.removeFromTop(40));
+        assignToSlot(index);
         return;
     }
 
+    // Guarded rather than assumed: the file can go missing between
+    // launches, in which case the engine never registered it.
+    if (soundboard.hasSound(slot.name))
+        soundboard.trigger(slot.name);
+}
+
+void SoundboardGridComponent::slotRightClicked(int index)
+{
+    if (!layout.isValidIndex(index))
+        return;
+
+    auto empty = layout.getSlot(index).isEmpty();
+    const int numPresets = (int) juce::numElementsInArray(kPresetColours);
+
+    juce::PopupMenu menu;
+
+    if (empty)
+    {
+        menu.addItem(1, "Assign sound...");
+    }
+    else
+    {
+        menu.addItem(1, "Replace sound...");
+        menu.addItem(2, "Rename...");
+
+        juce::PopupMenu colours;
+        for (int i = 0; i < numPresets; ++i)
+            colours.addItem(100 + i, kPresetColours[i].name);
+
+        menu.addSubMenu("Colour", colours);
+        menu.addSeparator();
+        menu.addItem(3, "Clear this button");
+    }
+
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(buttons[index]),
+                        [this, safeThis = juce::Component::SafePointer<SoundboardGridComponent>(this),
+                         index, numPresets](int result)
+    {
+        if (result == 0 || safeThis == nullptr)
+            return;
+
+        if (result == 1)
+            assignToSlot(index);
+        else if (result == 2)
+            renameSlot(index);
+        else if (result == 3)
+            clearSlot(index);
+        else if (result >= 100 && result < 100 + numPresets)
+        {
+            layout.setColour(index, kPresetColours[result - 100].argb);
+            // Colour is cosmetic - the engine's registration is by name
+            // and file, so this only needs a repaint, not a re-register.
+            refresh();
+        }
+    });
+}
+
+void SoundboardGridComponent::assignToSlot(int index)
+{
+    activeChooser = std::make_unique<juce::FileChooser>("Choose a sound for this button");
+    activeChooser->launchAsync(juce::FileBrowserComponent::openMode
+                                   | juce::FileBrowserComponent::canSelectFiles
+                                   | juce::FileBrowserComponent::canSelectMultipleItems,
+                                [this, safeThis = juce::Component::SafePointer<SoundboardGridComponent>(this), index]
+                                (const juce::FileChooser& chooser)
+    {
+        auto results = chooser.getResults();
+        if (results.isEmpty() || safeThis == nullptr)
+            return; // the board was replaced (Settings) while the chooser was open
+
+        // Selecting several files fills this button and then the free
+        // ones after it, rather than making the user repeat this eight
+        // times to set a board up.
+        if (layout.assignFrom(index, results) == 0)
+        {
+            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                                                    "Couldn't add that",
+                                                    "That file isn't in a format this app can play. "
+                                                    "Supported: WAV, AIFF, FLAC, Ogg Vorbis, MP3, "
+                                                    "AAC/M4A and WMA.");
+            return;
+        }
+
+        notifyChanged();
+    });
+}
+
+void SoundboardGridComponent::renameSlot(int index)
+{
+    auto* window = new juce::AlertWindow("Rename button", "New name:", juce::MessageBoxIconType::NoIcon);
+    window->addTextEditor("name", layout.getSlot(index).name);
+    window->addButton("Rename", 1);
+    window->addButton("Cancel", 0);
+
+    window->enterModalState(true, juce::ModalCallbackFunction::create(
+        [this, safeThis = juce::Component::SafePointer<SoundboardGridComponent>(this), index, window](int result)
+    {
+        std::unique_ptr<juce::AlertWindow> owned(window); // deleted however we leave here
+        if (result != 1 || safeThis == nullptr)
+            return;
+
+        if (!layout.rename(index, owned->getTextEditorContents("name")))
+        {
+            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                                                    "Couldn't rename",
+                                                    "That name is either empty or already used by "
+                                                    "another button. Names have to be unique - the "
+                                                    "name is what a Stream Deck button sends to "
+                                                    "trigger the sound.");
+            return;
+        }
+
+        // The name IS the engine's key, so this genuinely has to
+        // re-register rather than just repaint.
+        notifyChanged();
+    }));
+}
+
+void SoundboardGridComponent::clearSlot(int index)
+{
+    layout.clearSlot(index);
+    notifyChanged();
+}
+
+void SoundboardGridComponent::importFolderIntoBoard()
+{
+    activeChooser = std::make_unique<juce::FileChooser>("Import a folder of sound effects");
+    activeChooser->launchAsync(juce::FileBrowserComponent::openMode
+                                   | juce::FileBrowserComponent::canSelectDirectories,
+                                [this, safeThis = juce::Component::SafePointer<SoundboardGridComponent>(this)]
+                                (const juce::FileChooser& chooser)
+    {
+        auto folder = chooser.getResult();
+        if (folder == juce::File() || !folder.isDirectory() || safeThis == nullptr)
+            return;
+
+        auto imported = layout.importFolder(folder);
+        notifyChanged();
+
+        if (imported == 0)
+            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,
+                                                    "Nothing to import",
+                                                    "That folder has no playable audio files that "
+                                                    "aren't already on the board.");
+    });
+}
+
+void SoundboardGridComponent::changeSlotCount(int delta)
+{
+    auto wanted = layout.getNumSlots() + delta;
+    auto settled = layout.setNumSlots(wanted);
+
+    // setNumSlots refuses to drop a slot that has a sound in it, so this
+    // can legitimately do less than it was asked to.
+    if (delta < 0 && settled > wanted)
+        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,
+                                                "Buttons still in use",
+                                                "Only empty buttons at the end of the board can be "
+                                                "removed. Clear the sounds off them first.");
+
+    refresh();
+}
+
+//==============================================================================
+// Drag and drop from Explorer, onto a specific button.
+
+bool SoundboardGridComponent::isInterestedInFileDrag(const juce::StringArray& files)
+{
+    for (const auto& path : files)
+    {
+        juce::File file(path);
+        if (!file.isDirectory() && file.existsAsFile())
+            return true;
+    }
+
+    return false;
+}
+
+void SoundboardGridComponent::fileDragEnter(const juce::StringArray&, int x, int y)
+{
+    dragActive = true;
+    dragTargetSlot = slotIndexAt(x, y);
+    repaint();
+}
+
+void SoundboardGridComponent::fileDragMove(const juce::StringArray&, int x, int y)
+{
+    auto slot = slotIndexAt(x, y);
+    if (slot == dragTargetSlot)
+        return;
+
+    dragTargetSlot = slot;
+    repaint();
+}
+
+void SoundboardGridComponent::fileDragExit(const juce::StringArray&)
+{
+    dragActive = false;
+    dragTargetSlot = -1;
+    repaint();
+}
+
+int SoundboardGridComponent::slotIndexAt(int x, int y) const
+{
+    // x, y arrive in THIS component's coordinate space (JUCE converts via
+    // getLocalPoint before calling), so they have to be taken into the
+    // scrolled grid panel's space before hit-testing the buttons.
+    auto inGrid = gridPanel.getLocalPoint(this, juce::Point<int>(x, y));
+
+    for (auto* button : buttons)
+        if (button->getBounds().contains(inGrid))
+            return button->getSlotIndex();
+
+    return -1;
+}
+
+void SoundboardGridComponent::paintOverChildren(juce::Graphics& g)
+{
+    if (!dragActive)
+        return;
+
+    g.setColour(juce::Colours::lightgreen);
+
+    if (juce::isPositiveAndBelow(dragTargetSlot, buttons.size()))
+    {
+        // Show exactly which button the sound is about to land on.
+        g.drawRect(getLocalArea(&gridPanel, buttons[dragTargetSlot]->getBounds()), 2);
+    }
+    else
+    {
+        g.drawRect(getLocalBounds(), 2);
+    }
+}
+
+void SoundboardGridComponent::filesDropped(const juce::StringArray& paths, int x, int y)
+{
+    auto target = slotIndexAt(x, y);
+    dragActive = false;
+    dragTargetSlot = -1;
+    repaint();
+
+    juce::Array<juce::File> files;
+    for (const auto& path : paths)
+    {
+        juce::File file(path);
+        if (file.existsAsFile())
+            files.add(file);
+    }
+
+    if (files.isEmpty())
+        return;
+
+    // Dropped in the gap between buttons: fall back to the first free
+    // slot rather than discarding the drop.
+    if (target < 0)
+    {
+        for (int i = 0; i < layout.getNumSlots() && target < 0; ++i)
+            if (layout.getSlot(i).isEmpty())
+                target = i;
+
+        if (target < 0)
+            target = layout.getNumSlots(); // past the end - assignFrom grows the board
+    }
+
+    if (layout.assignFrom(target, files) == 0)
+    {
+        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                                                "Nothing to add",
+                                                "None of those files are in a format this app can "
+                                                "play. Supported: WAV, AIFF, FLAC, Ogg Vorbis, MP3, "
+                                                "AAC/M4A and WMA.");
+        return;
+    }
+
+    notifyChanged();
+}
+
+//==============================================================================
+void SoundboardGridComponent::resized()
+{
+    auto area = getLocalBounds();
+
+    auto captionRow = area.removeFromTop(kCaptionHeight);
+    removeSlotsButton.setBounds(captionRow.removeFromRight(30).reduced(0, 2));
+    captionRow.removeFromRight(4);
+    addSlotsButton.setBounds(captionRow.removeFromRight(30).reduced(0, 2));
+    captionRow.removeFromRight(4);
+    importButton.setBounds(captionRow.removeFromRight(120).reduced(0, 2));
+    caption.setBounds(captionRow);
+
+    hint.setBounds(area.removeFromTop(kHintHeight));
+    area.removeFromTop(4);
+
     viewport.setBounds(area);
+    layOutGrid();
+}
+
+void SoundboardGridComponent::layOutGrid()
+{
+    auto area = viewport.getBounds();
 
     auto usableWidth = juce::jmax(kMinCellWidth, area.getWidth() - viewport.getScrollBarThickness());
     auto columns = juce::jmax(1, (usableWidth + kCellGap) / (kMinCellWidth + kCellGap));

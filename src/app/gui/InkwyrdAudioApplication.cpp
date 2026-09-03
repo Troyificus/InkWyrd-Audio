@@ -56,13 +56,14 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     library.loadAll();
     migratePlaylistLibraryIfNeeded();
 
+    soundboardLayout.load();
+    migrateSoundboardLayoutIfNeeded();
+    registerSoundboardLayout();
+
     mainWindow = std::make_unique<MainWindow>(getApplicationName());
 
     if (!library.isEmpty() || settings.isPlaylistFolderSet())
     {
-        if (settings.getSoundboardFolder().isDirectory())
-            registerSoundboardFolder(settings.getSoundboardFolder());
-
         applyDefaultLocalMonitoring();
         showPlayer(); // after the above, so the Monitor button opens showing the right state
 
@@ -99,6 +100,26 @@ void InkwyrdAudioApplication::migratePlaylistLibraryIfNeeded()
     }
 
     settings.setPlaylistLibraryMigrated(true);
+    settings.save(); // AppSettings has no autosave - this call is mandatory
+}
+
+void InkwyrdAudioApplication::migrateSoundboardLayoutIfNeeded()
+{
+    if (settings.isSoundboardLayoutMigrated())
+        return;
+
+    // Upgrading from the version where the board WAS the sound-effects
+    // folder, alphabetically. importFolder() keeps that exact order and
+    // keeps each sound's name as the bare filename, so every existing
+    // Stream Deck button still matches afterwards.
+    if (settings.getSoundboardFolder().isDirectory())
+    {
+        auto imported = soundboardLayout.importFolder(settings.getSoundboardFolder());
+        logLine("[App] Migrated " + juce::String(imported) + " sound(s) from the sound effects folder "
+                 "onto the soundboard");
+    }
+
+    settings.setSoundboardLayoutMigrated(true);
     settings.save(); // AppSettings has no autosave - this call is mandatory
 }
 
@@ -197,14 +218,14 @@ void InkwyrdAudioApplication::applyDefaultLocalMonitoring()
 void InkwyrdAudioApplication::showPlayer()
 {
     mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins,
-                                library,
+                                library, soundboardLayout,
                                 [this](const juce::Uuid& id) { activatePlaylist(id); },
+                                [this] { registerSoundboardLayout(); },
                                 [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
                                 [this] { showSetup(); });
 
     if (auto* player = mainWindow->getPlayerComponent())
     {
-        player->setSoundNames(soundboard.getRegisteredNames());
         if (!activePlaylistId.isNull())
             player->setPlayingPlaylistId(activePlaylistId);
     }
@@ -272,7 +293,14 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
         activatePlaylist(existing->id);
     }
 
-    registerSoundboardFolder(result.soundboardFolder);
+    // Non-destructive: the board is the source of truth now, so changing
+    // the folder ADDS anything new from it to the free buttons rather
+    // than rebuilding the board and throwing away an arrangement the
+    // user has set up by hand.
+    if (result.soundboardFolder.isDirectory())
+        soundboardLayout.importFolder(result.soundboardFolder);
+
+    registerSoundboardLayout();
 
     // Only on the first pass through setup. Re-applying it on every save
     // would silently undo a monitor toggle the user had deliberately
@@ -339,26 +367,21 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
         });
 }
 
-void InkwyrdAudioApplication::registerSoundboardFolder(const juce::File& folder)
+void InkwyrdAudioApplication::registerSoundboardLayout()
 {
     // Clear first. This used to leak: changing the soundboard folder
     // emptied the GUI's list but left every old sound registered in the
     // engine, so the Stream Deck could still trigger sounds the app no
-    // longer showed anywhere.
+    // longer showed anywhere. The same applies to a renamed or cleared
+    // slot now.
     soundboard.clearSounds();
 
-    if (!folder.isDirectory())
-        return;
-
-    for (const auto& entry : juce::RangedDirectoryIterator(folder, false, "*", juce::File::findFiles))
+    for (const auto& slot : soundboardLayout.getFilledSlots())
     {
-        auto file = entry.getFile();
-        if (formatManager.findFormatForFileExtension(file.getFileExtension()) == nullptr)
-            continue;
-
-        // Name stays the bare filename: existing Stream Deck buttons
-        // carry these strings, and changing the scheme would silently
-        // stop every one of them matching.
-        soundboard.registerSound(file.getFileNameWithoutExtension(), file);
+        // A slot whose file has gone (moved, or an unplugged drive) stays
+        // ON the board - the button shows it as missing - but isn't
+        // registered, so pressing it does nothing rather than throwing.
+        if (slot.file.existsAsFile())
+            soundboard.registerSound(slot.name, slot.file);
     }
 }

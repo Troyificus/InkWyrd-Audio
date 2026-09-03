@@ -15,7 +15,9 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
                                   PluginChain& voiceChainToUse,
                                   juce::Array<juce::PluginDescription> availablePluginsToUse,
                                   PlaylistLibrary& libraryToUse,
+                                  SoundboardLayout& soundboardLayoutToUse,
                                   std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
+                                  std::function<void()> onSoundboardLayoutChangedToUse,
                                   std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
                                   std::function<void()> onSettingsClickedToUse)
     : playlist(playlistToUse),
@@ -26,7 +28,7 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
       availablePlugins(std::move(availablePluginsToUse)),
       playlistPanel(libraryToUse, playlistToUse, std::move(onActivatePlaylistToUse),
                      std::move(onPlaylistEditedToUse)),
-      soundboardGrid(soundboardToUse)
+      soundboardGrid(soundboardToUse, soundboardLayoutToUse, std::move(onSoundboardLayoutChangedToUse))
 {
     nowPlayingLabel.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));
     addAndMakeVisible(nowPlayingLabel);
@@ -99,9 +101,9 @@ void PlayerComponent::setWarningBanner(const juce::String& text)
     resized(); // the banner's presence changes how much height everything below it gets
 }
 
-void PlayerComponent::setSoundNames(const juce::StringArray& names)
+void PlayerComponent::refreshSoundboard()
 {
-    soundboardGrid.setSoundNames(names);
+    soundboardGrid.refresh();
 }
 
 void PlayerComponent::setPlayingPlaylistId(const juce::Uuid& id)

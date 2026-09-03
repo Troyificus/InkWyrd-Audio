@@ -56,8 +56,8 @@ channel ID.
 2. **First run:** a Setup screen appears. Click **Browse...** and point
    it at a folder of music files (WAV, AIFF, FLAC, Ogg Vorbis, MP3,
    AAC/M4A, or WMA) - that's the only required field. Optionally Browse
-   to a folder of short sound-effect files for the soundboard, and paste
-   in the three values from the [Discord bot setup](#setting-up-your-discord-bot)
+   to a folder of short sound-effect files to import onto the soundboard,
+   and paste in the three values from the [Discord bot setup](#setting-up-your-discord-bot)
    above if you want to actually stream to Discord. Then click
    **Save & Launch**.
 
@@ -92,8 +92,18 @@ Adding tracks to the playlist you're currently listening to never
 interrupts it: the track playing carries on, and the new tracks join the
 running order without it jumping back to the top.
 
-**Right - the soundboard.** One button per sound in your soundboard
-folder; click to fire it. Sounds can overlap.
+**Right - the soundboard.** A grid of programmable buttons, like a
+Stream Deck. Click an empty one to pick a sound for it, or **drag sound
+files straight onto a button** from Explorer. Click a filled button to
+fire it - sounds can overlap. **Right-click** any button to rename it,
+give it a colour, swap its sound or clear it. Buttons stay where you put
+them, so adding a new sound never shuffles the board around. **+** and
+**-** change how many buttons there are (a button with a sound on it is
+never removed), and **Import folder...** drops everything in a folder
+onto the free buttons.
+
+Button names are what a Stream Deck sends to trigger a sound, so
+renaming one means updating that button in the Stream Deck app to match.
 
 **Voice FX...** opens your VST3 plugin list and the live mic chain -
 plugins are found automatically in the standard VST3 folder, nothing to
@@ -110,8 +120,10 @@ the next launch, not immediately - everything else applies right away.
 - Build playlists from linked folders (which stay up to date as you add
   files), one-off folder imports, or individual tracks - added through
   the buttons or dragged in from Windows Explorer.
-- An on-demand soundboard for sound effects, layered independently of
-  the music (up to 16 sounds can overlap at once).
+- A programmable soundboard: a grid of assignable buttons you arrange
+  yourself, each with its own name and colour, layered independently of
+  the music (up to 16 sounds can overlap at once). Assign by drag and
+  drop, by picking a file, or by importing a whole folder at once.
 - Live microphone processing through your own VST3 plugin chain (EQ,
   compression, noise gates - whatever you already own), added and
   removed on the fly while a session is running.
@@ -136,8 +148,9 @@ the next launch, not immediately - everything else applies right away.
   effect on the next launch, not immediately - the app won't drop an
   active Discord connection to reconnect with new details mid-session.
 - No seek bar yet (planned).
-- The soundboard fills itself from your soundboard folder; assignable
-  Stream-Deck-style buttons you arrange yourself are planned.
+- Soundboard buttons can't be dragged from one position to another yet -
+  to move a sound, assign it to the button you want and clear the old
+  one.
 
 If you hit a bug, please open an issue on this repo with what you were
 doing and (if possible) a screenshot of the status line/error.

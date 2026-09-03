@@ -538,7 +538,76 @@ itself is the one part left for manual confirmation. Everything from
 `isInterestedInFileDrag` inward is covered headlessly, including the
 row-targeting coordinate maths and the write-to-disk.
 
-`INKWYRD_SELFTEST=1` is now **48 checks** (was 26).
+`INKWYRD_SELFTEST=1` is now **87 checks** (26 before drop 2, 48 after it,
+the rest added by drop 3 - which compiles `SoundboardGridComponent.cpp`
+into the test target for the same reason).
+
+## Assignable soundboard slots (drop 3) - shipped
+
+The board used to BE the contents of the sound-effects folder,
+alphabetically - so adding one file shifted every button along by one,
+and there was nowhere to keep a name or a colour. New
+`src/audio-engine/SoundboardLayout.{h,cpp}` holds a fixed array of slots
+(default 24, growable to 256) persisted to
+`%APPDATA%\Inkwyrd Audio\soundboard.json`, alongside the Playlists
+folder. Same conventions as `PlaylistLibrary`: `schemaVersion`, a newer
+file left strictly untouched and reported, atomic writes via
+`juce::TemporaryFile`, every mutator saving immediately.
+
+Storage is **sparse** - only filled slots are written, each carrying its
+own `index` - so changing the board size can't shift everything along.
+The model deliberately stores colour as a plain `juce::uint32` ARGB
+rather than a `juce::Colour`, so the AudioEngine library doesn't have to
+take a dependency on `juce_graphics`; the GUI wraps it.
+
+**Stream Deck compatibility is the acceptance criterion**, and
+`ControlServer.h/.cpp` is again untouched. A slot's NAME is what
+`SoundboardEngine` registers it under and what a Stream Deck button's
+payload carries, so:
+
+- Migration (`importFolder`) keeps the old alphabetical order and names
+  each sound `getFileNameWithoutExtension()` - exactly what the old
+  folder scan produced. Verified live: all four commands driven through
+  `test-control-client.mjs` against a running app after migration,
+  including triggering a migrated sound by its old name.
+- Names must be unique, because the engine keys sounds by name - a
+  duplicate would make one of them untriggerable. `assign()` auto-
+  suffixes " (2)"; `rename()` refuses a collision and says why.
+- Renaming a slot therefore has to **re-register** with the engine, not
+  just repaint. Recolouring doesn't.
+
+Other behaviour worth not re-deriving:
+
+- **Import is non-destructive.** `importFolder` only fills FREE slots and
+  skips files already on the board, so re-importing the same folder adds
+  nothing and never rearranges a board someone set up by hand. The
+  sound-effects folder field in Setup is relabelled "Sound effects folder
+  to import" and now only ever adds.
+- **A slot whose file has gone stays on the board** (shown as
+  "(file missing)" in a red-ish tint) but is NOT registered with the
+  engine, so pressing it is a no-op rather than a failed read
+  mid-session. An unplugged drive must not silently wipe a board layout.
+- **Shrinking the board never discards a sound**: `setNumSlots` stops at
+  the last filled slot and returns what it actually settled on, and the
+  UI explains why when it did less than asked.
+- **A multi-file drop overwrites only the slot aimed at**, then fills
+  gaps after it - it can't wipe out sounds further along the board.
+- Right-click is handled by a `SlotButton : juce::TextButton` subclass
+  that deliberately does NOT call through to `TextButton::mouseDown` for
+  a popup click - letting it register a press would fire the sound as
+  well as open the menu.
+
+**The bug the self-test caught here**: `importFolder` was written
+non-recursive, mirroring the old folder scan. That is the exact trap that
+once made a music folder look empty because every track sat in per-album
+subfolders. It now goes through the shared
+`inkwyrd::scanFolderForAudio(..., recursive)` the playlists use. Because
+that sorts by full path, a flat folder - what every existing user has -
+imports in an identical order, so Stream Deck buttons still line up.
+
+Deferred, deliberately: dragging a slot to a different position (assign
+and clear is the workaround), and per-slot volume / loop / stop-on-
+retrigger.
 
 ## Agreed but not yet built
 
@@ -549,13 +618,6 @@ row-targeting coordinate maths and the write-to-disk.
   explicitly wants this exposed as a setting when the feature pass
   happens, so the host can pick their own quality/bandwidth tradeoff.
   It's a named constant specifically so that's a small change.
-- **Assignable Stream-Deck-style soundboard slots** (drop 3) - a fixed
-  grid you drop sounds onto, rename and recolour, persisted to
-  `soundboard.json`. `SoundboardGridComponent::setSoundNames()` becomes
-  `setSlots()`; the grid geometry doesn't move. The enumeration/removal
-  API added in drop 1 is what makes this small. Default slot names must
-  stay `getFileNameWithoutExtension()` or existing Stream Deck buttons
-  stop matching.
 - **Per-playlist track position across restarts.** Currently
   session-only (`lastPlayedByPlaylistId` in the app, keyed by id and
   storing a FILE not an index, because shuffle reshuffles the order on

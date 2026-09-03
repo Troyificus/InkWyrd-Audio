@@ -10,6 +10,7 @@ target_sources(AudioEngineTest PRIVATE
     # this keeps the drop logic covered by the same headless run as
     # everything else rather than relying on a manual drag.
     ../app/gui/PlaylistPanel.cpp
+    ../app/gui/SoundboardGridComponent.cpp
 )
 
 target_include_directories(AudioEngineTest PRIVATE ../app/gui)

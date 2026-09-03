@@ -11,6 +11,7 @@
 #include "PluginScanner.h"
 #include "SoundboardEngine.h"
 #include "SoundboardGridComponent.h"
+#include "SoundboardLayout.h"
 
 // Main screen: status and transport across the top, then the playlist
 // library and its tracks on the left, the SFX board on the right.
@@ -29,7 +30,9 @@ public:
                      PluginChain& voiceChainToUse,
                      juce::Array<juce::PluginDescription> availablePluginsToUse,
                      PlaylistLibrary& libraryToUse,
+                     SoundboardLayout& soundboardLayoutToUse,
                      std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
+                     std::function<void()> onSoundboardLayoutChangedToUse,
                      std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
                      std::function<void()> onSettingsClickedToUse);
 
@@ -52,7 +55,7 @@ public:
     // it (connecting to Discord turns local monitoring off).
     void refreshToggleStates();
 
-    void setSoundNames(const juce::StringArray& names);
+    void refreshSoundboard();
     void setPlayingPlaylistId(const juce::Uuid& id);
     PlaylistPanel& getPlaylistPanel() { return playlistPanel; }
 
