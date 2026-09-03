@@ -7,6 +7,8 @@ target_sources(InkwyrdAudioApp PRIVATE
     MasterEngine.cpp
     DiscordAudioSender.cpp
     ControlServer.cpp
+    MessageThreadWatchdog.cpp
+    MessageThreadWatchdog.h
     MasterEngine.h
     DiscordAudioSender.h
     ControlServer.h
@@ -26,6 +28,8 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/VoiceFxComponent.h
     gui/AppSettings.cpp
     gui/AppSettings.h
+    gui/Dialogs.cpp
+    gui/Dialogs.h
     gui/DiscordConnector.cpp
     gui/DiscordConnector.h
 )

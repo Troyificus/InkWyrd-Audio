@@ -225,6 +225,31 @@ void PlaylistEngine::stop()
     crossfading = false;
 }
 
+void PlaylistEngine::pause()
+{
+    // Collapse an in-flight fade first, so resuming doesn't come back
+    // with two decks stuck at partial gain.
+    finishCrossfadeNow();
+    decks[0].transport.stop();
+    decks[1].transport.stop();
+}
+
+void PlaylistEngine::resume()
+{
+    if (playOrder.isEmpty())
+        return;
+
+    // Nothing loaded yet (fresh session, or stopped outright) - begin at
+    // the top of the order rather than doing nothing.
+    if (currentTrackFile == juce::File())
+    {
+        start();
+        return;
+    }
+
+    decks[activeDeck].transport.start();
+}
+
 void PlaylistEngine::skipToNext()
 {
     // A skip during an existing crossfade used to be silently swallowed,

@@ -11,6 +11,7 @@ target_sources(AudioEngineTest PRIVATE
     # everything else rather than relying on a manual drag.
     ../app/gui/PlaylistPanel.cpp
     ../app/gui/SoundboardGridComponent.cpp
+    ../app/gui/Dialogs.cpp
 )
 
 target_include_directories(AudioEngineTest PRIVATE ../app/gui)

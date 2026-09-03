@@ -10,10 +10,11 @@ MainWindow::MainWindow(const juce::String& name)
     setVisible(true);
 }
 
-void MainWindow::showSetupView(AppSettings& settings, std::function<void(SetupComponent::Result)> onSaveAndLaunch)
+void MainWindow::showSetupView(AppSettings& settings, bool isFirstRun,
+                                std::function<void(SetupComponent::Result)> onSaveAndLaunch)
 {
     playerComponent = nullptr;
-    setContentOwned(new SetupComponent(settings, std::move(onSaveAndLaunch)), true);
+    setContentOwned(new SetupComponent(settings, isFirstRun, std::move(onSaveAndLaunch)), true);
 }
 
 void MainWindow::showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soundboard, MasterEngine& masterEngine,

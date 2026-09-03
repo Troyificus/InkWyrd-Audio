@@ -56,6 +56,11 @@ public:
     void refreshToggleStates();
 
     void refreshSoundboard();
+
+    // Whether Discord credentials are configured, so the transport can
+    // point out that Monitor being off means nothing is audible ANYWHERE
+    // rather than just "not locally".
+    void setDiscordConfigured(bool configured);
     void setPlayingPlaylistId(const juce::Uuid& id);
     PlaylistPanel& getPlaylistPanel() { return playlistPanel; }
 
@@ -64,6 +69,8 @@ private:
     void updateShuffleButtonText();
     void updateMuteButtonText();
     void updateMonitorButtonText();
+    void updatePlayButtonText();
+    void updateMonitorHint();
     void showVoiceFxWindow();
 
     PlaylistEngine& playlist;
@@ -76,7 +83,11 @@ private:
     juce::Label nowPlayingLabel;
     juce::Label discordStatusLabel;
     juce::Label warningBannerLabel; // hidden (zero height) unless given non-empty text
+    juce::Label monitorHintLabel;   // "Monitor is off" - only while that actually means silence
 
+    bool discordConfigured = false;
+
+    juce::TextButton playButton;
     juce::TextButton skipButton { "Skip" };
     juce::TextButton shuffleButton;
     juce::TextButton muteButton;

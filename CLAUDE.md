@@ -609,6 +609,125 @@ Deferred, deliberately: dragging a slot to a different position (assign
 and clear is the workaround), and per-slot volume / loop / stop-on-
 retrigger.
 
+## Fixes from the first real beta.5 session (worth not re-deriving)
+
+- **Monitor now defaults to OFF unconditionally.** It used to be
+  `setLocalMonitoring(!settings.hasDiscordCredentials())` - on whenever
+  Discord wasn't configured - reasoning that local-only mode would
+  otherwise be silent with nothing explaining why. That produced exactly
+  the surprise it was meant to prevent: launching with a cleared bot
+  token started playing out of the speakers immediately, which is the
+  thing the user had specifically asked to never happen. The silence
+  problem is now solved by SAYING SO: `PlayerComponent` shows an orange
+  "Monitor is off, so nothing is audible" hint, and only when that's
+  actually true (no Discord configured) - with Discord set up, Monitor
+  off is the correct normal state and nagging about it would be noise.
+  **The regression was visible in this session's own verification
+  screenshot and went unnoticed** - when a screenshot is taken to check
+  a change, read the whole window, not just the part that changed.
+- **Play/Stop.** There was no way to stop playback at all - only Skip and
+  Shuffle - so a playlist that auto-started on launch could only be
+  silenced by quitting. `PlaylistEngine::pause()`/`resume()`/
+  `isPlaying()`; `pause()` collapses an in-flight crossfade first, or
+  resuming comes back with two decks stuck at partial gain.
+- **Deleting the playing playlist now stops the audio.** The engine holds
+  its own copy of the track list, so it happily played a deleted playlist
+  forever with nothing on screen owning it. `PlaylistPanel::deleteSelected`
+  now calls `notifyEdited(id)`, and `handlePlaylistEdited` treats
+  "active playlist, but `findById` returns null" as delete-and-stop.
+- **Discord settings usually no longer need a restart.**
+  `discordConnectAttempted` was set at startup even when there were no
+  credentials to connect with, so pasting a token into Settings
+  afterwards left the app insisting on a restart it didn't need. Renamed
+  `discordConnectStarted` and set inside `startDiscordConnectIfConfigured`
+  where a connect really happens. When a restart IS genuinely required
+  (credentials changed after a connection was already made), the app now
+  offers a "Restart now" button - which relaunches via a detached
+  `cmd /c ping ... & start ""` because the single-instance guard would
+  otherwise make the replacement quit on sight.
+- **Every modal dialog is now anchored to a component** via
+  `gui/Dialogs.h`. Without an associated component JUCE centres a message
+  box on the PRIMARY display - on a multi-monitor setup that can put a
+  modal dialog on a different screen from the app, and being modal it
+  swallows every click on the main window. That reads exactly like the
+  app having frozen: nothing in Inkwyrd Audio responds, other programs
+  are fine. This is a *candidate* explanation for the reported freeze,
+  not a confirmed one.
+
+## The "app froze" report - what was ruled OUT, and the instrumentation added
+
+A real report of "audio pausing, and I couldn't click anything in the
+app but other programs were fine". Not reproduced. What measurement
+actually established, so none of it gets re-derived:
+
+- **Recursive folder scanning is NOT the cause.** `activatePlaylist`
+  does a `library.resolve()` and then `updateWarningBanner()` does a
+  second one of the same playlist, and clicking a playlist row does
+  another - all synchronous on the message thread, which looked damning.
+  Timed against the real configured folder: 4 files, 3 ms. Not it.
+- **File opening is NOT the cause.** `createReaderFor` on the user's real
+  15 MB MP3s: 3-5 ms. `PlaylistEngine::start()` blocks the calling thread
+  for ~25 ms, `skipToNext()` ~11 ms.
+- **The 1210 ms of silence at track start is NOT a bug.** Measured via
+  `INKWYRD_TIMELOAD` (see below) and initially assumed to be
+  `BufferingAudioSource` under-running, which would have justified a
+  whole preload-the-next-deck redesign. A warm-up sweep killed it: the
+  silence was **exactly 1210 ms regardless of how long the source was
+  given to buffer** (0/250/500/1000/2000 ms), and the same harness
+  reports 0 ms on files known to start at full amplitude. It is those
+  ambient tracks' own quiet intro. **A fix was written and discarded on
+  this evidence** - the sweep is the only reason it wasn't shipped.
+
+Added instead of a guessed fix:
+
+- **`MessageThreadWatchdog`** (`src/app/`) logs any message-thread stall
+  over 300 ms, with its real duration. It immediately earned its place by
+  catching something nobody was looking for: **the VST3 scan blocks the
+  UI thread for ~18 seconds at every launch.** That is a genuine
+  "the app is unresponsive" defect in its own right (and matches an
+  earlier "took about a minute to launch" report). Not yet fixed -
+  scanning on a background thread is its own piece of work.
+- **`INKWYRD_TIMELOAD="fileA|fileB"`** on the AudioEngineTest binary
+  times reader creation and message-thread blocking, and measures how
+  long output stays silent after a load. Keep it: it is what disproved
+  the buffering theory.
+
+**If the app appears frozen and the watchdog logs NOTHING, the message
+thread was never blocked** - look at off-screen modal dialogs first (see
+`gui/Dialogs.h`), because that swallows input without blocking anything.
+
+## Launching the app for verification - read this first
+
+**A second copy of the app exits instantly with code 0 and an empty
+log.** `moreThanOneInstanceAllowed()` is false, so JUCE detects the
+running instance, **skips `initialise()` entirely, calls `shutdown()`,
+and returns 0**. There is no error, no crash dump, no log line - it looks
+exactly like a silent startup crash, and it cost two separate debugging
+detours in one session (once because the user's own installed copy was
+running, once because they had relaunched it).
+
+Before concluding the app crashed at startup, run
+`Get-Process | Where-Object { $_.ProcessName -like '*Inkwyrd*' }`.
+
+To launch a second copy deliberately, set
+**`INKWYRD_ALLOW_MULTIPLE_INSTANCES=1`** - an opt-in escape hatch added
+for exactly this. It contends for the control-server port (logged, then
+ignored) and shares the audio device, which is fine for checking the UI.
+
+**Also: the app writes to `%APPDATA%\Inkwyrd Audio\` - the same place
+the user's real settings, playlists and soundboard live, including their
+bot token in plaintext.** Back that directory up before any launch test
+that seeds a synthetic config, restore it afterwards, and check the
+user's app is not running first: a test script that overwrites the
+settings file while their session is live will strip their credentials
+from disk. That happened once in this session and had to be restored
+from a backup taken minutes earlier.
+
+Copy the backup's CHILDREN into place when restoring
+(`Get-ChildItem $bak | ForEach-Object { Copy-Item -Recurse -Force ... }`),
+not the folder itself - `Copy-Item -Recurse $bak $dir` nests the backup
+inside the target when the target exists.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`
@@ -626,6 +745,10 @@ retrigger.
 - **Crossfade duration** is a `const` member and doubles as the
   end-of-track look-ahead, so per-playlist fade times need care around a
   live ramp.
+- **Move the VST3 scan off the message thread.** Measured at ~18 seconds
+  of frozen UI at every launch (see the watchdog section above). The
+  scan result is only needed by the Voice FX panel, so the player could
+  come up immediately and the plugin list populate when it's ready.
 - **Winamp-style detachable window layout** - the user's chosen next
   direction after drop 3, decided with reference screenshots of Winamp
   and AIMP. Main window = player head + the playing playlist; SFX and

@@ -13,6 +13,7 @@
 #include "MasterEngine.h"
 #include "DiscordAudioSender.h"
 #include "ControlServer.h"
+#include "MessageThreadWatchdog.h"
 #include "PlaylistEngine.h"
 #include "SoundboardEngine.h"
 #include "SoundboardLayout.h"
@@ -30,7 +31,17 @@ class InkwyrdAudioApplication : public juce::JUCEApplication
 public:
     const juce::String getApplicationName() override { return JUCE_APPLICATION_NAME_STRING; }
     const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
-    bool moreThanOneInstanceAllowed() override { return false; } // one audio device, one bot token, one control-server port
+    // One audio device, one bot token, one control-server port - so
+    // normally no. The env-var escape hatch exists purely so a second
+    // copy can be launched for UI verification while a real session is
+    // running: without it, JUCE skips initialise() entirely and goes
+    // straight to shutdown() with exit code 0, which looks exactly like
+    // a silent startup crash and has now cost two debugging detours.
+    // Unset for every real user, so behaviour is unchanged.
+    bool moreThanOneInstanceAllowed() override
+    {
+        return juce::SystemStats::getEnvironmentVariable("INKWYRD_ALLOW_MULTIPLE_INSTANCES", "").isNotEmpty();
+    }
 
     void initialise(const juce::String& commandLine) override;
     void shutdown() override;
@@ -42,6 +53,11 @@ private:
     void completeSetupAndLaunch(SetupComponent::Result result);
     void startDiscordConnectIfConfigured();
     void applyDefaultLocalMonitoring();
+
+    // Relaunch the app. Only offered when Discord settings genuinely
+    // can't be applied to the running session (a connection has already
+    // been made this run).
+    void offerRestart();
     // Re-registers the engine's sounds from the board layout. Called
     // after anything changes a slot - the NAME is the engine's key, so a
     // rename genuinely has to re-register, not just repaint.
@@ -83,7 +99,23 @@ private:
 
     DiscordConnector discordConnector;
     std::unique_ptr<DiscordAudioSender> sender;
-    bool discordConnectAttempted = false;
+
+    // Whether a Discord connection has actually been STARTED this run -
+    // not merely "startup got as far as trying". Launching with no
+    // credentials used to set this anyway, so pasting a token into
+    // Settings afterwards left the app insisting on a restart it didn't
+    // need. Set inside startDiscordConnectIfConfigured(), where the
+    // connect really happens.
+    bool discordConnectStarted = false;
+
+    // Whether the player view has ever been shown this run, so reopening
+    // Settings can label its button honestly ("Save & Apply", not
+    // "Save & Launch").
+    bool hasShownPlayer = false;
 
     std::unique_ptr<MainWindow> mainWindow;
+
+    // Last member, so it's destroyed first and its thread is joined
+    // before anything it might log about goes away.
+    MessageThreadWatchdog watchdog;
 };

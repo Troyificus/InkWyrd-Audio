@@ -89,6 +89,14 @@ public:
     void start();
     void stop();
 
+    // Stop/resume without losing your place, for the transport's
+    // Play/Stop button. stop() is a full teardown used at shutdown and
+    // when switching lists; pause() keeps the current track and position
+    // so resume() carries on from exactly where it left off.
+    void pause();
+    void resume();
+    bool isPlaying() const { return isAnyDeckPlaying(); }
+
     // Manually begins a crossfade to the next track, same as what
     // happens automatically near the end of the current one.
     void skipToNext();

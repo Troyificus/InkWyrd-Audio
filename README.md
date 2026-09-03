@@ -74,7 +74,14 @@ channel ID.
 ### Using it
 
 Across the top: a "Now playing" line, the Discord connection status,
-and Skip / Shuffle / Mic mute / Monitor buttons.
+and Play/Stop / Skip / Shuffle / Mic mute / Monitor buttons.
+
+**Monitor is off when the app starts.** It controls whether the mix also
+comes out of *your own* speakers. When you're in the Discord call you
+already hear everything through the bot, so leaving it on would play
+every track twice, slightly offset. If you're running without a Discord
+bot, turn Monitor on - the app tells you when that's the only way you'd
+hear anything.
 
 **Left - your playlists.** Keep as many as you like (one per scene, mood
 or session). Click one to look at its tracks; **double-click, or hit
@@ -148,6 +155,8 @@ the next launch, not immediately - everything else applies right away.
   effect on the next launch, not immediately - the app won't drop an
   active Discord connection to reconnect with new details mid-session.
 - No seek bar yet (planned).
+- The app is unresponsive for roughly 15-20 seconds at startup while it
+  scans your VST3 plugins. It hasn't hung - it's working.
 - Soundboard buttons can't be dragged from one position to another yet -
   to move a sound, assign it to the button you want and clear the old
   one.

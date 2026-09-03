@@ -348,6 +348,43 @@ namespace
         }
 
         {
+            // Play/Stop. The app had no way to stop playback at all - the
+            // only controls were Skip and Shuffle - so a playlist that
+            // started on launch could not be silenced except by quitting.
+            PlaylistEngine engine(formatManager);
+            engine.setShuffle(false);
+
+            engine.resume();
+            check(!engine.isPlaying(), "Play on an empty playlist does nothing rather than half-starting");
+
+            engine.setTracks(folderTracks);
+            engine.resume();
+            check(engine.isPlaying(), "Play starts from the top when nothing has been loaded yet");
+
+            auto playing = engine.getCurrentTrackFile();
+            engine.pause();
+            check(!engine.isPlaying(), "Stop actually stops playback");
+            check(engine.getCurrentTrackFile() == playing,
+                   "Stop keeps your place rather than forgetting the track");
+
+            engine.resume();
+            check(engine.isPlaying() && engine.getCurrentTrackFile() == playing,
+                   "Play after Stop carries on with the same track, it doesn't jump elsewhere");
+
+            // Stopping mid-crossfade has to settle both decks, or resuming
+            // comes back with two tracks stuck at partial volume.
+            engine.skipToNext();
+            check(engine.isCrossfading(), "skip starts a crossfade (setup for the next check)");
+            engine.pause();
+            check(!engine.isCrossfading(), "Stop during a crossfade collapses it instead of freezing it");
+            check(!engine.isPlaying(), "Stop during a crossfade really stops both decks");
+
+            engine.resume();
+            check(engine.isPlaying(), "Play works again after stopping mid-crossfade");
+            engine.stop();
+        }
+
+        {
             // The assignable Stream-Deck-style soundboard.
             auto boardFile = scratch.getChildFile("soundboard.json");
 
@@ -589,6 +626,131 @@ int main(int argc, char* argv[])
     {
         std::cout << "Set PLAYLIST_FOLDER (and optionally SOUNDBOARD_FOLDER) env vars first." << std::endl;
         return 1;
+    }
+
+    // TEMPORARY diagnostic: INKWYRD_TIMELOAD="fileA|fileB" measures how
+    // long PlaylistEngine blocks the calling (message) thread when it
+    // loads a track, and how much SILENCE the incoming deck produces
+    // before its read-ahead buffer has anything in it. Both map directly
+    // onto "the app froze and the audio paused" at a crossfade.
+    {
+        auto timeLoad = juce::SystemStats::getEnvironmentVariable("INKWYRD_TIMELOAD", "");
+        if (timeLoad.isNotEmpty())
+        {
+            juce::ScopedJuceInitialiser_GUI juceInitialiser;
+            juce::AudioFormatManager fm;
+            fm.registerBasicFormats();
+            fm.registerFormat(new Mp3AudioFormat(), false);
+            fm.registerFormat(new MediaFoundationAudioFormat(), false);
+
+            juce::StringArray paths;
+            paths.addTokens(timeLoad, "|", "");
+
+            juce::Array<juce::File> files;
+            for (const auto& path : paths)
+                files.add(juce::File(path.trim()));
+
+            for (const auto& f : files)
+                std::cout << "file: " << f.getFileName() << "  exists=" << (f.existsAsFile() ? "yes" : "no")
+                           << "  " << (f.getSize() / (1024 * 1024)) << " MB" << std::endl;
+
+            // Raw reader cost, outside the engine.
+            for (const auto& f : files)
+            {
+                auto t0 = juce::Time::getMillisecondCounterHiRes();
+                std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(f));
+                auto t1 = juce::Time::getMillisecondCounterHiRes();
+                std::cout << "createReaderFor(" << f.getFileName() << ") = "
+                           << juce::String(t1 - t0, 1) << " ms"
+                           << (reader != nullptr ? "" : "  [FAILED]") << std::endl;
+            }
+
+            const int blockSize = 480;      // ~10 ms at 48k, like a real device
+            const double sr = 48000.0;
+
+            PlaylistEngine engine(fm);
+            engine.setShuffle(false);
+            engine.setTracks(files);
+            engine.prepareToPlay(blockSize, sr);
+
+            auto t0 = juce::Time::getMillisecondCounterHiRes();
+            engine.start();
+            auto t1 = juce::Time::getMillisecondCounterHiRes();
+            std::cout << "engine.start() blocked the calling thread for "
+                       << juce::String(t1 - t0, 1) << " ms" << std::endl;
+
+            juce::AudioBuffer<float> buffer(2, blockSize);
+            juce::AudioSourceChannelInfo info(&buffer, 0, blockSize);
+
+            // Pull blocks at real time and report how long output stays
+            // silent - that IS the audible gap.
+            auto pullUntilAudible = [&](const char* what)
+            {
+                int silentBlocks = 0;
+                for (int i = 0; i < 500; ++i) // up to 5 s
+                {
+                    buffer.clear();
+                    engine.getNextAudioBlock(info);
+
+                    if (buffer.getMagnitude(0, blockSize) > 0.0001f)
+                        break;
+
+                    ++silentBlocks;
+                    juce::Thread::sleep(10); // let the read-ahead thread work, as a real device would
+                }
+
+                std::cout << what << ": " << juce::String(silentBlocks * blockSize * 1000.0 / sr, 0)
+                           << " ms of silence before audio appeared" << std::endl;
+            };
+
+            pullUntilAudible("after start(), pulled immediately");
+
+            // Keep pulling for a second so playback is settled.
+            for (int i = 0; i < 100; ++i) { buffer.clear(); engine.getNextAudioBlock(info); juce::Thread::sleep(10); }
+
+            auto t2 = juce::Time::getMillisecondCounterHiRes();
+            engine.skipToNext();
+            auto t3 = juce::Time::getMillisecondCounterHiRes();
+            std::cout << "engine.skipToNext() blocked the calling thread for "
+                       << juce::String(t3 - t2, 1) << " ms" << std::endl;
+
+            // Does a HEAD START fix it? This is the whole question behind
+            // preloading the next deck before the crossfade rather than at
+            // it: give the same source time to buffer with nothing being
+            // pulled from it, then see whether it plays cleanly.
+            for (auto warmUpMs : { 0, 250, 500, 1000, 2000 })
+            {
+                PlaylistEngine warm(fm);
+                warm.setShuffle(false);
+                warm.setTracks(files);
+                warm.prepareToPlay(blockSize, sr);
+                warm.start();
+
+                juce::Thread::sleep(warmUpMs); // nothing pulled: pure buffering time
+
+                int silentBlocks = 0;
+                for (int i = 0; i < 300; ++i)
+                {
+                    buffer.clear();
+                    warm.getNextAudioBlock(info);
+                    if (buffer.getMagnitude(0, blockSize) > 0.0001f)
+                        break;
+                    ++silentBlocks;
+                    juce::Thread::sleep(10);
+                }
+
+                std::cout << "warm-up " << warmUpMs << " ms -> "
+                           << juce::String(silentBlocks * blockSize * 1000.0 / sr, 0)
+                           << " ms of silence" << std::endl;
+
+                warm.stop();
+                warm.releaseResources();
+            }
+
+            engine.stop();
+            engine.releaseResources();
+            return 0;
+        }
     }
 
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_SELFTEST", "").isNotEmpty())

@@ -41,6 +41,22 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     warningBannerLabel.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
     addAndMakeVisible(warningBannerLabel);
 
+    monitorHintLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
+    monitorHintLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
+    addAndMakeVisible(monitorHintLabel);
+
+    updatePlayButtonText();
+    addAndMakeVisible(playButton);
+    playButton.onClick = [this]
+    {
+        if (playlist.isPlaying())
+            playlist.pause();
+        else
+            playlist.resume();
+
+        updatePlayButtonText();
+    };
+
     addAndMakeVisible(skipButton);
     skipButton.onClick = [this] { playlist.skipToNext(); };
 
@@ -93,6 +109,35 @@ PlayerComponent::~PlayerComponent()
 void PlayerComponent::setDiscordStatus(const juce::String& text)
 {
     discordStatusLabel.setText(text, juce::dontSendNotification);
+}
+
+void PlayerComponent::setDiscordConfigured(bool configured)
+{
+    discordConfigured = configured;
+    updateMonitorHint();
+}
+
+void PlayerComponent::updatePlayButtonText()
+{
+    playButton.setButtonText(playlist.isPlaying() ? "Stop" : "Play");
+}
+
+void PlayerComponent::updateMonitorHint()
+{
+    // Only worth saying when it actually means total silence. With
+    // Discord configured, Monitor off is the normal, correct state - the
+    // host hears the mix through the call - so nagging about it there
+    // would just be noise.
+    auto silent = !masterEngine.isLocalMonitoring() && !discordConfigured;
+    auto text = silent ? juce::String("Monitor is off, so nothing is audible - turn it on to hear the mix "
+                                        "through this computer's speakers.")
+                        : juce::String();
+
+    if (monitorHintLabel.getText() == text)
+        return;
+
+    monitorHintLabel.setText(text, juce::dontSendNotification);
+    resized(); // the hint's presence changes how much height everything below it gets
 }
 
 void PlayerComponent::setWarningBanner(const juce::String& text)
@@ -174,6 +219,8 @@ void PlayerComponent::refreshToggleStates()
     updateShuffleButtonText();
     updateMuteButtonText();
     updateMonitorButtonText();
+    updatePlayButtonText();
+    updateMonitorHint();
 }
 
 void PlayerComponent::resized()
@@ -197,7 +244,19 @@ void PlayerComponent::resized()
         warningBannerLabel.setBounds(0, 0, 0, 0);
     }
 
+    if (monitorHintLabel.getText().isNotEmpty())
+    {
+        monitorHintLabel.setBounds(area.removeFromTop(20));
+        area.removeFromTop(6);
+    }
+    else
+    {
+        monitorHintLabel.setBounds(0, 0, 0, 0);
+    }
+
     auto buttonRow = area.removeFromTop(32);
+    playButton.setBounds(buttonRow.removeFromLeft(80));
+    buttonRow.removeFromLeft(8);
     skipButton.setBounds(buttonRow.removeFromLeft(90));
     buttonRow.removeFromLeft(8);
     shuffleButton.setBounds(buttonRow.removeFromLeft(110));

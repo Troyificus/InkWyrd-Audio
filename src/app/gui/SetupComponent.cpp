@@ -1,8 +1,11 @@
 #include "SetupComponent.h"
 
-SetupComponent::SetupComponent(AppSettings& settingsToUse, std::function<void(Result)> onSaveAndLaunchToUse)
+SetupComponent::SetupComponent(AppSettings& settingsToUse,
+                                bool isFirstRun,
+                                std::function<void(Result)> onSaveAndLaunchToUse)
     : settings(settingsToUse), onSaveAndLaunch(std::move(onSaveAndLaunchToUse))
 {
+    saveAndLaunchButton.setButtonText(isFirstRun ? "Save & Launch" : "Save & Apply");
     titleLabel.setText("Inkwyrd Audio - Setup", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(juce::FontOptions(22.0f, juce::Font::bold)));
     addAndMakeVisible(titleLabel);

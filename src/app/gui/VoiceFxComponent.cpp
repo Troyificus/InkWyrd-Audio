@@ -1,5 +1,7 @@
 #include "VoiceFxComponent.h"
 
+#include "Dialogs.h"
+
 namespace
 {
     constexpr int kRowHeight = 28;
@@ -36,7 +38,8 @@ VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
         {
             juce::String error;
             if (!voiceChain.addPlugin(scanner, description, error))
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Couldn't add plugin", error);
+                inkwyrd::showMessage(this, juce::MessageBoxIconType::WarningIcon,
+                                      "Couldn't add plugin", error);
             rebuildChainListUI();
         };
     }

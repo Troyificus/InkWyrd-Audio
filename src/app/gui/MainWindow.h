@@ -14,7 +14,8 @@ class MainWindow : public juce::DocumentWindow
 public:
     explicit MainWindow(const juce::String& name);
 
-    void showSetupView(AppSettings& settings, std::function<void(SetupComponent::Result)> onSaveAndLaunch);
+    void showSetupView(AppSettings& settings, bool isFirstRun,
+                        std::function<void(SetupComponent::Result)> onSaveAndLaunch);
 
     void showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soundboard, MasterEngine& masterEngine,
                          PluginScanner& scanner, PluginChain& voiceChain,

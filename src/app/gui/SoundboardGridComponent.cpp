@@ -1,5 +1,7 @@
 #include "SoundboardGridComponent.h"
 
+#include "Dialogs.h"
+
 namespace
 {
     constexpr int kMinCellWidth = 120;
@@ -228,11 +230,10 @@ void SoundboardGridComponent::assignToSlot(int index)
         // times to set a board up.
         if (layout.assignFrom(index, results) == 0)
         {
-            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
-                                                    "Couldn't add that",
-                                                    "That file isn't in a format this app can play. "
-                                                    "Supported: WAV, AIFF, FLAC, Ogg Vorbis, MP3, "
-                                                    "AAC/M4A and WMA.");
+            inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::WarningIcon,
+                                  "Couldn't add that",
+                                  "That file isn't in a format this app can play. Supported: WAV, "
+                                  "AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A and WMA.");
             return;
         }
 
@@ -242,7 +243,8 @@ void SoundboardGridComponent::assignToSlot(int index)
 
 void SoundboardGridComponent::renameSlot(int index)
 {
-    auto* window = new juce::AlertWindow("Rename button", "New name:", juce::MessageBoxIconType::NoIcon);
+    auto* window = new juce::AlertWindow("Rename button", "New name:",
+                                          juce::MessageBoxIconType::NoIcon, this);
     window->addTextEditor("name", layout.getSlot(index).name);
     window->addButton("Rename", 1);
     window->addButton("Cancel", 0);
@@ -256,12 +258,11 @@ void SoundboardGridComponent::renameSlot(int index)
 
         if (!layout.rename(index, owned->getTextEditorContents("name")))
         {
-            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
-                                                    "Couldn't rename",
-                                                    "That name is either empty or already used by "
-                                                    "another button. Names have to be unique - the "
-                                                    "name is what a Stream Deck button sends to "
-                                                    "trigger the sound.");
+            inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::WarningIcon,
+                                  "Couldn't rename",
+                                  "That name is either empty or already used by another button. "
+                                  "Names have to be unique - the name is what a Stream Deck button "
+                                  "sends to trigger the sound.");
             return;
         }
 
@@ -293,10 +294,10 @@ void SoundboardGridComponent::importFolderIntoBoard()
         notifyChanged();
 
         if (imported == 0)
-            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,
-                                                    "Nothing to import",
-                                                    "That folder has no playable audio files that "
-                                                    "aren't already on the board.");
+            inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::InfoIcon,
+                                  "Nothing to import",
+                                  "That folder has no playable audio files that aren't already on "
+                                  "the board.");
     });
 }
 
@@ -308,10 +309,10 @@ void SoundboardGridComponent::changeSlotCount(int delta)
     // setNumSlots refuses to drop a slot that has a sound in it, so this
     // can legitimately do less than it was asked to.
     if (delta < 0 && settled > wanted)
-        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,
-                                                "Buttons still in use",
-                                                "Only empty buttons at the end of the board can be "
-                                                "removed. Clear the sounds off them first.");
+        inkwyrd::showMessage(this, juce::MessageBoxIconType::InfoIcon,
+                              "Buttons still in use",
+                              "Only empty buttons at the end of the board can be removed. Clear the "
+                              "sounds off them first.");
 
     refresh();
 }
@@ -419,11 +420,10 @@ void SoundboardGridComponent::filesDropped(const juce::StringArray& paths, int x
 
     if (layout.assignFrom(target, files) == 0)
     {
-        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
-                                                "Nothing to add",
-                                                "None of those files are in a format this app can "
-                                                "play. Supported: WAV, AIFF, FLAC, Ogg Vorbis, MP3, "
-                                                "AAC/M4A and WMA.");
+        inkwyrd::showMessage(this, juce::MessageBoxIconType::WarningIcon,
+                              "Nothing to add",
+                              "None of those files are in a format this app can play. Supported: "
+                              "WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A and WMA.");
         return;
     }
 

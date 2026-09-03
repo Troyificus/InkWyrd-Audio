@@ -1,5 +1,7 @@
 #include "PlaylistPanel.h"
 
+#include "Dialogs.h"
+
 namespace
 {
     constexpr int kRowHeight = 24;
@@ -297,14 +299,13 @@ void PlaylistPanel::addFoldersWithPrompt(const juce::Uuid& id, const juce::Array
     auto what = folders.size() == 1 ? folders.getFirst().getFullPathName()
                                      : juce::String(folders.size()) + " folders";
 
-    auto options = juce::MessageBoxOptions()
-                        .withIconType(juce::MessageBoxIconType::QuestionIcon)
-                        .withTitle(folders.size() == 1 ? "Add folder" : "Add folders")
-                        .withMessage(what + "\n\n"
-                                      + juce::String(count) + " playable file(s) found.\n\n"
-                                      "Keep the folder linked so files added to it later show up "
-                                      "automatically, or add these tracks once so you can remove "
-                                      "them individually?")
+    auto options = inkwyrd::dialogOptions(this, juce::MessageBoxIconType::QuestionIcon,
+                                           folders.size() == 1 ? "Add folder" : "Add folders",
+                                           what + "\n\n"
+                                            + juce::String(count) + " playable file(s) found.\n\n"
+                                            "Keep the folder linked so files added to it later show up "
+                                            "automatically, or add these tracks once so you can remove "
+                                            "them individually?")
                         .withButton("Keep folder linked")
                         .withButton("Add these tracks once")
                         .withButton("Cancel");
@@ -335,7 +336,8 @@ void PlaylistPanel::renameSelected()
         return;
 
     auto id = playlist->id;
-    auto* window = new juce::AlertWindow("Rename playlist", "New name:", juce::MessageBoxIconType::NoIcon);
+    auto* window = new juce::AlertWindow("Rename playlist", "New name:",
+                                          juce::MessageBoxIconType::NoIcon, this);
     window->addTextEditor("name", playlist->name);
     window->addButton("Rename", 1);
     window->addButton("Cancel", 0);
@@ -350,10 +352,9 @@ void PlaylistPanel::renameSelected()
         auto newName = owned->getTextEditorContents("name");
         if (!library.renamePlaylist(id, newName))
         {
-            juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
-                                                    "Couldn't rename",
-                                                    "That name is either empty or already used by "
-                                                    "another playlist.");
+            inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::WarningIcon,
+                                  "Couldn't rename",
+                                  "That name is either empty or already used by another playlist.");
             return;
         }
 
@@ -368,12 +369,11 @@ void PlaylistPanel::deleteSelected()
         return;
 
     auto id = playlist->id;
-    auto options = juce::MessageBoxOptions()
-                        .withIconType(juce::MessageBoxIconType::QuestionIcon)
-                        .withTitle("Delete playlist")
-                        .withMessage("Delete \"" + playlist->name + "\"?\n\n"
-                                      "Only the playlist is removed - none of your audio files are "
-                                      "touched, and the playlist file goes to the Recycle Bin.")
+    auto options = inkwyrd::dialogOptions(this, juce::MessageBoxIconType::QuestionIcon,
+                                           "Delete playlist",
+                                           "Delete \"" + playlist->name + "\"?\n\n"
+                                            "Only the playlist is removed - none of your audio files are "
+                                            "touched, and the playlist file goes to the Recycle Bin.")
                         .withButton("Delete")
                         .withButton("Cancel");
 
@@ -387,6 +387,12 @@ void PlaylistPanel::deleteSelected()
         library.deletePlaylist(id);
         selectedId = juce::Uuid();
         refresh();
+
+        // Tell the app: if this was the playlist being PLAYED, it has to
+        // stop the audio. Nothing else would - the engine holds its own
+        // copy of the track list and would happily play a deleted
+        // playlist forever.
+        notifyEdited(id);
     });
 }
 
@@ -498,11 +504,10 @@ void PlaylistPanel::filesDropped(const juce::StringArray& paths, int x, int y)
     {
         // Say so rather than silently doing nothing - a drop that appears
         // to work but adds no tracks is worse than a refusal.
-        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
-                                                "Nothing to add",
-                                                "None of those files are in a format this app can "
-                                                "play. Supported: WAV, AIFF, FLAC, Ogg Vorbis, MP3, "
-                                                "AAC/M4A and WMA.");
+        inkwyrd::showMessage(this, juce::MessageBoxIconType::WarningIcon,
+                              "Nothing to add",
+                              "None of those files are in a format this app can play. Supported: "
+                              "WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A and WMA.");
         return;
     }
 

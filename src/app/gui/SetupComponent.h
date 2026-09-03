@@ -23,7 +23,12 @@ public:
         juce::String botToken, guildId, channelId;
     };
 
-    SetupComponent(AppSettings& settingsToUse, std::function<void(Result)> onSaveAndLaunchToUse);
+    // isFirstRun distinguishes the initial setup screen (where the
+    // button really does launch the app) from reopening Settings later
+    // (where it applies changes to the session already running).
+    SetupComponent(AppSettings& settingsToUse,
+                    bool isFirstRun,
+                    std::function<void(Result)> onSaveAndLaunchToUse);
 
     void resized() override;
 
@@ -61,7 +66,7 @@ private:
     juce::Label channelIdCaption { {}, "Voice channel ID" };
     juce::TextEditor channelIdEditor;
 
-    juce::TextButton saveAndLaunchButton { "Save & Launch" };
+    juce::TextButton saveAndLaunchButton;
 
     std::unique_ptr<juce::FileChooser> activeChooser;
 };

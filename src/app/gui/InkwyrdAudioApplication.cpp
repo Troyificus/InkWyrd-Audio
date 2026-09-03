@@ -3,6 +3,8 @@
 #include "MediaFoundationAudioFormat.h"
 #include "Log.h"
 
+#include "Dialogs.h"
+
 #include <ixwebsocket/IXNetSystem.h>
 #include <sodium.h>
 
@@ -75,7 +77,6 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
         if (startupPlaylist != nullptr)
             activatePlaylist(startupPlaylist->id);
 
-        discordConnectAttempted = true;
         startDiscordConnectIfConfigured();
     }
     else
@@ -169,7 +170,24 @@ void InkwyrdAudioApplication::handlePlaylistEdited(const juce::Uuid& id)
 
     auto* target = library.findById(id);
     if (target == nullptr)
+    {
+        // The playlist being played was DELETED. Carrying on playing a
+        // list that no longer exists leaves audio running with nothing
+        // on screen owning it, and no obvious way to stop it.
+        playlist.stop();
+        activePlaylistId = juce::Uuid();
+        settings.setActivePlaylistId({});
+        settings.save();
+
+        if (auto* player = mainWindow->getPlayerComponent())
+        {
+            player->setPlayingPlaylistId({});
+            player->refreshToggleStates();
+        }
+
+        updateWarningBanner();
         return;
+    }
 
     // Preserving order rather than setTracks(): this is an edit to the
     // list that's already playing, so it must not restart the track,
@@ -197,26 +215,37 @@ void InkwyrdAudioApplication::shutdown()
 
 void InkwyrdAudioApplication::showSetup()
 {
-    mainWindow->showSetupView(settings, [this](SetupComponent::Result result) { completeSetupAndLaunch(result); });
+    // First run is the case where there's nothing to come back to: no
+    // player view has ever been shown this session.
+    auto isFirstRun = mainWindow->getPlayerComponent() == nullptr && !hasShownPlayer;
+
+    mainWindow->showSetupView(settings, isFirstRun,
+                               [this](SetupComponent::Result result) { completeSetupAndLaunch(result); });
 }
 
 void InkwyrdAudioApplication::applyDefaultLocalMonitoring()
 {
-    // Off by default whenever Discord is configured. The host is
-    // normally already in the call when they open the app, so playing
-    // locally as well means hearing every track twice, slightly offset.
-    // Waiting until the connection completes to switch it off isn't good
-    // enough - the doubling happens during the connect window, which can
-    // last indefinitely while waiting for someone to join the channel.
+    // ALWAYS off at startup. The host is normally already in the call
+    // when they open the app, so playing locally as well means hearing
+    // every track twice, slightly offset. Waiting until the connection
+    // completes to switch it off isn't good enough - the doubling
+    // happens during the connect window, which can last indefinitely.
     //
-    // With no Discord configured, local output is the only way to hear
-    // anything at all, so it stays on - otherwise "local monitor only"
-    // mode would be completely silent with nothing explaining why.
-    masterEngine.setLocalMonitoring(!settings.hasDiscordCredentials());
+    // This used to be `!hasDiscordCredentials()`, i.e. ON whenever
+    // Discord wasn't set up, reasoning that local-only mode would
+    // otherwise be silent with nothing explaining why. That produced
+    // exactly the surprise it was meant to avoid: launching with an
+    // empty bot token started playing out of the speakers immediately.
+    // The silence problem is now solved by SAYING SO - PlayerComponent
+    // shows a "Monitor is off" hint - rather than by overriding the
+    // user's stated default.
+    masterEngine.setLocalMonitoring(false);
 }
 
 void InkwyrdAudioApplication::showPlayer()
 {
+    hasShownPlayer = true;
+
     mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins,
                                 library, soundboardLayout,
                                 [this](const juce::Uuid& id) { activatePlaylist(id); },
@@ -226,6 +255,10 @@ void InkwyrdAudioApplication::showPlayer()
 
     if (auto* player = mainWindow->getPlayerComponent())
     {
+        // So it can point out that Monitor being off means silence when
+        // there's no Discord to send to either.
+        player->setDiscordConfigured(settings.hasDiscordCredentials());
+
         if (!activePlaylistId.isNull())
             player->setPlayingPlaylistId(activePlaylistId);
     }
@@ -305,14 +338,16 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
     // Only on the first pass through setup. Re-applying it on every save
     // would silently undo a monitor toggle the user had deliberately
     // flipped, just because they went in to change a folder.
-    if (!discordConnectAttempted)
+    if (!discordConnectStarted)
         applyDefaultLocalMonitoring();
 
     showPlayer();
 
-    if (!discordConnectAttempted)
+    if (!discordConnectStarted)
     {
-        discordConnectAttempted = true;
+        // Nothing has connected yet this run, so new credentials take
+        // effect right now - no restart needed. This is the common case
+        // after launching with an empty or cleared bot token.
         startDiscordConnectIfConfigured();
     }
     else if (auto* player = mainWindow->getPlayerComponent())
@@ -325,11 +360,16 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
         // actually configured - otherwise a folder-only settings change
         // would misleadingly imply a Discord setting changed too.
         if (settings.hasDiscordCredentials())
+        {
             player->setDiscordStatus(discordConnector.isConnected()
                                           ? "Connected - streaming to Discord. Restart to apply changed Discord settings."
                                           : "Restart Inkwyrd Audio to apply changed Discord settings.");
+            offerRestart();
+        }
         else
+        {
             player->setDiscordStatus("Local monitor only - no Discord credentials configured.");
+        }
     }
 }
 
@@ -341,6 +381,8 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
             player->setDiscordStatus("Local monitor only - no Discord credentials configured.");
         return;
     }
+
+    discordConnectStarted = true;
 
     discordConnector.connectAsync(settings.getBotToken(), settings.getGuildId(), settings.getChannelId(),
         [this](juce::String status)
@@ -365,6 +407,36 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
             if (auto* player = mainWindow->getPlayerComponent())
                 player->refreshToggleStates();
         });
+}
+
+void InkwyrdAudioApplication::offerRestart()
+{
+    auto options = inkwyrd::dialogOptions(mainWindow.get(), juce::MessageBoxIconType::QuestionIcon,
+                                           "Restart to apply Discord settings",
+                                           "Your settings are saved, but Discord settings only take "
+                                           "effect when Inkwyrd Audio restarts.\n\n"
+                                           "Restart now?")
+                        .withButton("Restart now")
+                        .withButton("Later");
+
+    juce::AlertWindow::showAsync(options, [this](int result)
+    {
+        if (result != 1)
+            return;
+
+        // The app refuses to run twice at once (one audio device, one bot
+        // token, one control-server port), so the replacement can't just
+        // be started here - it would find this instance still alive and
+        // quit immediately. Hand the relaunch to a detached shell that
+        // waits for this process to go away first.
+        auto exe = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+
+        juce::ChildProcess relauncher;
+        relauncher.start("cmd.exe /c ping -n 4 127.0.0.1 > nul & start \"\" \""
+                          + exe.getFullPathName() + "\"");
+
+        quit();
+    });
 }
 
 void InkwyrdAudioApplication::registerSoundboardLayout()
