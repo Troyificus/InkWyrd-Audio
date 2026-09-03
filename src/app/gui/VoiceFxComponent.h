@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "PluginChain.h"
@@ -17,7 +19,8 @@ class VoiceFxComponent : public juce::Component
 public:
     VoiceFxComponent(PluginScanner& scannerToUse,
                       PluginChain& voiceChainToUse,
-                      juce::Array<juce::PluginDescription> availablePluginsToUse);
+                      juce::Array<juce::PluginDescription> availablePluginsToUse,
+                      std::function<void()> onRescanToUse);
 
     void resized() override;
 
@@ -29,6 +32,9 @@ private:
     juce::Array<juce::PluginDescription> availablePlugins;
 
     juce::Label pluginListCaption { {}, "Available VST3 plugins" };
+    juce::TextButton rescanButton { "Rescan" };
+    juce::Label emptyMessage;
+    std::function<void()> onRescan;
     juce::Viewport pluginListViewport;
     juce::Component pluginListPanel;
     juce::OwnedArray<juce::TextButton> addPluginButtons;

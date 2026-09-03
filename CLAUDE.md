@@ -682,11 +682,12 @@ Added instead of a guessed fix:
 
 - **`MessageThreadWatchdog`** (`src/app/`) logs any message-thread stall
   over 300 ms, with its real duration. It immediately earned its place by
-  catching something nobody was looking for: **the VST3 scan blocks the
-  UI thread for ~18 seconds at every launch.** That is a genuine
-  "the app is unresponsive" defect in its own right (and matches an
-  earlier "took about a minute to launch" report). Not yet fixed -
-  scanning on a background thread is its own piece of work.
+  catching something nobody was looking for: **the VST3 scan blocked the
+  UI thread for ~18 seconds at every launch.** That was a genuine
+  "the app is unresponsive" defect in its own right, and matched an
+  earlier "took about a minute to launch" report. Fixed - see the VST3
+  scan section above. The watchdog's 18,222 ms and the scan test's
+  18,268 ms were measured independently and agree.
 - **`INKWYRD_TIMELOAD="fileA|fileB"`** on the AudioEngineTest binary
   times reader creation and message-thread blocking, and measures how
   long output stays silent after a load. Keep it: it is what disproved
@@ -728,6 +729,46 @@ Copy the backup's CHILDREN into place when restoring
 not the folder itself - `Copy-Item -Recurse $bak $dir` nests the backup
 inside the target when the target exists.
 
+## The VST3 scan no longer freezes startup
+
+`MessageThreadWatchdog` caught this on its first run: **the plugin scan
+blocked the message thread for ~18 seconds at every launch**, because
+`initialise()` called `PluginScanner::scan()` directly.
+`PluginDirectoryScanner` loads every plugin binary on the machine to read
+its description, so this is inherent to scanning, not a bug in the loop.
+It matches an earlier user report of the app "taking about a minute to
+launch".
+
+Two changes, and the cache is the one that matters most:
+
+- **The scan result is cached** to `%APPDATA%\Inkwyrd Audio\plugins.xml`
+  via `KnownPluginList::createXml()`/`recreateFromXml()`, written
+  atomically through `juce::TemporaryFile` like the playlist and
+  soundboard files. Measured on the dev machine's 40 plugins:
+  **a real scan takes 14-18 seconds; restoring the cache takes 7 ms.**
+  A normal launch now does no scanning at all.
+- **A real scan runs on its own `std::thread`**, joined in `shutdown()`.
+  It only happens on a first run (empty cache) or an explicit **Rescan**
+  in the Voice FX panel. The Voice FX button is *disabled* and reads
+  "Scanning..." while one is in flight - not just relabelled, because the
+  scan is writing to the same `KnownPluginList` the panel would be
+  instantiating plugins from. `PlayerComponent::setAvailablePlugins()`
+  also closes an open Voice FX panel, since its rows are built once at
+  construction and can't grow.
+
+`PluginScanner::scan()` and `restoreFromCache()` both now
+`sort(sortAlphabetically)`. That was originally just to make a cached
+list and a scanned list come out *identical* rather than merely
+equivalent - the cache test caught a difference in order - but it also
+makes the Voice FX list findable instead of filesystem-ordered.
+
+**`INKWYRD_CACHETEST=1`** on the VstHostingTest binary does a real scan,
+saves and restores the cache, and checks the restored list against the
+scanned one **as a set** before checking order, so a missing plugin is
+never mistaken for a reordering. It also covers a missing and a corrupt
+cache file, both of which must degrade to "no plugins known yet" (which
+the app treats as "scan in the background") rather than crashing.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`
@@ -745,10 +786,6 @@ inside the target when the target exists.
 - **Crossfade duration** is a `const` member and doubles as the
   end-of-track look-ahead, so per-playlist fade times need care around a
   live ramp.
-- **Move the VST3 scan off the message thread.** Measured at ~18 seconds
-  of frozen UI at every launch (see the watchdog section above). The
-  scan result is only needed by the Voice FX panel, so the player could
-  come up immediately and the plugin list populate when it's ready.
 - **Winamp-style detachable window layout** - the user's chosen next
   direction after drop 3, decided with reference screenshots of Winamp
   and AIMP. Main window = player head + the playing playlist; SFX and

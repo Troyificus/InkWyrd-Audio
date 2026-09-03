@@ -111,6 +111,35 @@ void PlayerComponent::setDiscordStatus(const juce::String& text)
     discordStatusLabel.setText(text, juce::dontSendNotification);
 }
 
+void PlayerComponent::setAvailablePlugins(juce::Array<juce::PluginDescription> plugins)
+{
+    availablePlugins = std::move(plugins);
+
+    // If the panel happens to be open when a scan finishes, close it -
+    // it was built from the old (probably empty) list and has no way to
+    // grow new rows. Reopening shows the full list.
+    if (voiceFxWindow != nullptr)
+    {
+        delete voiceFxWindow.getComponent();
+        voiceFxWindow = nullptr;
+    }
+}
+
+void PlayerComponent::setPluginScanInProgress(bool scanning)
+{
+    pluginScanInProgress = scanning;
+
+    // Disabled rather than merely relabelled: the scan is writing to the
+    // same PluginScanner the panel would be instantiating plugins from.
+    voiceFxButton.setButtonText(scanning ? "Scanning..." : "Voice FX...");
+    voiceFxButton.setEnabled(!scanning);
+}
+
+void PlayerComponent::setRescanPluginsCallback(std::function<void()> callback)
+{
+    onRescanPlugins = std::move(callback);
+}
+
 void PlayerComponent::setDiscordConfigured(bool configured)
 {
     discordConfigured = configured;
@@ -167,7 +196,8 @@ void PlayerComponent::showVoiceFxWindow()
 
     juce::DialogWindow::LaunchOptions options;
     options.dialogTitle = "Voice FX";
-    options.content.setOwned(new VoiceFxComponent(scanner, voiceChain, availablePlugins));
+    options.content.setOwned(new VoiceFxComponent(scanner, voiceChain, availablePlugins,
+                                                   [this] { if (onRescanPlugins) onRescanPlugins(); }));
     options.componentToCentreAround = this;
     options.dialogBackgroundColour = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
     options.escapeKeyTriggersCloseButton = true;

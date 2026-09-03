@@ -22,10 +22,25 @@ namespace
 
 VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
                                     PluginChain& voiceChainToUse,
-                                    juce::Array<juce::PluginDescription> availablePluginsToUse)
-    : scanner(scannerToUse), voiceChain(voiceChainToUse), availablePlugins(std::move(availablePluginsToUse))
+                                    juce::Array<juce::PluginDescription> availablePluginsToUse,
+                                    std::function<void()> onRescanToUse)
+    : scanner(scannerToUse), voiceChain(voiceChainToUse),
+      availablePlugins(std::move(availablePluginsToUse)),
+      onRescan(std::move(onRescanToUse))
 {
     addAndMakeVisible(pluginListCaption);
+
+    // The plugin list is cached between launches so startup doesn't have
+    // to pay for a scan, which means newly installed plugins need a way
+    // to be picked up.
+    addAndMakeVisible(rescanButton);
+    rescanButton.onClick = [this] { if (onRescan) onRescan(); };
+
+    emptyMessage.setText("No VST3 plugins found yet. Click Rescan to look again.",
+                          juce::dontSendNotification);
+    emptyMessage.setColour(juce::Label::textColourId, juce::Colours::grey);
+    emptyMessage.setVisible(availablePlugins.isEmpty());
+    addAndMakeVisible(emptyMessage);
     pluginListViewport.setViewedComponent(&pluginListPanel, false);
     addAndMakeVisible(pluginListViewport);
 
@@ -81,7 +96,15 @@ void VoiceFxComponent::resized()
     area.removeFromLeft(12);
     auto chainColumn = area;
 
-    pluginListCaption.setBounds(pluginColumn.removeFromTop(22));
+    auto captionRow = pluginColumn.removeFromTop(24);
+    rescanButton.setBounds(captionRow.removeFromRight(80).reduced(0, 1));
+    pluginListCaption.setBounds(captionRow);
+
+    if (availablePlugins.isEmpty())
+        emptyMessage.setBounds(pluginColumn.removeFromTop(40));
+    else
+        emptyMessage.setBounds(0, 0, 0, 0);
+
     pluginListViewport.setBounds(pluginColumn);
     layoutRows(pluginListPanel, addPluginButtons, pluginListViewport.getWidth() - pluginListViewport.getScrollBarThickness());
 

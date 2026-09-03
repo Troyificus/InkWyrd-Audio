@@ -30,7 +30,40 @@ juce::Array<juce::PluginDescription> PluginScanner::scan(const juce::File& extra
         // loop has to keep pumping it to actually scan everything.
     }
 
+    // Alphabetical, so the Voice FX list is in a findable order rather
+    // than whatever order the filesystem happened to yield - and so a
+    // cached list and a freshly scanned one come out identical rather
+    // than merely equivalent.
+    knownPlugins.sort(juce::KnownPluginList::sortAlphabetically, true);
     return knownPlugins.getTypes();
+}
+
+void PluginScanner::restoreFromCache(const juce::File& cacheFile)
+{
+    if (!cacheFile.existsAsFile())
+        return;
+
+    if (auto xml = juce::parseXML(cacheFile))
+    {
+        knownPlugins.recreateFromXml(*xml);
+        knownPlugins.sort(juce::KnownPluginList::sortAlphabetically, true);
+    }
+}
+
+void PluginScanner::saveToCache(const juce::File& cacheFile) const
+{
+    if (auto xml = knownPlugins.createXml())
+    {
+        cacheFile.getParentDirectory().createDirectory();
+
+        // Atomic, same reasoning as the playlist and soundboard files: a
+        // half-written cache would be parsed as a short plugin list, and
+        // the user would silently lose plugins from the Voice FX panel
+        // with no indication why.
+        juce::TemporaryFile temp(cacheFile);
+        if (temp.getFile().replaceWithText(xml->toString()))
+            temp.overwriteTargetFileWithTemporary();
+    }
 }
 
 juce::Array<juce::PluginDescription> PluginScanner::getKnownPlugins() const

@@ -61,6 +61,12 @@ public:
     // point out that Monitor being off means nothing is audible ANYWHERE
     // rather than just "not locally".
     void setDiscordConfigured(bool configured);
+
+    // The plugin scan runs in the background now, so the list can arrive
+    // after this screen is already up.
+    void setAvailablePlugins(juce::Array<juce::PluginDescription> plugins);
+    void setPluginScanInProgress(bool scanning);
+    void setRescanPluginsCallback(std::function<void()> callback);
     void setPlayingPlaylistId(const juce::Uuid& id);
     PlaylistPanel& getPlaylistPanel() { return playlistPanel; }
 
@@ -102,4 +108,7 @@ private:
 
     // Non-modal, so the user can keep driving the session while it's open.
     juce::Component::SafePointer<juce::DialogWindow> voiceFxWindow;
+
+    bool pluginScanInProgress = false;
+    std::function<void()> onRescanPlugins;
 };

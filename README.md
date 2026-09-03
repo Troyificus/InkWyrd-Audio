@@ -114,7 +114,11 @@ renaming one means updating that button in the Stream Deck app to match.
 
 **Voice FX...** opens your VST3 plugin list and the live mic chain -
 plugins are found automatically in the standard VST3 folder, nothing to
-configure.
+configure. The list is remembered between launches, so the scan only
+happens the first time you run the app; if you install new plugins
+later, hit **Rescan** in that panel. Scanning runs in the background -
+the button reads "Scanning..." while it does, and everything else keeps
+working.
 
 Changing a Discord bot token/server/channel via Settings takes effect on
 the next launch, not immediately - everything else applies right away.
@@ -155,8 +159,6 @@ the next launch, not immediately - everything else applies right away.
   effect on the next launch, not immediately - the app won't drop an
   active Discord connection to reconnect with new details mid-session.
 - No seek bar yet (planned).
-- The app is unresponsive for roughly 15-20 seconds at startup while it
-  scans your VST3 plugins. It hasn't hung - it's working.
 - Soundboard buttons can't be dragged from one position to another yet -
   to move a sound, assign it to the button you want and clear the old
   one.
