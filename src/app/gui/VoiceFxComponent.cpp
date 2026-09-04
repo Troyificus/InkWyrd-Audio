@@ -140,8 +140,13 @@ void VoiceFxComponent::rebuildChainListUI()
 
     chainHint.setVisible(n > 0);
 
-    layoutRows(chainListPanel, editChainButtons, removeChainButtons, kEditButtonWidth,
-                chainListViewport.getWidth() - chainListViewport.getScrollBarThickness());
+    // resized(), not just layoutRows(): showing the hint changes how much
+    // vertical room the chain list gets, so the whole column has to be
+    // laid out again. Doing only the rows left the hint visible but with
+    // no bounds - it appeared on a REopen (where the constructor's own
+    // resized() ran afterwards) and never on the add that first filled
+    // the chain.
+    resized();
 }
 
 void VoiceFxComponent::browseForPlugin()
