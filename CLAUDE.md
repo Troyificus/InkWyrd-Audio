@@ -1092,8 +1092,44 @@ instantiates the plugin, creates its editor, checks the size is real,
 and destroys it again, which is where a lifetime mistake would show up.
 Confirmed against Bertom Phantom Center 2: its own editor, 425x271.
 
-Not verified: how the rebuilt panel LOOKS in the app. It needs a launch,
-and the user's own session was running.
+Then verified in a real launch of the Release build, driven by real
+mouse input (a synthetic `element.click()` equivalent would not have
+exercised focus properly - see the note on that above): the panel opens
+empty rather than listing 40 plugins, **Add VST3...** lands on
+`C:\Program Files\Common Files\VST3`, picking Bertom Phantom Center 2
+puts it on the shelf and writes `voice-plugins.xml`, clicking it adds it
+to the chain and opens **its own GUI** (sliders, preset gear, vendor
+branding - not a generic parameter list). Startup was 4.7s with
+`0 voice FX plugin(s) in your list` in the log, confirming no scan
+happens at all now.
+
+The lifetime paths were exercised deliberately, since that is where this
+would go wrong: Edit with the editor already open brings it forward
+rather than stacking a second window; **Remove with the editor open**
+closes the editor and the app survives; closing the whole panel with an
+editor open closes both and leaves the chain intact (reopening still
+showed the plugin in the chain); **Forget** empties the shelf and the
+XML while leaving the chain alone, as designed.
+
+**One real bug found this way and fixed** (commit 121ef49): adding the
+first plugin to the chain showed its row but not the hint line
+explaining what the chain is and that Edit opens the plugin's own
+window. `rebuildChainListUI()` made the hint visible without ever giving
+it bounds, because it only re-laid the rows instead of calling
+`resized()` - and showing the hint changes how much vertical room the
+list gets. It appeared on a *reopen* of the panel, since the
+constructor's own `resized()` runs after the rebuild there, which is
+exactly why reading the code would not have caught it.
+
+### Plugin settings are saved as the plugin's own presets
+
+Asked whether the live chain and each plugin's state should persist
+across restarts. The user's call: **no** - "users will have to make
+presets in the VSTs themselves to save settings, same as they would do
+if using them in a DAW." So the chain stays session-only by design, not
+by omission. This avoids instantiating plugins during startup (time
+cost) and avoids a badly-behaved plugin being able to block launch,
+which was the real risk of the alternative.
 
 ## Agreed but not yet built
 
