@@ -389,6 +389,73 @@ namespace
         }
 
         {
+            // Hard Stop, Fade out, and turning crossfade off.
+            PlaylistEngine engine(formatManager);
+            engine.setShuffle(false);
+            engine.setTracks(folderTracks);
+            engine.resume();
+
+            engine.skipToNext();
+            auto secondTrack = engine.getCurrentTrackFile();
+            juce::ignoreUnused(secondTrack);
+
+            engine.hardStop();
+            check(!engine.isPlaying(), "Stop silences playback");
+            check(engine.getCurrentTrackFile() == juce::File(),
+                   "Stop forgets where it was - that is what makes it a stop and not a pause");
+            check(!engine.isCrossfading(), "Stop collapses a crossfade rather than leaving it running");
+
+            engine.resume();
+            check(engine.isPlaying() && engine.getCurrentTrackFile() == folderTracks[0],
+                   "Play after Stop begins the list again from the top");
+
+            // Fade out
+            check(!engine.isFadingOut(), "nothing is fading before the button is pressed");
+            engine.fadeOutAndStop(2.0);
+            check(engine.isFadingOut(), "Fade out starts a fade");
+            check(engine.isPlaying(), "a fade-out is still playing while it fades");
+
+            engine.resume();
+            check(!engine.isFadingOut(),
+                   "pressing Play during a fade-out cancels it rather than continuing down");
+
+            engine.fadeOutAndStop(2.0);
+            engine.pause();
+            check(!engine.isFadingOut(),
+                   "Pause during a fade-out abandons it, so resuming isn't mysteriously quiet");
+
+            engine.hardStop();
+            engine.fadeOutAndStop(2.0);
+            check(!engine.isFadingOut(),
+                   "Fade out does nothing when there is nothing playing");
+
+            // Crossfade off
+            engine.setCrossfadeEnabled(false);
+            check(!engine.isCrossfadeEnabled(), "crossfade can be switched off");
+
+            engine.resume();
+            auto before = engine.getCurrentTrackFile();
+            engine.skipToNext();
+            check(!engine.isCrossfading(),
+                   "with crossfade off a skip cuts straight over instead of starting a fade");
+            check(engine.getCurrentTrackFile() != before,
+                   "the cut still actually moves to the next track");
+            check(engine.isPlaying(), "and it is still playing afterwards");
+
+            engine.setCrossfadeEnabled(true);
+            engine.setCrossfadeSeconds(500.0);
+            check(engine.getCrossfadeSeconds() == PlaylistEngine::kMaxCrossfadeSeconds,
+                   "an absurd crossfade length is clamped to the usable range");
+            engine.setCrossfadeSeconds(4.0);
+            check(engine.getCrossfadeSeconds() == 4.0, "a sensible crossfade length is kept");
+
+            engine.skipToNext();
+            check(engine.isCrossfading(), "with crossfade back on, a skip fades again");
+
+            engine.hardStop();
+        }
+
+        {
             // Per-track volume trims.
             TrackGainStore gains;
             gains.setFile(scratch.getChildFile("gains.json"));

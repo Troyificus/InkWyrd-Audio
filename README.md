@@ -73,11 +73,23 @@ channel ID.
 
 ### Using it
 
-Across the top: a "Now playing" line, the Discord connection status,
-Play/Stop / Skip / Shuffle / Mic mute / Monitor buttons, and the
-**Master** fader - one control over everything the app sends out, both to
-your speakers and to Discord. Its position is remembered between
-sessions.
+Across the top: a "Now playing" line and the Discord connection status,
+then two rows of controls.
+
+**The transport row:** **Pause** (keeps your place), **Stop** (silences
+everything and starts the list from the top next time), **Fade out**
+(rides the music down to silence and then stops - for ending a scene),
+**Skip**, **Shuffle**, and the **Master** fader, which is one control
+over everything the app sends out: your speakers *and* Discord.
+
+**The row below** is how the app behaves rather than what it's doing now:
+**Mic** mute, **Monitor**, whether tracks **Crossfade** into each other
+and over how long, and how long **Fade out** takes. All of it is
+remembered between sessions.
+
+Fade out only takes the *music* down, not your microphone - fading
+yourself out mid-sentence isn't what a button next to Stop should do. Use
+the Master fader if you want to take absolutely everything down.
 
 **Monitor is off when the app starts.** It controls whether the mix also
 comes out of *your own* speakers. When you're in the Discord call you

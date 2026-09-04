@@ -51,13 +51,63 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     addAndMakeVisible(playButton);
     playButton.onClick = [this]
     {
-        if (playlist.isPlaying())
+        // Pause, not stop: this one keeps your place.
+        if (playlist.isPlaying() && !playlist.isFadingOut())
             playlist.pause();
         else
             playlist.resume();
 
         updatePlayButtonText();
     };
+
+    addAndMakeVisible(stopButton);
+    stopButton.onClick = [this]
+    {
+        playlist.hardStop();
+        refreshToggleStates();
+    };
+
+    addAndMakeVisible(fadeOutButton);
+    fadeOutButton.onClick = [this]
+    {
+        playlist.fadeOutAndStop(fadeOutSlider.getValue());
+        refreshToggleStates();
+    };
+
+    updateCrossfadeToggleText();
+    addAndMakeVisible(crossfadeCaption);
+    addAndMakeVisible(crossfadeToggle);
+    crossfadeToggle.onClick = [this]
+    {
+        playlist.setCrossfadeEnabled(!playlist.isCrossfadeEnabled());
+        updateCrossfadeToggleText();
+        crossfadeSlider.setEnabled(playlist.isCrossfadeEnabled());
+
+        if (onPlaybackSettingsChanged)
+            onPlaybackSettingsChanged();
+    };
+
+    crossfadeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    crossfadeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 22);
+    crossfadeSlider.setRange(PlaylistEngine::kMinCrossfadeSeconds,
+                              PlaylistEngine::kMaxCrossfadeSeconds, 0.5);
+    crossfadeSlider.setTextValueSuffix(" s");
+    crossfadeSlider.onValueChange = [this]
+    {
+        playlist.setCrossfadeSeconds(crossfadeSlider.getValue());
+
+        if (onPlaybackSettingsChanged)
+            onPlaybackSettingsChanged();
+    };
+    addAndMakeVisible(crossfadeSlider);
+
+    addAndMakeVisible(fadeOutCaption);
+    fadeOutSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    fadeOutSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 22);
+    fadeOutSlider.setRange(1.0, 20.0, 0.5);
+    fadeOutSlider.setTextValueSuffix(" s");
+    fadeOutSlider.onValueChange = [this] { if (onPlaybackSettingsChanged) onPlaybackSettingsChanged(); };
+    addAndMakeVisible(fadeOutSlider);
 
     addAndMakeVisible(skipButton);
     skipButton.onClick = [this] { playlist.skipToNext(); };
@@ -181,7 +231,38 @@ void PlayerComponent::setDiscordConfigured(bool configured)
 
 void PlayerComponent::updatePlayButtonText()
 {
-    playButton.setButtonText(playlist.isPlaying() ? "Stop" : "Play");
+    // "Pause" rather than "Stop" now that a real Stop sits next to it -
+    // two buttons both saying Stop, doing different things, would be
+    // worse than either.
+    playButton.setButtonText(playlist.isPlaying() && !playlist.isFadingOut() ? "Pause" : "Play");
+
+    stopButton.setEnabled(playlist.isPlaying());
+    fadeOutButton.setEnabled(playlist.isPlaying() && !playlist.isFadingOut());
+    fadeOutButton.setButtonText(playlist.isFadingOut() ? "Fading..." : "Fade out");
+}
+
+void PlayerComponent::updateCrossfadeToggleText()
+{
+    crossfadeToggle.setButtonText(playlist.isCrossfadeEnabled() ? "On" : "Off");
+}
+
+void PlayerComponent::setPlaybackSettings(bool crossfadeEnabled, double crossfadeSeconds,
+                                           double fadeOutSecondsToUse)
+{
+    playlist.setCrossfadeEnabled(crossfadeEnabled);
+    playlist.setCrossfadeSeconds(crossfadeSeconds);
+
+    // dontSendNotification: restoring saved values, not the user changing
+    // them, so this must not write straight back to settings.
+    crossfadeSlider.setValue(playlist.getCrossfadeSeconds(), juce::dontSendNotification);
+    crossfadeSlider.setEnabled(crossfadeEnabled);
+    fadeOutSlider.setValue(fadeOutSecondsToUse, juce::dontSendNotification);
+    updateCrossfadeToggleText();
+}
+
+void PlayerComponent::setPlaybackSettingsChangedCallback(std::function<void()> callback)
+{
+    onPlaybackSettingsChanged = std::move(callback);
 }
 
 void PlayerComponent::updateMonitorHint()
@@ -317,21 +398,38 @@ void PlayerComponent::resized()
         monitorHintLabel.setBounds(0, 0, 0, 0);
     }
 
+    // Row one is the transport - the things pressed during a session.
     auto buttonRow = area.removeFromTop(32);
     playButton.setBounds(buttonRow.removeFromLeft(80));
     buttonRow.removeFromLeft(8);
-    skipButton.setBounds(buttonRow.removeFromLeft(90));
+    stopButton.setBounds(buttonRow.removeFromLeft(70));
+    buttonRow.removeFromLeft(8);
+    fadeOutButton.setBounds(buttonRow.removeFromLeft(95));
+    buttonRow.removeFromLeft(8);
+    skipButton.setBounds(buttonRow.removeFromLeft(80));
     buttonRow.removeFromLeft(8);
     shuffleButton.setBounds(buttonRow.removeFromLeft(110));
-    buttonRow.removeFromLeft(8);
-    muteButton.setBounds(buttonRow.removeFromLeft(100));
-    buttonRow.removeFromLeft(8);
-    monitorButton.setBounds(buttonRow.removeFromLeft(120));
 
     voiceFxButton.setBounds(buttonRow.removeFromRight(110));
     buttonRow.removeFromRight(12);
-    masterVolumeSlider.setBounds(buttonRow.removeFromRight(190));
+    masterVolumeSlider.setBounds(buttonRow.removeFromRight(180));
     masterVolumeCaption.setBounds(buttonRow.removeFromRight(56));
+
+    area.removeFromTop(8);
+
+    // Row two is how the app behaves - set once and mostly left alone.
+    auto settingsRow = area.removeFromTop(28);
+    muteButton.setBounds(settingsRow.removeFromLeft(100));
+    settingsRow.removeFromLeft(8);
+    monitorButton.setBounds(settingsRow.removeFromLeft(120));
+    settingsRow.removeFromLeft(20);
+    crossfadeCaption.setBounds(settingsRow.removeFromLeft(70));
+    crossfadeToggle.setBounds(settingsRow.removeFromLeft(50));
+    settingsRow.removeFromLeft(6);
+    crossfadeSlider.setBounds(settingsRow.removeFromLeft(170));
+    settingsRow.removeFromLeft(20);
+    fadeOutCaption.setBounds(settingsRow.removeFromLeft(96));
+    fadeOutSlider.setBounds(settingsRow.removeFromLeft(160));
     area.removeFromTop(16);
 
     playlistPanel.setBounds(area.removeFromLeft(kLeftColumnWidth));

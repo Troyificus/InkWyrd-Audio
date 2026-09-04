@@ -11,6 +11,9 @@ namespace
     constexpr const char* kPlaylistLibraryMigratedKey = "playlistLibraryMigrated";
     constexpr const char* kSoundboardLayoutMigratedKey = "soundboardLayoutMigrated";
     constexpr const char* kMasterVolumeKey = "masterVolume";
+    constexpr const char* kCrossfadeEnabledKey = "crossfadeEnabled";
+    constexpr const char* kCrossfadeSecondsKey = "crossfadeSeconds";
+    constexpr const char* kFadeOutSecondsKey = "fadeOutSeconds";
 }
 
 AppSettings::AppSettings()
@@ -107,6 +110,36 @@ float AppSettings::getMasterVolume() const
 void AppSettings::setMasterVolume(float volume)
 {
     settings()->setValue(kMasterVolumeKey, (double) juce::jlimit(0.0f, 1.0f, volume));
+}
+
+bool AppSettings::isCrossfadeEnabled() const
+{
+    return settings()->getBoolValue(kCrossfadeEnabledKey, true);
+}
+
+void AppSettings::setCrossfadeEnabled(bool enabled)
+{
+    settings()->setValue(kCrossfadeEnabledKey, enabled);
+}
+
+double AppSettings::getCrossfadeSeconds() const
+{
+    return settings()->getDoubleValue(kCrossfadeSecondsKey, 3.0);
+}
+
+void AppSettings::setCrossfadeSeconds(double seconds)
+{
+    settings()->setValue(kCrossfadeSecondsKey, seconds);
+}
+
+double AppSettings::getFadeOutSeconds() const
+{
+    return settings()->getDoubleValue(kFadeOutSecondsKey, 5.0);
+}
+
+void AppSettings::setFadeOutSeconds(double seconds)
+{
+    settings()->setValue(kFadeOutSecondsKey, seconds);
 }
 
 bool AppSettings::isSoundboardLayoutMigrated() const

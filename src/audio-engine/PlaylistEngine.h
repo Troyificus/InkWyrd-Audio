@@ -113,6 +113,31 @@ public:
     void resume();
     bool isPlaying() const { return isAnyDeckPlaying(); }
 
+    // A HARD stop, as distinct from pause(): silence now, forget where we
+    // were, and let Play begin the list again from the top. pause() keeps
+    // your place; this deliberately doesn't.
+    void hardStop();
+
+    // Ramps everything down to silence over the given time and then hard
+    // stops. Pressing Play (or Stop) during the ramp cancels it.
+    //
+    // Fades the MUSIC, not the microphone: this is for ending a scene,
+    // and fading the host out mid-sentence would be a strange thing for a
+    // button next to Stop to do. The master fader is there for taking
+    // absolutely everything down.
+    void fadeOutAndStop(double seconds);
+    bool isFadingOut() const { return fadingOut; }
+
+    // Whether one track fades into the next at all. With this off, a
+    // track runs to its end and the next starts immediately.
+    void setCrossfadeEnabled(bool shouldCrossfade);
+    bool isCrossfadeEnabled() const { return crossfadeEnabled; }
+
+    static constexpr double kMinCrossfadeSeconds = 0.5;
+    static constexpr double kMaxCrossfadeSeconds = 15.0;
+    void setCrossfadeSeconds(double seconds);
+    double getCrossfadeSeconds() const { return crossfadeSeconds; }
+
     // Manually begins a crossfade to the next track, same as what
     // happens automatically near the end of the current one.
     void skipToNext();
@@ -140,8 +165,15 @@ private:
     void finishCrossfadeNow();
     bool isAnyDeckPlaying() const;
     void seekOrderTo(const juce::File& file);
-    void applyCrossfadeGains();
+    // One place that decides what gain each deck should be at, given the
+    // crossfade position, the two tracks' trims and any fade-out in
+    // progress. Three separate things multiply here, and having them
+    // applied from several places is how they end up fighting.
+    void applyDeckGains();
     float gainFor(const juce::File& file) const;
+
+    // How far before the end of a track the next one has to be started.
+    double transitionLookAheadSeconds() const;
 
     juce::AudioFormatManager& formatManager;
     juce::Array<juce::File> playOrder;
@@ -158,7 +190,13 @@ private:
 
     bool crossfading = false;
     double crossfadeElapsedSeconds = 0.0;
-    const double crossfadeDurationSeconds = 3.0;
+    bool crossfadeEnabled = true;
+    double crossfadeSeconds = 3.0;
+
+    bool fadingOut = false;
+    double fadeOutElapsedSeconds = 0.0;
+    double fadeOutSeconds = 5.0;
+    float fadeGain = 1.0f; // 1 normally, ramping to 0 during a fade-out
     juce::File currentTrackFile, incomingTrackFile;
 
     std::function<float(const juce::File&)> trackGainProvider;

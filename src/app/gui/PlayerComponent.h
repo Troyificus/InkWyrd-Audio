@@ -74,6 +74,13 @@ public:
     // the callback fires when the user moves it so it can be persisted.
     void setMasterVolume(float volume);
     void setMasterVolumeChangedCallback(std::function<void(float)> callback);
+
+    // Crossfade on/off, its length, and the Fade out length. Set from
+    // saved settings at startup; the callback fires when the user changes
+    // any of them so they can be persisted.
+    void setPlaybackSettings(bool crossfadeEnabled, double crossfadeSeconds, double fadeOutSeconds);
+    void setPlaybackSettingsChangedCallback(std::function<void()> callback);
+    double getFadeOutSeconds() const { return fadeOutSlider.getValue(); }
     void setPlayingPlaylistId(const juce::Uuid& id);
     PlaylistPanel& getPlaylistPanel() { return playlistPanel; }
 
@@ -83,6 +90,7 @@ private:
     void updateMuteButtonText();
     void updateMonitorButtonText();
     void updatePlayButtonText();
+    void updateCrossfadeToggleText();
     void updateMonitorHint();
     void showVoiceFxWindow();
 
@@ -101,10 +109,19 @@ private:
     bool discordConfigured = false;
 
     juce::TextButton playButton;
+    juce::TextButton stopButton { "Stop" };
+    juce::TextButton fadeOutButton { "Fade out" };
     juce::TextButton skipButton { "Skip" };
     juce::TextButton shuffleButton;
     juce::TextButton muteButton;
     juce::TextButton monitorButton;
+    juce::Label crossfadeCaption { {}, "Crossfade" };
+    juce::TextButton crossfadeToggle;
+    juce::Slider crossfadeSlider;
+    juce::Label fadeOutCaption { {}, "Fade out over" };
+    juce::Slider fadeOutSlider;
+    std::function<void()> onPlaybackSettingsChanged;
+
     juce::Label masterVolumeCaption { {}, "Master" };
     juce::Slider masterVolumeSlider;
     std::function<void(float)> onMasterVolumeChanged;

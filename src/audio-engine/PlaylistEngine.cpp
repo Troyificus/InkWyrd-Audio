@@ -117,10 +117,7 @@ void PlaylistEngine::refreshTrackGains()
 
     // Applied immediately, so dragging a track's slider is audible while
     // that track is playing rather than only from its next play.
-    if (crossfading)
-        applyCrossfadeGains();
-    else
-        decks[activeDeck].transport.setGain(currentTrackGain);
+    applyDeckGains();
 }
 
 void PlaylistEngine::setShuffle(bool shouldShuffle)
@@ -258,6 +255,14 @@ void PlaylistEngine::pause()
     // Collapse an in-flight fade first, so resuming doesn't come back
     // with two decks stuck at partial gain.
     finishCrossfadeNow();
+
+    // A fade-out that was running is abandoned, not left half-applied -
+    // otherwise resuming comes back quieter than it went away, with
+    // nothing on screen to explain why.
+    fadingOut = false;
+    fadeGain = 1.0f;
+    applyDeckGains();
+
     decks[0].transport.stop();
     decks[1].transport.stop();
 }
@@ -266,6 +271,18 @@ void PlaylistEngine::resume()
 {
     if (playOrder.isEmpty())
         return;
+
+    // Pressing Play during a fade-out cancels it and comes straight back
+    // up to level, rather than continuing to fade.
+    if (fadingOut)
+    {
+        fadingOut = false;
+        fadeGain = 1.0f;
+        applyDeckGains();
+
+        if (isAnyDeckPlaying())
+            return;
+    }
 
     // Nothing loaded yet (fresh session, or stopped outright) - begin at
     // the top of the order rather than doing nothing.
@@ -302,7 +319,7 @@ void PlaylistEngine::finishCrossfadeNow()
     activeDeck = 1 - activeDeck;
     currentTrackFile = incomingTrackFile;
     currentTrackGain = incomingTrackGain;
-    decks[activeDeck].transport.setGain(currentTrackGain); // snap the incoming deck to its own level
+    applyDeckGains(); // snap the incoming deck to its own level (under any fade-out)
     crossfading = false;
     crossfadeElapsedSeconds = 0.0;
 }
@@ -313,6 +330,27 @@ void PlaylistEngine::beginCrossfadeTo(const juce::File& file)
         return;
 
     int incomingDeck = 1 - activeDeck;
+
+    if (!crossfadeEnabled)
+    {
+        // Straight cut. The outgoing deck is stopped rather than left to
+        // run out, because this same path serves a manual Skip - where
+        // leaving the old track playing to its natural end would mean it
+        // carrying on underneath for minutes.
+        decks[activeDeck].transport.stop();
+        loadIntoDeck(decks[incomingDeck], file);
+
+        activeDeck = incomingDeck;
+        currentTrackFile = file;
+        currentTrackGain = gainFor(file);
+        crossfading = false;
+        crossfadeElapsedSeconds = 0.0;
+
+        applyDeckGains();
+        decks[activeDeck].transport.start();
+        return;
+    }
+
     loadIntoDeck(decks[incomingDeck], file);
     decks[incomingDeck].transport.setGain(0.0f);
     decks[incomingDeck].transport.start();
@@ -321,41 +359,123 @@ void PlaylistEngine::beginCrossfadeTo(const juce::File& file)
 
     crossfading = true;
     crossfadeElapsedSeconds = 0.0;
-    applyCrossfadeGains();
+    applyDeckGains();
 }
 
-void PlaylistEngine::applyCrossfadeGains()
+void PlaylistEngine::applyDeckGains()
 {
-    auto t = (float) juce::jlimit(0.0, 1.0, crossfadeElapsedSeconds / crossfadeDurationSeconds);
     int incomingDeck = 1 - activeDeck;
+
+    if (!crossfading)
+    {
+        decks[activeDeck].transport.setGain(currentTrackGain * fadeGain);
+        return;
+    }
+
+    auto t = (float) juce::jlimit(0.0, 1.0, crossfadeElapsedSeconds / crossfadeSeconds);
 
     // Equal-power crossfade so the perceived loudness stays roughly
     // constant through the transition instead of dipping in the middle.
     // Each deck's trim multiplies its side of the fade, so a quiet track
-    // fading into a loud one keeps both trims through the transition.
-    decks[activeDeck].transport.setGain(std::cos(t * juce::MathConstants<float>::halfPi) * currentTrackGain);
-    decks[incomingDeck].transport.setGain(std::sin(t * juce::MathConstants<float>::halfPi) * incomingTrackGain);
+    // fading into a loud one keeps both trims through the transition -
+    // and a fade-out in progress multiplies both.
+    decks[activeDeck].transport.setGain(std::cos(t * juce::MathConstants<float>::halfPi)
+                                          * currentTrackGain * fadeGain);
+    decks[incomingDeck].transport.setGain(std::sin(t * juce::MathConstants<float>::halfPi)
+                                            * incomingTrackGain * fadeGain);
+}
+
+double PlaylistEngine::transitionLookAheadSeconds() const
+{
+    // With crossfading off, the next track only needs to be started right
+    // at the end. Not zero: the timer ticks every 30 ms, so a little
+    // lead is what stops an audible gap opening between tracks.
+    return crossfadeEnabled ? crossfadeSeconds : 0.05;
+}
+
+void PlaylistEngine::setCrossfadeEnabled(bool shouldCrossfade)
+{
+    crossfadeEnabled = shouldCrossfade;
+}
+
+void PlaylistEngine::setCrossfadeSeconds(double seconds)
+{
+    crossfadeSeconds = juce::jlimit(kMinCrossfadeSeconds, kMaxCrossfadeSeconds, seconds);
+}
+
+void PlaylistEngine::hardStop()
+{
+    stop();
+
+    fadingOut = false;
+    fadeGain = 1.0f;
+    decks[0].transport.setGain(1.0f);
+    decks[1].transport.setGain(1.0f);
+
+    // Deliberately forgetting where we were - that is what makes this a
+    // stop rather than a pause. resume() sees no current track and starts
+    // the list from the top.
+    currentTrackFile = juce::File();
+    incomingTrackFile = juce::File();
+    currentTrackGain = 1.0f;
+    incomingTrackGain = 1.0f;
+    nextOrderIndex = 0;
+}
+
+void PlaylistEngine::fadeOutAndStop(double seconds)
+{
+    if (!isAnyDeckPlaying())
+        return;
+
+    fadeOutSeconds = juce::jmax(0.1, seconds);
+    fadeOutElapsedSeconds = 0.0;
+    fadingOut = true;
 }
 
 void PlaylistEngine::timerCallback()
 {
+    constexpr double dt = (double) kTimerIntervalMs / 1000.0;
+
+    if (fadingOut)
+    {
+        fadeOutElapsedSeconds += dt;
+        fadeGain = (float) juce::jlimit(0.0, 1.0, 1.0 - fadeOutElapsedSeconds / fadeOutSeconds);
+    }
+
     if (crossfading)
     {
-        crossfadeElapsedSeconds += (double) kTimerIntervalMs / 1000.0;
-        applyCrossfadeGains();
+        crossfadeElapsedSeconds += dt;
+        applyDeckGains();
 
-        if (crossfadeElapsedSeconds >= crossfadeDurationSeconds)
+        if (crossfadeElapsedSeconds >= crossfadeSeconds)
             finishCrossfadeNow();
+    }
+    else if (fadingOut)
+    {
+        applyDeckGains();
+    }
 
+    if (fadingOut)
+    {
+        // All the way down - stop for real rather than leaving silent
+        // decks running.
+        if (fadeOutElapsedSeconds >= fadeOutSeconds)
+            hardStop();
+
+        // No new transitions while fading out: starting the next track
+        // underneath a fade is never what was wanted.
         return;
     }
+
+    if (crossfading)
+        return;
 
     auto& deck = decks[activeDeck];
     if (!deck.transport.isPlaying())
         return;
 
     auto remaining = deck.transport.getLengthInSeconds() - deck.transport.getCurrentPosition();
-    if (remaining <= crossfadeDurationSeconds)
+    if (remaining <= transitionLookAheadSeconds())
         beginCrossfade();
 }
 

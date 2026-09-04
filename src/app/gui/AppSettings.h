@@ -39,6 +39,18 @@ public:
     float getMasterVolume() const;
     void setMasterVolume(float volume);
 
+    // Crossfade between tracks, and how long the Fade out button takes.
+    // Global rather than per-playlist: these are how the host likes the
+    // app to behave, not a property of any particular list.
+    bool isCrossfadeEnabled() const;
+    void setCrossfadeEnabled(bool enabled);
+
+    double getCrossfadeSeconds() const;
+    void setCrossfadeSeconds(double seconds);
+
+    double getFadeOutSeconds() const;
+    void setFadeOutSeconds(double seconds);
+
     // Which playlist was last activated, so the app comes back up on it.
     juce::String getActivePlaylistId() const;
     void setActivePlaylistId(const juce::String& id);

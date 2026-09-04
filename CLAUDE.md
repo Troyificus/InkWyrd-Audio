@@ -868,6 +868,44 @@ notes above). Painting the components headlessly verifies the actual
 paint code - bars, ticks, background pictures, colours - with zero risk
 to their data and without needing their app closed.
 
+## Transport: Pause, Stop, Fade out, and the crossfade toggle
+
+Three distinct things that all sound like "stop", kept distinct:
+
+- **Pause** keeps the position. **`hardStop()`** deliberately does not -
+  it clears `currentTrackFile` and resets `nextOrderIndex`, so Play
+  starts the list from the top. That is the difference that makes it a
+  stop rather than a second pause, and the button labels say so
+  ("Pause" only appears once a real Stop sits next to it).
+- **`fadeOutAndStop(seconds)`** ramps `fadeGain` 1 -> 0 on the existing
+  30 ms timer and then calls `hardStop()`. Both **Play and Pause cancel a
+  fade in progress** and restore full gain - otherwise resuming comes
+  back quieter than it went away with nothing on screen explaining why.
+  It is a no-op when nothing is playing.
+- It fades the MUSIC, not the mic. A button sitting next to Stop that
+  fades the host out mid-sentence would be a surprising thing; the master
+  fader is there for taking everything down.
+
+**`applyDeckGains()` replaced `applyCrossfadeGains()`.** Three separate
+things now multiply into each deck's gain - the crossfade curve, the
+track's own trim, and any fade-out - and having them applied from four
+different call sites is exactly how they end up fighting each other.
+One function decides, everything else calls it.
+
+**Crossfade off** is not "a crossfade of length zero". `beginCrossfadeTo`
+takes a separate straight-cut path that stops the outgoing deck and
+starts the incoming at full. The outgoing deck is stopped rather than
+left to run out because the same path serves a manual **Skip**, where
+letting the old track finish naturally would leave it playing underneath
+for minutes. The end-of-track look-ahead also changes:
+`transitionLookAheadSeconds()` returns the crossfade length when fading,
+and 0.05 s when cutting - not zero, because the timer only ticks every
+30 ms and a gap would open.
+
+`crossfadeDurationSeconds` was a `const` member; it is now
+`crossfadeSeconds`, clamped to 0.5-15 s, with the enabled flag and the
+fade-out length all persisted in `AppSettings`.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`
