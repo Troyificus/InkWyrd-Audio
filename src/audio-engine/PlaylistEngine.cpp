@@ -334,9 +334,17 @@ void PlaylistEngine::finishCrossfadeNow()
     activeDeck = 1 - activeDeck;
     currentTrackFile = incomingTrackFile;
     currentTrackGain = incomingTrackGain;
-    applyDeckGains(); // snap the incoming deck to its own level (under any fade-out)
+
+    // The fade is OVER before the gains are applied. This order is not
+    // cosmetic: applyDeckGains() branches on `crossfading`, and with it
+    // still set it would compute the fade at t=1 and hand the deck that
+    // has just become active a gain of cos(90 degrees) - zero. That
+    // shipped in beta.8 and silenced playback the moment any crossfade
+    // completed.
     crossfading = false;
     crossfadeElapsedSeconds = 0.0;
+
+    applyDeckGains(); // snap the incoming deck to its own level (under any fade-out)
 }
 
 void PlaylistEngine::beginCrossfadeTo(const juce::File& file)

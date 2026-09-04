@@ -951,6 +951,46 @@ so trims set in beta.7 survive the upgrade, and leaves the old file alone
 - the first change writes the new one. Only non-default fields are
 written, so a track with a trim and no fade doesn't claim a fade of zero.
 
+## The beta.8 silence bug, and the test gap that let it ship
+
+**Symptom:** playing a track crossfaded straight into the next one and
+then went silent a few seconds later. Reported from real use, one release
+after it shipped.
+
+**Cause, entirely self-inflicted:** `finishCrossfadeNow()` flips
+`activeDeck` to the incoming deck and then applies gains. beta.8 replaced
+its direct `setGain(currentTrackGain)` with the new `applyDeckGains()`
+**without moving `crossfading = false` above the call**. `applyDeckGains()`
+branches on that flag, so it took the crossfade branch at t=1 and handed
+the deck that had just become active `cos(90 degrees)` - zero. Every
+completed crossfade landed on silence.
+
+Order in that function is not cosmetic. The comment there says so.
+
+**Why 155 checks missed it.** Every one of them drove the engine by
+calling methods and inspecting state, and **not one ever let a crossfade
+run to completion** - that needs `juce::Timer` to fire, which needs a
+pumped message loop. The tests could only ever observe a fade *starting*
+(`skipToNext` then `isCrossfading()`) or being *cut short* (`pause()`,
+which re-applies gains afterwards and would have masked the bug anyway).
+The failure lived exactly at the moment none of them reached.
+
+**The fix for the gap**, not just the bug: a real playback check that
+writes two test tones, prepares the engine, pulls audio from a background
+thread at roughly real-time pace while the message loop runs, and asserts
+the output is still non-silent **after a crossfade completes**. It needs
+`JUCE_MODAL_LOOPS_PERMITTED=1`, set on the test target only (never the
+app, where modal loops are a hazard).
+
+Verified by reintroducing the bug: the new check fails, and the other 162
+still pass. A regression test that has never been seen to fail is not
+known to test anything.
+
+**Worth generalising:** this project's engine is timer-driven, so any
+behaviour that happens *at the end of a timed process* - a crossfade
+completing, a fade-out reaching zero, an end-of-track transition - is
+invisible to state-poking tests. Those need the pumped-loop harness.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`

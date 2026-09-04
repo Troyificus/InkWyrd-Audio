@@ -18,6 +18,13 @@ target_include_directories(AudioEngineTest PRIVATE ../app/gui)
 
 target_compile_definitions(AudioEngineTest PRIVATE
     JUCE_STANDALONE_APPLICATION=1
+    # Test target only. runDispatchLoopUntil() is what lets a check let a
+    # crossfade actually RUN to completion - juce::Timer needs a pumped
+    # message loop - and without it every test can only observe a fade
+    # starting or being cut short. beta.8 shipped a bug that lives
+    # exactly at the moment a fade completes, past 155 passing checks.
+    # Deliberately not set for the app, where modal loops are a hazard.
+    JUCE_MODAL_LOOPS_PERMITTED=1
     JUCE_USE_CURL=0
     JUCE_WEB_BROWSER=0
     JUCE_ASIO=0

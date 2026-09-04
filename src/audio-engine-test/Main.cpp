@@ -867,6 +867,114 @@ namespace
             }
         }
 
+        {
+            // REAL playback, with the timer running and audio actually
+            // being pulled.
+            //
+            // Every other check in this file drives the engine by calling
+            // its methods and inspecting state. None of them ever let a
+            // crossfade RUN TO COMPLETION, because that needs
+            // juce::Timer to fire, which needs a message loop. beta.8
+            // shipped a bug that only appears at that exact moment - the
+            // deck that had just become active was handed a gain of zero,
+            // so playback went silent the instant any crossfade finished
+            // - and 155 passing checks said nothing about it.
+            auto makeTone = [&](const juce::File& file, double frequency, int seconds)
+            {
+                juce::WavAudioFormat wav;
+                std::unique_ptr<juce::FileOutputStream> stream(file.createOutputStream());
+                if (stream == nullptr)
+                    return false;
+
+                std::unique_ptr<juce::AudioFormatWriter> writer(
+                    wav.createWriterFor(stream.get(), 44100.0, 1, 16, {}, 0));
+                if (writer == nullptr)
+                    return false;
+
+                stream.release(); // the writer owns it now
+
+                juce::AudioBuffer<float> block(1, 44100);
+                for (int second = 0; second < seconds; ++second)
+                {
+                    for (int i = 0; i < 44100; ++i)
+                        block.setSample(0, i, 0.35f * std::sin(2.0 * juce::MathConstants<double>::pi
+                                                                * frequency * i / 44100.0));
+                    writer->writeFromAudioSampleBuffer(block, 0, 44100);
+                }
+
+                return true;
+            };
+
+            auto toneA = scratch.getChildFile("tone-a.wav");
+            auto toneB = scratch.getChildFile("tone-b.wav");
+            auto tonesOk = makeTone(toneA, 220.0, 8) && makeTone(toneB, 330.0, 8);
+            check(tonesOk, "test tones were written (everything below depends on this)");
+
+            if (tonesOk)
+            {
+                juce::Array<juce::File> tones;
+                tones.add(toneA);
+                tones.add(toneB);
+
+                PlaylistEngine engine(formatManager);
+                engine.setShuffle(false);
+                engine.setCrossfadeSeconds(0.5); // keep the test quick
+                engine.setTracks(tones);
+                engine.prepareToPlay(512, 44100.0);
+                engine.resume();
+
+                // The audio thread's job, at roughly real-time pace -
+                // without something consuming blocks the transport never
+                // advances and no transition would ever be reached.
+                std::atomic<bool> pulling { true };
+                std::atomic<float> magnitude { 0.0f };
+
+                std::thread puller([&]
+                {
+                    juce::AudioBuffer<float> buffer(2, 512);
+                    while (pulling.load())
+                    {
+                        buffer.clear();
+                        juce::AudioSourceChannelInfo info(&buffer, 0, 512);
+                        engine.getNextAudioBlock(info);
+                        magnitude.store(buffer.getMagnitude(0, 512));
+                        std::this_thread::sleep_for(std::chrono::milliseconds(11));
+                    }
+                });
+
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(700);
+                check(magnitude.load() > 0.01f, "audio actually comes out when playback starts");
+
+                engine.skipToNext();
+                check(engine.isCrossfading(), "the skip started a crossfade");
+
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(1500);
+                check(!engine.isCrossfading(), "the crossfade finished on its own");
+                check(engine.getCurrentTrackFile() == toneB, "and left the next track playing");
+                check(magnitude.load() > 0.01f,
+                       "audio is STILL coming out after a completed crossfade "
+                       "(beta.8 shipped silence here)");
+
+                // And it keeps going, rather than being silenced a moment later.
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(700);
+                check(magnitude.load() > 0.01f, "and keeps playing afterwards");
+
+                engine.pause();
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(200);
+                check(magnitude.load() < 0.01f, "Pause really does silence the output");
+
+                engine.resume();
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(400);
+                check(magnitude.load() > 0.01f, "and Play brings it back");
+
+                pulling.store(false);
+                puller.join();
+
+                engine.hardStop();
+                engine.releaseResources();
+            }
+        }
+
         scratch.deleteRecursively();
 
         std::cout << (failures == 0 ? "SELF-TEST PASSED" : "SELF-TEST FAILED")
