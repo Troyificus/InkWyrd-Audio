@@ -26,6 +26,8 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/SoundboardGridComponent.h
     gui/VoiceFxComponent.cpp
     gui/VoiceFxComponent.h
+    gui/PluginEditorWindow.cpp
+    gui/PluginEditorWindow.h
     gui/AppSettings.cpp
     gui/AppSettings.h
     gui/Dialogs.cpp

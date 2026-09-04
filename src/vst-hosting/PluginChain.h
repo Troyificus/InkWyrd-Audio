@@ -22,6 +22,14 @@ public:
     int getNumPlugins() const;
     juce::String getPluginName(int index) const;
 
+    // The live instance, so its own editor window can be opened.
+    //
+    // MESSAGE THREAD ONLY, and the pointer is only valid until the
+    // plugin is removed - so anything holding on to it (an open editor
+    // window) has to be closed BEFORE removePlugin() is called, not
+    // after.
+    juce::AudioPluginInstance* getPlugin(int index) const;
+
     // juce::AudioProcessor
     const juce::String getName() const override { return "Inkwyrd VST3 Chain"; }
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;

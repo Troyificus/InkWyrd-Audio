@@ -160,13 +160,20 @@ readable. PNG, JPEG, GIF, BMP and WebP.
 Button names are what a Stream Deck sends to trigger a sound, so
 renaming one means updating that button in the Stream Deck app to match.
 
-**Voice FX...** opens your VST3 plugin list and the live mic chain -
-plugins are found automatically in the standard VST3 folder, nothing to
-configure. The list is remembered between launches, so the scan only
-happens the first time you run the app; if you install new plugins
-later, hit **Rescan** in that panel. Scanning runs in the background -
-the button reads "Scanning..." while it does, and everything else keeps
-working.
+**Voice FX...** is where you build a processing chain for your
+microphone.
+
+Click **Add VST3...** to pick the plugins you want. It opens at your
+system VST3 folder, and you can select several at once. Only what you
+pick appears in the list - the app doesn't trawl through everything
+installed, because most of it won't be anything you'd put on a mic.
+Your list is remembered between sessions, and **Forget** takes something
+off it.
+
+Clicking a plugin adds it to your live chain **and opens the plugin's own
+window**, so you can set it up and pick presets exactly as you would in a
+DAW. **Edit** reopens that window later; **Remove** takes it out of the
+chain. Plugins run on your mic in the order listed.
 
 Changing a Discord bot token/server/channel via Settings takes effect on
 the next launch, not immediately - everything else applies right away.

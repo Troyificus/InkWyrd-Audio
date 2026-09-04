@@ -29,7 +29,6 @@ public:
                      MasterEngine& masterEngineToUse,
                      PluginScanner& scannerToUse,
                      PluginChain& voiceChainToUse,
-                     juce::Array<juce::PluginDescription> availablePluginsToUse,
                      PlaylistLibrary& libraryToUse,
                      SoundboardLayout& soundboardLayoutToUse,
                      TrackSettingsStore& trackGainsToUse,
@@ -64,11 +63,9 @@ public:
     // rather than just "not locally".
     void setDiscordConfigured(bool configured);
 
-    // The plugin scan runs in the background now, so the list can arrive
-    // after this screen is already up.
-    void setAvailablePlugins(juce::Array<juce::PluginDescription> plugins);
-    void setPluginScanInProgress(bool scanning);
-    void setRescanPluginsCallback(std::function<void()> callback);
+    // Fired when the user adds or forgets a plugin, so the list can be
+    // written back to disk.
+    void setPluginListChangedCallback(std::function<void()> callback);
 
     // The master fader, 0..1. Set once from the saved value at startup;
     // the callback fires when the user moves it so it can be persisted.
@@ -101,7 +98,6 @@ private:
     MasterEngine& masterEngine;
     PluginScanner& scanner;
     PluginChain& voiceChain;
-    juce::Array<juce::PluginDescription> availablePlugins;
 
     juce::Label nowPlayingLabel;
     juce::Label discordStatusLabel;
@@ -143,6 +139,5 @@ private:
     // Non-modal, so the user can keep driving the session while it's open.
     juce::Component::SafePointer<juce::DialogWindow> voiceFxWindow;
 
-    bool pluginScanInProgress = false;
-    std::function<void()> onRescanPlugins;
+    std::function<void()> onPluginListChanged;
 };

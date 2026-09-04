@@ -1041,6 +1041,60 @@ and a half seconds of test time, and every timing assertion was
 measuring the wrong thing. The pullers now pull however many blocks the
 wall clock says are owed rather than trusting sleep_for.
 
+## Voice FX: chosen plugins, and their own editors
+
+Two complaints, both fair, both fixed:
+
+**1. It listed every VST3 on the machine.** The app scanned the whole
+system folder, which on a working machine is dozens of plugins - almost
+none of which anyone would put on a microphone - and cost 15-20 seconds
+on a first launch. Now there is an **Add VST3...** button that opens a
+file chooser at the system plugin folder, and only what the user picks
+goes on the list. `PluginScanner::addPluginsFromFile()` uses
+`VST3PluginFormat::findAllTypesForFile` on ONE file (a single .vst3 can
+legitimately contain several plugins, hence the count return value).
+
+Stored in `voice-plugins.xml` via the same `KnownPluginList` XML
+round-trip the cache used. **Deliberately a new filename**: reusing
+`plugins.xml` would have shown an upgrading user all 40 scanned plugins
+again, which is precisely what they asked to be rid of. The old file is
+left alone, just unused.
+
+The whole background-scan machinery from beta.6.1 is gone from the app -
+no scan thread, no "Scanning..." button state, no startup scan at all.
+`PluginScanner::scan()` remains for the standalone VstHostingTest.
+
+**2. Adding a plugin loaded it at its defaults with no way to change
+anything**, which for an EQ or de-esser is close to useless. Adding a
+plugin now opens **the plugin's own interface** in a `PluginEditorWindow`,
+and every plugin in the chain has an **Edit** button to reopen it. A
+plugin with no interface of its own gets `GenericAudioProcessorEditor`,
+so everything is at least adjustable.
+
+**The lifetime rule that matters**: the editor belongs to the plugin
+instance, so an open editor window MUST be closed before that instance
+leaves the chain. `VoiceFxComponent::removeFromList` never touches the
+chain, Remove closes the editor first, and the destructor closes them
+all. `PluginChain::getPlugin()` is message-thread-only and its pointer is
+valid only until removal - the header says so.
+
+`PlayerComponent` no longer carries a copy of the plugin list. The panel
+reads it straight from `PluginScanner`, because a second copy of the
+truth is how the two drift apart.
+
+### Verified
+
+`INKWYRD_PICKTEST=<path.vst3>` on the VstHostingTest binary runs the
+whole path against a real plugin: one chosen file yields a description,
+a duplicate add is refused with a reason, the list survives
+save/restore, a non-plugin file is refused, removal works - and then it
+instantiates the plugin, creates its editor, checks the size is real,
+and destroys it again, which is where a lifetime mistake would show up.
+Confirmed against Bertom Phantom Center 2: its own editor, 425x271.
+
+Not verified: how the rebuilt panel LOOKS in the app. It needs a launch,
+and the user's own session was running.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`

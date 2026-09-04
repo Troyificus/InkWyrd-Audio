@@ -1,46 +1,75 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "PluginChain.h"
+#include "PluginEditorWindow.h"
 #include "PluginScanner.h"
 
-// The VST3 plugin list and the live mic chain, lifted out of
-// PlayerComponent unchanged so the main screen can be playlist + SFX.
+// The VST3 plugins the user has chosen, and the live mic chain built
+// from them.
 //
-// This is a straight move, not a redesign: the user asked for voice
-// effects to live on the main screen "somewhere" but explicitly deferred
-// designing that, so it lives behind a Voice FX... button for now rather
-// than being squeezed into a third column or dropped.
+// Two deliberate changes from the first version:
+//
+// 1. It no longer lists every VST3 installed on the machine. That was a
+//    scan of the whole system folder producing dozens of plugins, almost
+//    none of which anyone wants on a microphone, and it cost 15-20
+//    seconds on first launch. Now there is an "Add VST3..." button that
+//    opens at the system plugin folder, and the list holds only what the
+//    user picked. It persists between sessions.
+//
+// 2. Adding a plugin opens the plugin's OWN interface, and every plugin
+//    in the chain has an Edit button to reopen it. Loading something
+//    like an EQ at its defaults with no way to touch it - which is what
+//    happened before - is barely worth having.
 class VoiceFxComponent : public juce::Component
 {
 public:
     VoiceFxComponent(PluginScanner& scannerToUse,
                       PluginChain& voiceChainToUse,
-                      juce::Array<juce::PluginDescription> availablePluginsToUse,
-                      std::function<void()> onRescanToUse);
+                      std::function<void()> onPluginListChangedToUse);
+
+    // Editor windows are closed here, before anything they point into can
+    // go away.
+    ~VoiceFxComponent() override;
 
     void resized() override;
 
 private:
+    void rebuildPluginListUI();
     void rebuildChainListUI();
+
+    void browseForPlugin();
+    void addToChain(const juce::PluginDescription& description);
+    void removeFromList(const juce::PluginDescription& description);
+
+    void openEditorFor(int chainIndex);
+    void closeEditorFor(const juce::AudioPluginInstance* plugin);
+    void closeAllEditors();
 
     PluginScanner& scanner;
     PluginChain& voiceChain;
-    juce::Array<juce::PluginDescription> availablePlugins;
+    std::function<void()> onPluginListChanged;
 
-    juce::Label pluginListCaption { {}, "Available VST3 plugins" };
-    juce::TextButton rescanButton { "Rescan" };
+    juce::Label pluginListCaption { {}, "Your VST3 plugins" };
+    juce::TextButton addPluginButton { "Add VST3..." };
     juce::Label emptyMessage;
-    std::function<void()> onRescan;
     juce::Viewport pluginListViewport;
     juce::Component pluginListPanel;
-    juce::OwnedArray<juce::TextButton> addPluginButtons;
+    juce::OwnedArray<juce::TextButton> addToChainButtons;
+    juce::OwnedArray<juce::TextButton> forgetButtons;
 
     juce::Label chainListCaption { {}, "Live voice chain" };
+    juce::Label chainHint;
     juce::Viewport chainListViewport;
     juce::Component chainListPanel;
+    juce::OwnedArray<juce::TextButton> editChainButtons;
     juce::OwnedArray<juce::TextButton> removeChainButtons;
+
+    juce::OwnedArray<PluginEditorWindow> editorWindows;
+
+    std::unique_ptr<juce::FileChooser> activeChooser;
 };

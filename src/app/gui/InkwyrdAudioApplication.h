@@ -66,14 +66,11 @@ private:
     // rename genuinely has to re-register, not just repaint.
     void registerSoundboardLayout();
 
-    // The VST3 scan loads every plugin on the machine and took ~18
-    // seconds on the test machine - long enough that running it on the
-    // message thread made the whole app unresponsive at every launch
-    // (caught by MessageThreadWatchdog). It now runs on its own thread,
-    // and its result is cached so a scan normally never happens at all.
-    static juce::File getPluginCacheFile();
-    void startPluginScan();
-    void publishScannedPlugins(juce::Array<juce::PluginDescription> plugins);
+    // The VST3 plugins the user has picked for the voice chain. There is
+    // no folder scan any more - see PluginScanner's header - so this is
+    // just a list to read at startup and write when it changes.
+    static juce::File getVoicePluginsFile();
+    void saveVoicePlugins();
     void migratePlaylistLibraryIfNeeded();
     void migrateSoundboardLayoutIfNeeded();
     void activatePlaylist(const juce::Uuid& id);
@@ -99,11 +96,6 @@ private:
     SoundboardLayout soundboardLayout { formatManager };
     TrackSettingsStore trackGains;
 
-    juce::Array<juce::PluginDescription> foundPlugins;
-
-    // Joined in shutdown(). Only ever touched from the message thread.
-    std::unique_ptr<std::thread> pluginScanThread;
-    std::atomic<bool> pluginScanRunning { false };
     juce::String audioDeviceError; // non-empty if initialiseWithDefaultDevices() failed - see initialise()
 
     juce::Uuid activePlaylistId;

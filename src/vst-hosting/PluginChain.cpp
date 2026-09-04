@@ -42,6 +42,12 @@ juce::String PluginChain::getPluginName(int index) const
     return {};
 }
 
+juce::AudioPluginInstance* PluginChain::getPlugin(int index) const
+{
+    const juce::ScopedLock sl(chainLock);
+    return plugins[index];
+}
+
 void PluginChain::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;

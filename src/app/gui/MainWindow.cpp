@@ -19,7 +19,6 @@ void MainWindow::showSetupView(AppSettings& settings, bool isFirstRun,
 
 void MainWindow::showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soundboard, MasterEngine& masterEngine,
                                  PluginScanner& scanner, PluginChain& voiceChain,
-                                 juce::Array<juce::PluginDescription> availablePlugins,
                                  PlaylistLibrary& library,
                                  SoundboardLayout& soundboardLayout,
                                  TrackSettingsStore& trackGains,
@@ -29,7 +28,7 @@ void MainWindow::showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soun
                                  std::function<void()> onSettingsClicked)
 {
     auto* component = new PlayerComponent(playlist, soundboard, masterEngine, scanner, voiceChain,
-                                           std::move(availablePlugins), library, soundboardLayout, trackGains,
+                                           library, soundboardLayout, trackGains,
                                            std::move(onActivatePlaylist),
                                            std::move(onSoundboardLayoutChanged),
                                            std::move(onPlaylistEdited),

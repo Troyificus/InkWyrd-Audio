@@ -46,6 +46,117 @@ int main(int argc, char* argv[])
 
     juce::ScopedJuceInitialiser_GUI juceInitialiser;
 
+    // INKWYRD_PICKTEST=<path.vst3>: the "user picks a plugin" path that
+    // replaced the folder-wide scan. Checks the thing that actually
+    // matters - that ONE chosen file yields a usable plugin description,
+    // survives a save/restore, and can be taken off the list again.
+    {
+        auto pickPath = juce::SystemStats::getEnvironmentVariable("INKWYRD_PICKTEST", "");
+        if (pickPath.isNotEmpty())
+        {
+            juce::ScopedJuceInitialiser_GUI juceInitialiser;
+
+            int failures = 0;
+            auto check = [&failures](bool condition, const char* what)
+            {
+                std::cout << (condition ? "  PASS  " : "  FAIL  ") << what << std::endl;
+                if (!condition)
+                    ++failures;
+            };
+
+            juce::File chosen(pickPath);
+            std::cout << "picking: " << chosen.getFileName().toStdString() << std::endl;
+
+            auto listFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                 .getChildFile("inkwyrd-picktest.xml");
+            listFile.deleteFile();
+
+            PluginScanner picker;
+            check(picker.getNumKnownPlugins() == 0, "a fresh list starts empty, not full of everything installed");
+
+            juce::String error;
+            auto added = picker.addPluginsFromFile(chosen, error);
+            check(added > 0, "picking one .vst3 adds it");
+            if (added == 0)
+                std::cout << "     error was: " << error.toStdString() << std::endl;
+
+            auto types = picker.getKnownPlugins();
+            check(types.size() == added, "and the list holds exactly what was added");
+            if (!types.isEmpty())
+                std::cout << "     got: " << types[0].name.toStdString()
+                           << " by " << types[0].manufacturerName.toStdString() << std::endl;
+
+            juce::String secondError;
+            check(picker.addPluginsFromFile(chosen, secondError) == 0,
+                   "adding the same plugin twice adds nothing");
+            check(secondError.isNotEmpty(), "and says why rather than failing silently");
+            check(picker.getNumKnownPlugins() == added, "the list didn't grow on the duplicate");
+
+            picker.saveToCache(listFile);
+            check(listFile.existsAsFile(), "the chosen list is written to disk");
+
+            PluginScanner reloaded;
+            reloaded.restoreFromCache(listFile);
+            check(reloaded.getNumKnownPlugins() == added, "and comes back on the next launch");
+            check(reloaded.getKnownPlugins()[0].name == types[0].name,
+                   "with the same plugin in it");
+
+            juce::String badError;
+            check(picker.addPluginsFromFile(chosen.getSiblingFile("definitely-not-real.vst3"), badError) == 0,
+                   "a file that isn't a plugin is refused");
+            check(badError.isNotEmpty(), "and explains itself");
+
+            // The other half of the rebuild: a chosen plugin has to
+            // instantiate AND produce an editor that can be opened and
+            // closed again. Adding a plugin at its defaults with no way
+            // to touch it is what this replaced.
+            {
+                juce::String instanceError;
+                auto instance = reloaded.createInstance(types[0], 44100.0, 512, instanceError);
+                check(instance != nullptr, "the chosen plugin actually instantiates");
+
+                if (instance == nullptr)
+                {
+                    std::cout << "     error was: " << instanceError.toStdString() << std::endl;
+                }
+                else
+                {
+                    auto ownEditor = instance->hasEditor();
+                    std::unique_ptr<juce::AudioProcessorEditor> editor(
+                        ownEditor ? instance->createEditorIfNeeded()
+                                  : new juce::GenericAudioProcessorEditor(*instance));
+
+                    check(editor != nullptr, "and gives us an editor to show");
+
+                    if (editor != nullptr)
+                    {
+                        check(editor->getWidth() > 0 && editor->getHeight() > 0,
+                               "with a real size rather than a zero-sized window");
+                        std::cout << "     editor " << editor->getWidth() << "x" << editor->getHeight()
+                                   << (ownEditor ? " (the plugin's own)" : " (generic fallback)")
+                                   << std::endl;
+                    }
+
+                    // Closing it must hand the editor back to the plugin
+                    // cleanly - this is where a lifetime mistake shows up.
+                    editor.reset();
+                    check(true, "and closing the editor doesn't crash");
+
+                    instance->releaseResources();
+                }
+            }
+
+            picker.removePlugin(types[0]);
+            check(picker.getNumKnownPlugins() == added - 1, "a plugin can be taken off the list");
+
+            listFile.deleteFile();
+
+            std::cout << (failures == 0 ? "PICK TEST PASSED" : "PICK TEST FAILED")
+                       << " (" << failures << " failure(s))" << std::endl;
+            return failures == 0 ? 0 : 1;
+        }
+    }
+
     // INKWYRD_CACHETEST=1: proves the plugin cache is worth having, and
     // that restoring it produces the same list a real scan does.
     //

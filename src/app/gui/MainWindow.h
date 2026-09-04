@@ -19,7 +19,6 @@ public:
 
     void showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soundboard, MasterEngine& masterEngine,
                          PluginScanner& scanner, PluginChain& voiceChain,
-                         juce::Array<juce::PluginDescription> availablePlugins,
                          PlaylistLibrary& library,
                          SoundboardLayout& soundboardLayout,
                          TrackSettingsStore& trackGains,

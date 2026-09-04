@@ -49,13 +49,13 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     formatManager.registerFormat(new Mp3AudioFormat(), false);
     formatManager.registerFormat(new MediaFoundationAudioFormat(), false); // AAC/M4A + WMA
 
-    // Cached from a previous run, so the usual launch pays nothing for
-    // this. A real scan only happens on a first run or an explicit
-    // rescan, and never on this thread.
-    scanner.restoreFromCache(getPluginCacheFile());
-    foundPlugins = scanner.getKnownPlugins();
-    logLine("[App] " + juce::String(foundPlugins.size()) + " plugin(s) loaded from cache.");
-    logPhase("loading the plugin cache");
+    // Just the plugins the user chose. Deliberately NOT a folder scan:
+    // that produced a list of everything installed and cost 15-20
+    // seconds on a first launch. Reading this file is a few
+    // milliseconds and loads no plugin binaries at all.
+    scanner.restoreFromCache(getVoicePluginsFile());
+    logLine("[App] " + juce::String(scanner.getNumKnownPlugins()) + " voice FX plugin(s) in your list.");
+    logPhase("loading the voice FX plugin list");
 
     constexpr int kControlServerPort = 39231; // matches streamdeck-plugin/src/audioAppClient.ts
     if (!controlServer.start(kControlServerPort))
@@ -129,12 +129,6 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     {
         showSetup();
     }
-
-    // First run, or the cache was deleted. Everything above is already on
-    // screen by now, so the scan costs the user nothing but a disabled
-    // Voice FX button while it runs.
-    if (foundPlugins.isEmpty())
-        startPluginScan();
 }
 
 void InkwyrdAudioApplication::migratePlaylistLibraryIfNeeded()
@@ -251,10 +245,6 @@ void InkwyrdAudioApplication::handlePlaylistEdited(const juce::Uuid& id)
 
 void InkwyrdAudioApplication::shutdown()
 {
-    // Before anything the scan thread might touch goes away.
-    if (pluginScanThread != nullptr && pluginScanThread->joinable())
-        pluginScanThread->join();
-
     if (sender != nullptr)
         sender->stop();
     masterEngine.setDiscordSender(nullptr);
@@ -279,52 +269,16 @@ void InkwyrdAudioApplication::showSetup()
                                [this](SetupComponent::Result result) { completeSetupAndLaunch(result); });
 }
 
-juce::File InkwyrdAudioApplication::getPluginCacheFile()
+juce::File InkwyrdAudioApplication::getVoicePluginsFile()
 {
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
         .getChildFile("Inkwyrd Audio")
-        .getChildFile("plugins.xml");
+        .getChildFile("voice-plugins.xml");
 }
 
-void InkwyrdAudioApplication::startPluginScan()
+void InkwyrdAudioApplication::saveVoicePlugins()
 {
-    if (pluginScanRunning.load())
-        return;
-
-    pluginScanRunning.store(true);
-
-    if (auto* player = mainWindow != nullptr ? mainWindow->getPlayerComponent() : nullptr)
-        player->setPluginScanInProgress(true);
-
-    // Joined here rather than detached, so a rescan can't leave two
-    // scans touching PluginScanner's KnownPluginList at once.
-    if (pluginScanThread != nullptr && pluginScanThread->joinable())
-        pluginScanThread->join();
-
-    pluginScanThread = std::make_unique<std::thread>([this]
-    {
-        auto found = scanner.scan();
-        scanner.saveToCache(getPluginCacheFile());
-
-        juce::MessageManager::callAsync([this, found]
-        {
-            publishScannedPlugins(found);
-        });
-    });
-}
-
-void InkwyrdAudioApplication::publishScannedPlugins(juce::Array<juce::PluginDescription> plugins)
-{
-    foundPlugins = std::move(plugins);
-    pluginScanRunning.store(false);
-
-    logLine("[App] Plugin scan finished: " + juce::String(foundPlugins.size()) + " plugin(s)");
-
-    if (auto* player = mainWindow != nullptr ? mainWindow->getPlayerComponent() : nullptr)
-    {
-        player->setAvailablePlugins(foundPlugins);
-        player->setPluginScanInProgress(false);
-    }
+    scanner.saveToCache(getVoicePluginsFile());
 }
 
 void InkwyrdAudioApplication::applyDefaultLocalMonitoring()
@@ -350,7 +304,7 @@ void InkwyrdAudioApplication::showPlayer()
 {
     hasShownPlayer = true;
 
-    mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins,
+    mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain,
                                 library, soundboardLayout, trackGains,
                                 [this](const juce::Uuid& id) { activatePlaylist(id); },
                                 [this] { registerSoundboardLayout(); },
@@ -362,9 +316,7 @@ void InkwyrdAudioApplication::showPlayer()
         // So it can point out that Monitor being off means silence when
         // there's no Discord to send to either.
         player->setDiscordConfigured(settings.hasDiscordCredentials());
-        player->setAvailablePlugins(foundPlugins);
-        player->setPluginScanInProgress(pluginScanRunning.load());
-        player->setRescanPluginsCallback([this] { startPluginScan(); });
+        player->setPluginListChangedCallback([this] { saveVoicePlugins(); });
         player->setMasterVolume(settings.getMasterVolume());
         player->setPlaybackSettings(settings.isCrossfadeEnabled(),
                                      settings.getCrossfadeSeconds(),
