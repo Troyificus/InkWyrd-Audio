@@ -906,6 +906,51 @@ and 0.05 s when cutting - not zero, because the timer only ticks every
 `crossfadeSeconds`, clamped to 0.5-15 s, with the enabled flag and the
 fade-out length all persisted in `AppSettings`.
 
+## Per-track fade lengths, and why not "wiring"
+
+The user asked whether to build a **wiring system** - linking specific
+tracks in specific orders with a crossfade length assigned to each
+pairing - or to attach a length to each adjacent pair as they sit in the
+playlist order. The answer given, and built, was **neither**: a fade
+length per TRACK.
+
+The reasoning is worth keeping, because the wiring idea will sound
+appealing again:
+
+- It is **cheap to implement**, which is the misleading part.
+  `beginCrossfadeTo` already knows both files at the moment a transition
+  starts, so a pair-keyed lookup is a handful of lines. Implementation
+  cost is not the argument against it.
+- **Shuffle is.** Playlists shuffle by default - the randomiser is a
+  headline feature - so a configured pairing mostly never comes up. To
+  make wiring meaningful it would have to override shuffle, at which
+  point there are two competing ordering systems.
+- The use case wiring would serve, "these tracks always segue as a
+  suite", **already works**: a playlist with shuffle turned off is a
+  fixed order with fixed transitions, today, with no new concept.
+- Per-POSITION (a length attached to "the gap between rows 3 and 4") is
+  worse still: positions shift the moment a track is added or the list is
+  shuffled, so the setting silently attaches to a different transition.
+
+A length per track survives all of that - "this one ends on a long tail"
+is true of the track wherever it lands - and is N settings rather than
+N-squared relationships.
+
+Mechanically: the length is asked of the **outgoing** track, since a
+transition is that track leaving. `transitionLookAheadSeconds()` returns
+it too, because a track has to start handing over exactly that far from
+its own end. The value is captured into `activeCrossfadeSeconds` when the
+fade begins, so changing a setting mid-fade can't make the ramp jump. 0
+means "use the global crossfade length", and the slider says **Default**
+there rather than "0.0 s", which would read as "cut straight over".
+
+`TrackGainStore` became **`TrackSettingsStore`** (`track-settings.json`)
+once it held more than gains, with entries as objects rather than bare
+numbers. It reads the old `track-gains.json` when the new file is absent,
+so trims set in beta.7 survive the upgrade, and leaves the old file alone
+- the first change writes the new one. Only non-default fields are
+written, so a track with a trim and no fade doesn't claim a fade of zero.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`

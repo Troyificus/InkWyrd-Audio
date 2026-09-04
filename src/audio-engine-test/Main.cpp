@@ -17,8 +17,9 @@
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
 #include "SoundboardLayout.h"
-#include "TrackGainStore.h"
+#include "TrackSettingsStore.h"
 #include "SoundboardGridComponent.h"
+#include "VolumeCallout.h"
 #include "SoundboardEngine.h"
 #include "Mp3AudioFormat.h"
 #include "MediaFoundationAudioFormat.h"
@@ -284,7 +285,7 @@ namespace
             juce::Uuid editedId;
             int editCount = 0;
 
-            TrackGainStore dropGains;
+            TrackSettingsStore dropGains;
             dropGains.setFile(scratch.getChildFile("drop-gains.json"));
 
             PlaylistPanel panel(dropLibrary, dropEngine, dropGains,
@@ -457,7 +458,7 @@ namespace
 
         {
             // Per-track volume trims.
-            TrackGainStore gains;
+            TrackSettingsStore gains;
             gains.setFile(scratch.getChildFile("gains.json"));
             gains.load();
 
@@ -473,7 +474,7 @@ namespace
             check(gains.getNumEntries() == 1, "only trimmed tracks take up space");
 
             gains.setGainDb(loud, -200.0f);
-            check(gains.getGainDb(loud) == TrackGainStore::kMinDb,
+            check(gains.getGainDb(loud) == TrackSettingsStore::kMinDb,
                    "a trim beyond the usable range is clamped, not stored as-is");
 
             gains.setGainDb(loud, 0.0f);
@@ -484,7 +485,7 @@ namespace
             gains.setGainDb(quiet, 2.0f);
 
             {
-                TrackGainStore reloaded;
+                TrackSettingsStore reloaded;
                 reloaded.setFile(scratch.getChildFile("gains.json"));
                 reloaded.load();
                 check(reloaded.getGainDb(loud) == -3.5f && reloaded.getGainDb(quiet) == 2.0f,
@@ -502,7 +503,7 @@ namespace
                 future.replaceWithText("{ \"schemaVersion\": 99 }");
                 auto before = future.loadFileAsString();
 
-                TrackGainStore newer;
+                TrackSettingsStore newer;
                 newer.setFile(future);
                 newer.load();
                 check(!newer.getLoadWarnings().isEmpty(), "a newer trims file is reported");
@@ -510,7 +511,7 @@ namespace
 
                 auto broken = scratch.getChildFile("broken-gains.json");
                 broken.replaceWithText("{ not json");
-                TrackGainStore bad;
+                TrackSettingsStore bad;
                 bad.setFile(broken);
                 bad.load();
                 check(!bad.getLoadWarnings().isEmpty(), "an unreadable trims file is reported, not fatal");
@@ -533,6 +534,86 @@ namespace
                                             juce::Decibels::decibelsToGain(-12.0f)),
                    "changing a trim while that track plays takes effect immediately");
             trimmed.stop();
+
+            // ---- per-track fade lengths ----------------------------------
+            check(gains.getFadeSeconds(loud) == 0.0,
+                   "a track with no fade set follows the global crossfade length");
+            check(!gains.hasFade(loud), "and doesn't claim to have one of its own");
+
+            gains.setFadeSeconds(loud, 8.0);
+            check(gains.getFadeSeconds(loud) == 8.0, "a track's fade length is remembered");
+            check(gains.getGainDb(loud) == -12.0f,
+                   "setting a fade doesn't disturb the trim on the same track");
+
+            gains.setFadeSeconds(loud, 900.0);
+            check(gains.getFadeSeconds(loud) == TrackSettingsStore::kMaxFadeSeconds,
+                   "an absurd fade length is clamped");
+
+            gains.setFadeSeconds(loud, 8.0);
+            gains.setGainDb(loud, 0.0f);
+            check(gains.hasFade(loud),
+                   "clearing the trim leaves the fade alone - they are separate settings");
+            check(gains.getNumEntries() == 2, "a track with only a fade is still stored");
+
+            gains.setFadeSeconds(loud, 0.0);
+            check(gains.getNumEntries() == 1,
+                   "a track back to normal on BOTH settings drops out of the file entirely");
+
+            {
+                // The engine asks the OUTGOING track how long to take.
+                PlaylistEngine fades(formatManager);
+                fades.setShuffle(false);
+                fades.setCrossfadeSeconds(3.0);
+                fades.setTrackFadeProvider([&gains](const juce::File& f) { return gains.getFadeSeconds(f); });
+                fades.setTracks(folderTracks);
+
+                gains.setFadeSeconds(folderTracks[0], 9.0);
+                fades.resume();
+                check(fades.getCurrentTrackFile() == folderTracks[0], "playing the track with a custom fade");
+
+                fades.skipToNext();
+                check(fades.isCrossfading(), "a skip from it starts a crossfade");
+                check(fades.getActiveCrossfadeSeconds() == 9.0,
+                       "the fade uses the LEAVING track's own length, not the global default");
+
+                fades.hardStop();
+
+                // A track with no fade of its own falls back to the global.
+                fades.resume();
+                fades.skipToNext();
+                check(fades.getActiveCrossfadeSeconds() == 9.0,
+                       "still the custom length while that track is the one leaving");
+
+                gains.setFadeSeconds(folderTracks[0], 0.0);
+                fades.hardStop();
+                fades.resume();
+                fades.skipToNext();
+                check(fades.getActiveCrossfadeSeconds() == 3.0,
+                       "clearing a track's fade puts it back on the global length");
+
+                gains.setFadeSeconds(folderTracks[0], 0.0);
+            }
+
+            {
+                // The file this replaced must still be readable, or trims
+                // set in beta.7 vanish on upgrade.
+                auto legacy = scratch.getChildFile("legacy-gains.json");
+                auto current = scratch.getChildFile("legacy-migration").getChildFile("track-settings.json");
+                current.getParentDirectory().createDirectory();
+
+                auto legacyInPlace = current.getSiblingFile("track-gains.json");
+                legacyInPlace.replaceWithText("{ \"schemaVersion\": 1, \"gains\": { \"c:\\\\music\\\\hot.wav\": -7.5 } }");
+                juce::ignoreUnused(legacy);
+
+                TrackSettingsStore upgraded;
+                upgraded.setFile(current);
+                upgraded.load();
+
+                check(upgraded.getGainDb(juce::File("C:\\music\\hot.wav")) == -7.5f,
+                       "trims from the previous version's file are read on upgrade");
+                check(current.existsAsFile() == false,
+                       "reading the old file doesn't write the new one until something changes");
+            }
         }
 
         {
@@ -873,10 +954,12 @@ int main(int argc, char* argv[])
                 png.writeImageToStream(art, out);
             }
 
-            TrackGainStore gains;
+            TrackSettingsStore gains;
             gains.setFile(scratch.getChildFile("gains.json"));
             gains.setGainDb(tracks[0], -12.0f);
             gains.setGainDb(tracks[1], 4.0f);
+            gains.setFadeSeconds(tracks[2], 8.0);
+            gains.setFadeSeconds(tracks[0], 1.5);
 
             SoundboardLayout board(fm);
             board.setFile(scratch.getChildFile("board.json"));
@@ -903,13 +986,23 @@ int main(int argc, char* argv[])
             PlaylistPanel panel(library, engine, gains, [](const juce::Uuid&) {}, [](const juce::Uuid&) {});
             panel.setSize(440, 400);
 
-            // Side by side, the way they appear in the app.
-            juce::Image sheet(juce::Image::RGB, 440 + 700 + 24, 400, true);
+            // The popup a volume bar expands into. Rendered here because
+            // opening it for real needs a click, and synthetic clicks in
+            // this app have proven unreliable (see CLAUDE.md).
+            VolumeCallout callout("Some Long Track Name", -6.0f,
+                                   TrackSettingsStore::kMinDb, TrackSettingsStore::kMaxDb,
+                                   [](float) {});
+            callout.addFadeControl(8.0, TrackSettingsStore::kMaxFadeSeconds, [](double) {});
+
+            // Side by side, the way they appear in the app, with the
+            // popup underneath.
+            juce::Image sheet(juce::Image::RGB, 440 + 700 + 24, 400 + 16 + callout.getHeight(), true);
             {
                 juce::Graphics g(sheet);
                 g.fillAll(juce::Colour(0xff2b3540));
                 g.drawImageAt(panel.createComponentSnapshot(panel.getLocalBounds()), 0, 0);
                 g.drawImageAt(grid.createComponentSnapshot(grid.getLocalBounds()), 464, 0);
+                g.drawImageAt(callout.createComponentSnapshot(callout.getLocalBounds()), 0, 416);
             }
 
             juce::File outFile(renderTo);

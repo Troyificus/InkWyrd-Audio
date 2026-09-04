@@ -78,6 +78,11 @@ public:
     // volume actually reached the deck, rather than that nothing crashed.
     float getCurrentTrackGain() const { return currentTrackGain; }
 
+    // The length of the crossfade actually running, so the self-test can
+    // assert that a track's own fade length was the one used - not merely
+    // that some crossfade started.
+    double getActiveCrossfadeSeconds() const { return activeCrossfadeSeconds; }
+
     // Fires on the message thread when shuffle actually changes value -
     // including via ControlServer's toggleShuffle, which is why the app
     // can't just watch its own button. Used to persist per-playlist
@@ -94,6 +99,15 @@ public:
     // refreshTrackGains() after editing one that's already playing.
     void setTrackGainProvider(std::function<float(const juce::File&)> provider);
     void refreshTrackGains();
+
+    // How long THIS track takes to fade into whatever follows it, in
+    // seconds; 0 means "use the global crossfade length". Asked of the
+    // OUTGOING track, because a transition is that track leaving.
+    //
+    // Per track rather than per pair of tracks: playlists shuffle, so a
+    // pairing mostly never comes up, whereas "this one ends on a long
+    // tail" is true of the track wherever it lands.
+    void setTrackFadeProvider(std::function<double(const juce::File&)> provider);
 
     void setShuffle(bool shouldShuffle);
     bool isShuffleEnabled() const { return shuffleEnabled; }
@@ -175,6 +189,10 @@ private:
     // How far before the end of a track the next one has to be started.
     double transitionLookAheadSeconds() const;
 
+    // The crossfade length to use when the given track is the one
+    // leaving: its own, or the global default if it hasn't got one.
+    double fadeSecondsFor(const juce::File& file) const;
+
     juce::AudioFormatManager& formatManager;
     juce::Array<juce::File> playOrder;
     int nextOrderIndex = 0;
@@ -193,6 +211,10 @@ private:
     bool crossfadeEnabled = true;
     double crossfadeSeconds = 3.0;
 
+    // The length of the fade actually in progress, captured when it
+    // started. Changing a setting mid-fade must not make the ramp jump.
+    double activeCrossfadeSeconds = 3.0;
+
     bool fadingOut = false;
     double fadeOutElapsedSeconds = 0.0;
     double fadeOutSeconds = 5.0;
@@ -200,6 +222,7 @@ private:
     juce::File currentTrackFile, incomingTrackFile;
 
     std::function<float(const juce::File&)> trackGainProvider;
+    std::function<double(const juce::File&)> trackFadeProvider;
 
     // The trims currently in force for the playing and incoming tracks,
     // cached so applyCrossfadeGains() doesn't have to call out to the

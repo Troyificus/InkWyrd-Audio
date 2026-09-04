@@ -22,7 +22,7 @@ void MainWindow::showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soun
                                  juce::Array<juce::PluginDescription> availablePlugins,
                                  PlaylistLibrary& library,
                                  SoundboardLayout& soundboardLayout,
-                                 TrackGainStore& trackGains,
+                                 TrackSettingsStore& trackGains,
                                  std::function<void(const juce::Uuid&)> onActivatePlaylist,
                                  std::function<void()> onSoundboardLayoutChanged,
                                  std::function<void(const juce::Uuid&)> onPlaylistEdited,

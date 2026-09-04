@@ -7,7 +7,7 @@
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
-#include "TrackGainStore.h"
+#include "TrackSettingsStore.h"
 #include "PluginChain.h"
 #include "PluginScanner.h"
 #include "SoundboardEngine.h"
@@ -32,7 +32,7 @@ public:
                      juce::Array<juce::PluginDescription> availablePluginsToUse,
                      PlaylistLibrary& libraryToUse,
                      SoundboardLayout& soundboardLayoutToUse,
-                     TrackGainStore& trackGainsToUse,
+                     TrackSettingsStore& trackGainsToUse,
                      std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
                      std::function<void()> onSoundboardLayoutChangedToUse,
                      std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,

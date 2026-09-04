@@ -38,6 +38,45 @@ public:
         setSize(300, 74);
     }
 
+    // Optional second control, used by the playlist's tracks: how long
+    // this one takes to fade into whatever follows it.
+    //
+    // 0 means "use whatever the global crossfade length is", which is
+    // what every track does until told otherwise - so the slider says
+    // "Default" there rather than "0.0 s", which would read as "cut
+    // straight over".
+    void addFadeControl(double initialSeconds,
+                         double maxSeconds,
+                         std::function<void(double)> onFadeChanged)
+    {
+        onFadeChange = std::move(onFadeChanged);
+
+        fadeCaption.setText("Fade into next", juce::dontSendNotification);
+        fadeCaption.setFont(juce::Font(juce::FontOptions(12.0f)));
+        fadeCaption.setColour(juce::Label::textColourId, juce::Colours::grey);
+        addAndMakeVisible(fadeCaption);
+
+        fadeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+        fadeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 64, 20);
+        fadeSlider.setRange(0.0, maxSeconds, 0.5);
+        fadeSlider.setValue(initialSeconds, juce::dontSendNotification);
+        fadeSlider.textFromValueFunction = [](double value)
+        {
+            return value <= 0.0 ? juce::String("Default") : juce::String(value, 1) + " s";
+        };
+        fadeSlider.updateText();
+        fadeSlider.onValueChange = [this]
+        {
+            if (onFadeChange)
+                onFadeChange(fadeSlider.getValue());
+        };
+        addAndMakeVisible(fadeSlider);
+
+        hasFadeControl = true;
+        setSize(getWidth(), 122);
+        resized();
+    }
+
     void resized() override
     {
         auto area = getLocalBounds().reduced(8);
@@ -48,11 +87,23 @@ public:
         resetButton.setBounds(row.removeFromRight(60));
         row.removeFromRight(6);
         slider.setBounds(row);
+
+        if (!hasFadeControl)
+            return;
+
+        area.removeFromTop(6);
+        fadeCaption.setBounds(area.removeFromTop(16));
+        fadeSlider.setBounds(area.removeFromTop(24));
     }
 
 private:
     std::function<void(float)> onChange;
+    std::function<void(double)> onFadeChange;
     juce::Label title;
     juce::Slider slider;
     juce::TextButton resetButton { "Reset" };
+
+    bool hasFadeControl = false;
+    juce::Label fadeCaption;
+    juce::Slider fadeSlider;
 };

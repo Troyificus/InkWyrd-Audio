@@ -102,6 +102,21 @@ void PlaylistEngine::setTrackGainProvider(std::function<float(const juce::File&)
     refreshTrackGains();
 }
 
+void PlaylistEngine::setTrackFadeProvider(std::function<double(const juce::File&)> provider)
+{
+    trackFadeProvider = std::move(provider);
+}
+
+double PlaylistEngine::fadeSecondsFor(const juce::File& file) const
+{
+    if (file == juce::File() || trackFadeProvider == nullptr)
+        return crossfadeSeconds;
+
+    auto own = trackFadeProvider(file);
+    return own > 0.0 ? juce::jlimit(kMinCrossfadeSeconds, kMaxCrossfadeSeconds, own)
+                      : crossfadeSeconds;
+}
+
 float PlaylistEngine::gainFor(const juce::File& file) const
 {
     if (file == juce::File() || trackGainProvider == nullptr)
@@ -359,6 +374,11 @@ void PlaylistEngine::beginCrossfadeTo(const juce::File& file)
 
     crossfading = true;
     crossfadeElapsedSeconds = 0.0;
+
+    // Captured now, from the track that is LEAVING, so the ramp keeps a
+    // consistent length even if the setting changes while it runs.
+    activeCrossfadeSeconds = fadeSecondsFor(currentTrackFile);
+
     applyDeckGains();
 }
 
@@ -372,7 +392,7 @@ void PlaylistEngine::applyDeckGains()
         return;
     }
 
-    auto t = (float) juce::jlimit(0.0, 1.0, crossfadeElapsedSeconds / crossfadeSeconds);
+    auto t = (float) juce::jlimit(0.0, 1.0, crossfadeElapsedSeconds / activeCrossfadeSeconds);
 
     // Equal-power crossfade so the perceived loudness stays roughly
     // constant through the transition instead of dipping in the middle.
@@ -390,7 +410,11 @@ double PlaylistEngine::transitionLookAheadSeconds() const
     // With crossfading off, the next track only needs to be started right
     // at the end. Not zero: the timer ticks every 30 ms, so a little
     // lead is what stops an audible gap opening between tracks.
-    return crossfadeEnabled ? crossfadeSeconds : 0.05;
+    //
+    // When fading, the lead is the CURRENT track's fade length - it has
+    // to start handing over that far from its own end, which is exactly
+    // what a per-track fade time means.
+    return crossfadeEnabled ? fadeSecondsFor(currentTrackFile) : 0.05;
 }
 
 void PlaylistEngine::setCrossfadeEnabled(bool shouldCrossfade)
@@ -447,7 +471,7 @@ void PlaylistEngine::timerCallback()
         crossfadeElapsedSeconds += dt;
         applyDeckGains();
 
-        if (crossfadeElapsedSeconds >= crossfadeSeconds)
+        if (crossfadeElapsedSeconds >= activeCrossfadeSeconds)
             finishCrossfadeNow();
     }
     else if (fadingOut)

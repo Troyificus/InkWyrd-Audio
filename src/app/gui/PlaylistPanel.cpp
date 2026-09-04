@@ -23,8 +23,8 @@ namespace
     float trackGainFraction(float gainDb)
     {
         return juce::jlimit(0.0f, 1.0f,
-                             (gainDb - TrackGainStore::kMinDb)
-                              / (TrackGainStore::kMaxDb - TrackGainStore::kMinDb));
+                             (gainDb - TrackSettingsStore::kMinDb)
+                              / (TrackSettingsStore::kMaxDb - TrackSettingsStore::kMinDb));
     }
 
     void drawTrackGainBar(juce::Graphics& g, juce::Rectangle<float> bar, float gainDb)
@@ -104,8 +104,26 @@ public:
         g.setColour(playing ? juce::Colours::lightgreen : juce::Colours::white);
 
         auto bar = trackVolumeBarBounds(width, height);
+        auto nameArea = juce::Rectangle<int>(6, 0, bar.getX() - 12, height);
+
+        // A custom fade is worth saying on the row. Otherwise it is
+        // invisible until you open the slider, and "why does this one
+        // hand over so slowly" is a horrible thing to have to hunt for.
+        auto fadeSeconds = owner.trackGains.getFadeSeconds(file);
+        if (fadeSeconds > 0.0)
+        {
+            auto suffixArea = nameArea.removeFromRight(66);
+            g.setColour(juce::Colours::grey);
+            g.setFont(juce::Font(juce::FontOptions(11.0f)));
+            g.drawText(juce::String(fadeSeconds, 1) + "s fade", suffixArea,
+                        juce::Justification::centredRight, false);
+            g.setFont(juce::Font(juce::FontOptions(14.0f)));
+            g.setColour(playing ? juce::Colours::lightgreen : juce::Colours::white);
+        }
+
         g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   ")) + file.getFileNameWithoutExtension(),
-                    6, 0, bar.getX() - 12, height, juce::Justification::centredLeft, true);
+                    nameArea, juce::Justification::centredLeft, true);
+
 
         drawTrackGainBar(g, bar.toFloat(), owner.trackGains.getGainDb(file));
     }
@@ -137,7 +155,7 @@ private:
 //==============================================================================
 PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
                               PlaylistEngine& engineToUse,
-                              TrackGainStore& trackGainsToUse,
+                              TrackSettingsStore& trackGainsToUse,
                               std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
                               std::function<void(const juce::Uuid&)> onPlaylistEditedToUse)
     : library(libraryToUse),
@@ -234,8 +252,8 @@ void PlaylistPanel::showTrackVolumeCallout(int row)
     auto content = std::make_unique<VolumeCallout>(
         file.getFileNameWithoutExtension(),
         trackGains.getGainDb(file),
-        TrackGainStore::kMinDb,
-        TrackGainStore::kMaxDb,
+        TrackSettingsStore::kMinDb,
+        TrackSettingsStore::kMaxDb,
         [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this), file](float db)
     {
         if (safeThis == nullptr)
@@ -246,6 +264,20 @@ void PlaylistPanel::showTrackVolumeCallout(int row)
         // Audible straight away if this track happens to be the one
         // playing, rather than only from its next play.
         engine.refreshTrackGains();
+        trackListBox.repaint();
+    });
+
+    content->addFadeControl(trackGains.getFadeSeconds(file),
+                             TrackSettingsStore::kMaxFadeSeconds,
+                             [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this), file](double seconds)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        // Nothing to poke in the engine: it asks for the fade length at
+        // the moment a transition begins, so the next one already uses
+        // this. Only the row's readout needs refreshing.
+        trackGains.setFadeSeconds(file, seconds);
         trackListBox.repaint();
     });
 

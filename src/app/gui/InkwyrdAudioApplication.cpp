@@ -83,11 +83,15 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
 
     // Per-track trims, and the master fader position, both restored
     // before anything starts playing so nothing is briefly loud.
-    trackGains.setFile(TrackGainStore::getDefaultFile());
+    trackGains.setFile(TrackSettingsStore::getDefaultFile());
     trackGains.load();
     playlist.setTrackGainProvider([this](const juce::File& file)
     {
         return trackGains.getLinearGain(file);
+    });
+    playlist.setTrackFadeProvider([this](const juce::File& file)
+    {
+        return trackGains.getFadeSeconds(file);
     });
     masterEngine.setMasterGain(settings.getMasterVolume());
     playlist.setCrossfadeEnabled(settings.isCrossfadeEnabled());

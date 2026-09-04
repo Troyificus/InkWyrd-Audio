@@ -6,7 +6,7 @@
 
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
-#include "TrackGainStore.h"
+#include "TrackSettingsStore.h"
 
 // Left-hand column: the playlist library on top, the selected playlist's
 // tracks underneath.
@@ -27,7 +27,7 @@ class PlaylistPanel : public juce::Component,
 public:
     PlaylistPanel(PlaylistLibrary& libraryToUse,
                    PlaylistEngine& engineToUse,
-                   TrackGainStore& trackGainsToUse,
+                   TrackSettingsStore& trackGainsToUse,
                    std::function<void(const juce::Uuid&)> onActivatePlaylist,
                    // Fired with the id of a playlist whose CONTENTS changed,
                    // so the app can push the edit into the engine if it
@@ -95,7 +95,7 @@ private:
 
     PlaylistLibrary& library;
     PlaylistEngine& engine;
-    TrackGainStore& trackGains;
+    TrackSettingsStore& trackGains;
     std::function<void(const juce::Uuid&)> onActivatePlaylist;
     std::function<void(const juce::Uuid&)> onPlaylistEdited;
 

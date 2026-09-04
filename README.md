@@ -114,13 +114,22 @@ Adding tracks to the playlist you're currently listening to never
 interrupts it: the track playing carries on, and the new tracks join the
 running order without it jumping back to the top.
 
-**Every track has its own volume**, shown as a small bar at the right of
-its row. Click the bar to adjust it. That's there for the track that was
-exported hotter than everything else and makes everyone jump when shuffle
-lands on it - pull it down once and it stays down. The trim belongs to
-the *file*, so a track that appears in several playlists is fixed in all
-of them at once, and it applies straight away if that track is playing.
-The small notch on each bar is normal volume.
+**Every track has its own volume and its own fade length**, reached by
+clicking the small bar at the right of its row.
+
+**Volume** is for the track that was exported hotter than everything else
+and makes everyone jump when shuffle lands on it - pull it down once and
+it stays down. The small notch on each bar is normal volume.
+
+**Fade into next** sets how long *this* track takes to hand over to
+whatever follows it, overriding the global Crossfade length. It's for the
+track that ends on a long tail and wants a slow hand-off, or the one that
+stops dead and wants a quick one. Leave it on **Default** and it follows
+the global setting; tracks with a fade of their own say so on their row.
+
+Both settings belong to the *file*, so a track that appears in several
+playlists is fixed in all of them at once, and the volume applies
+straight away if that track is playing.
 
 **Right - the soundboard.** A grid of programmable buttons, like a
 Stream Deck. Click an empty one to pick a sound for it, or **drag sound

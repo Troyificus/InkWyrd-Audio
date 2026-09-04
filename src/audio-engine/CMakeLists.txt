@@ -3,14 +3,14 @@
     PlaylistLibrary.cpp
     SoundboardEngine.cpp
     SoundboardLayout.cpp
-    TrackGainStore.cpp
+    TrackSettingsStore.cpp
     Mp3AudioFormat.cpp
     MediaFoundationAudioFormat.cpp
     PlaylistEngine.h
     PlaylistLibrary.h
     SoundboardEngine.h
     SoundboardLayout.h
-    TrackGainStore.h
+    TrackSettingsStore.h
     Mp3AudioFormat.h
     MediaFoundationAudioFormat.h
 )
