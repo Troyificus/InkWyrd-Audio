@@ -74,7 +74,10 @@ channel ID.
 ### Using it
 
 Across the top: a "Now playing" line, the Discord connection status,
-and Play/Stop / Skip / Shuffle / Mic mute / Monitor buttons.
+Play/Stop / Skip / Shuffle / Mic mute / Monitor buttons, and the
+**Master** fader - one control over everything the app sends out, both to
+your speakers and to Discord. Its position is remembered between
+sessions.
 
 **Monitor is off when the app starts.** It controls whether the mix also
 comes out of *your own* speakers. When you're in the Discord call you
@@ -99,15 +102,32 @@ Adding tracks to the playlist you're currently listening to never
 interrupts it: the track playing carries on, and the new tracks join the
 running order without it jumping back to the top.
 
+**Every track has its own volume**, shown as a small bar at the right of
+its row. Click the bar to adjust it. That's there for the track that was
+exported hotter than everything else and makes everyone jump when shuffle
+lands on it - pull it down once and it stays down. The trim belongs to
+the *file*, so a track that appears in several playlists is fixed in all
+of them at once, and it applies straight away if that track is playing.
+The small notch on each bar is normal volume.
+
 **Right - the soundboard.** A grid of programmable buttons, like a
 Stream Deck. Click an empty one to pick a sound for it, or **drag sound
 files straight onto a button** from Explorer. Click a filled button to
 fire it - sounds can overlap. **Right-click** any button to rename it,
-give it a colour, swap its sound or clear it. Buttons stay where you put
-them, so adding a new sound never shuffles the board around. **+** and
-**-** change how many buttons there are (a button with a sound on it is
-never removed), and **Import folder...** drops everything in a folder
-onto the free buttons.
+give it a colour or a picture, swap its sound or clear it. Buttons stay
+where you put them, so adding a new sound never shuffles the board
+around. **+** and **-** change how many buttons there are (a button with
+a sound on it is never removed), and **Import folder...** drops
+everything in a folder onto the free buttons.
+
+**Each button has its own volume too**, as a bar along its bottom edge.
+Click the *bar* to open a slider; click anywhere else on the button to
+fire the sound as usual.
+
+**Buttons can have a picture.** Right-click one and choose *Set a
+picture*, or just drag an image file onto a button that already has a
+sound. The picture is dimmed behind the button's name so the label stays
+readable. PNG, JPEG, GIF, BMP and WebP.
 
 Button names are what a Stream Deck sends to trigger a sound, so
 renaming one means updating that button in the Stream Deck app to match.
@@ -132,9 +152,13 @@ the next launch, not immediately - everything else applies right away.
   files), one-off folder imports, or individual tracks - added through
   the buttons or dragged in from Windows Explorer.
 - A programmable soundboard: a grid of assignable buttons you arrange
-  yourself, each with its own name and colour, layered independently of
-  the music (up to 16 sounds can overlap at once). Assign by drag and
-  drop, by picking a file, or by importing a whole folder at once.
+  yourself, each with its own name, colour, volume and optional picture,
+  layered independently of the music (up to 16 sounds can overlap at
+  once). Assign by drag and drop, by picking a file, or by importing a
+  whole folder at once.
+- Volume control at every level: a master fader over everything, a trim
+  per soundboard button, and a trim per track so one loud export can't
+  ambush the table when shuffle reaches it.
 - Live microphone processing through your own VST3 plugin chain (EQ,
   compression, noise gates - whatever you already own), added and
   removed on the fly while a session is running.

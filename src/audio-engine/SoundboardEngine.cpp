@@ -22,9 +22,9 @@ SoundboardEngine::~SoundboardEngine()
     readAheadThread.stopThread(2000);
 }
 
-void SoundboardEngine::registerSound(const juce::String& name, const juce::File& file)
+void SoundboardEngine::registerSound(const juce::String& name, const juce::File& file, float linearGain)
 {
-    registeredSounds[name] = file;
+    registeredSounds[name] = { file, linearGain };
 }
 
 bool SoundboardEngine::hasSound(const juce::String& name) const
@@ -35,7 +35,7 @@ bool SoundboardEngine::hasSound(const juce::String& name) const
 juce::File SoundboardEngine::getSoundFile(const juce::String& name) const
 {
     auto it = registeredSounds.find(name);
-    return it == registeredSounds.end() ? juce::File() : it->second;
+    return it == registeredSounds.end() ? juce::File() : it->second.file;
 }
 
 juce::StringArray SoundboardEngine::getRegisteredNames() const
@@ -70,9 +70,11 @@ void SoundboardEngine::trigger(const juce::String& name)
     if (it == registeredSounds.end())
         return; // unknown name is ordinary user error - see the header
 
-    auto* reader = formatManager.createReaderFor(it->second);
+    auto* reader = formatManager.createReaderFor(it->second.file);
     if (reader == nullptr)
         return;
+
+    auto gain = it->second.gain;
 
     Voice* voice = nullptr;
     for (auto* v : voices)
@@ -99,7 +101,7 @@ void SoundboardEngine::trigger(const juce::String& name)
     voice->transport.setSource(nullptr);
     voice->readerSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
     voice->transport.setSource(voice->readerSource.get(), kReadAheadBufferSamples, &readAheadThread, reader->sampleRate);
-    voice->transport.setGain(1.0f);
+    voice->transport.setGain(gain);
     voice->transport.start();
 }
 

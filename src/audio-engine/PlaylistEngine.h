@@ -73,11 +73,27 @@ public:
     const juce::Array<juce::File>& getPlayOrder() const { return playOrder; }
     int getNextOrderIndex() const { return nextOrderIndex; }
 
+    // The trim currently in force for the playing track, for the same
+    // reason as the two above: so the self-test can assert that a track's
+    // volume actually reached the deck, rather than that nothing crashed.
+    float getCurrentTrackGain() const { return currentTrackGain; }
+
     // Fires on the message thread when shuffle actually changes value -
     // including via ControlServer's toggleShuffle, which is why the app
     // can't just watch its own button. Used to persist per-playlist
     // shuffle state. Must not call back into this engine.
     void setShuffleChangedCallback(std::function<void(bool)> callback);
+
+    // Per-track volume trim. The engine asks this for a LINEAR gain each
+    // time it loads a track, and folds the answer into the deck gain
+    // alongside the crossfade curve - so a track's trim and the fade
+    // multiply rather than one overwriting the other.
+    //
+    // A callback rather than a stored map so the engine doesn't need to
+    // know where trims live or when they change; call
+    // refreshTrackGains() after editing one that's already playing.
+    void setTrackGainProvider(std::function<float(const juce::File&)> provider);
+    void refreshTrackGains();
 
     void setShuffle(bool shouldShuffle);
     bool isShuffleEnabled() const { return shuffleEnabled; }
@@ -125,6 +141,7 @@ private:
     bool isAnyDeckPlaying() const;
     void seekOrderTo(const juce::File& file);
     void applyCrossfadeGains();
+    float gainFor(const juce::File& file) const;
 
     juce::AudioFormatManager& formatManager;
     juce::Array<juce::File> playOrder;
@@ -143,6 +160,14 @@ private:
     double crossfadeElapsedSeconds = 0.0;
     const double crossfadeDurationSeconds = 3.0;
     juce::File currentTrackFile, incomingTrackFile;
+
+    std::function<float(const juce::File&)> trackGainProvider;
+
+    // The trims currently in force for the playing and incoming tracks,
+    // cached so applyCrossfadeGains() doesn't have to call out to the
+    // provider on every timer tick.
+    float currentTrackGain = 1.0f;
+    float incomingTrackGain = 1.0f;
 
     bool shuffleEnabled = true;
     juce::Random random;

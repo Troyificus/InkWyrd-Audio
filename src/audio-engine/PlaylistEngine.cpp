@@ -96,6 +96,33 @@ void PlaylistEngine::updateTracksPreservingOrder(const juce::Array<juce::File>& 
     }
 }
 
+void PlaylistEngine::setTrackGainProvider(std::function<float(const juce::File&)> provider)
+{
+    trackGainProvider = std::move(provider);
+    refreshTrackGains();
+}
+
+float PlaylistEngine::gainFor(const juce::File& file) const
+{
+    if (file == juce::File() || trackGainProvider == nullptr)
+        return 1.0f;
+
+    return trackGainProvider(file);
+}
+
+void PlaylistEngine::refreshTrackGains()
+{
+    currentTrackGain = gainFor(currentTrackFile);
+    incomingTrackGain = gainFor(incomingTrackFile);
+
+    // Applied immediately, so dragging a track's slider is audible while
+    // that track is playing rather than only from its next play.
+    if (crossfading)
+        applyCrossfadeGains();
+    else
+        decks[activeDeck].transport.setGain(currentTrackGain);
+}
+
 void PlaylistEngine::setShuffle(bool shouldShuffle)
 {
     if (shuffleEnabled == shouldShuffle)
@@ -157,9 +184,10 @@ void PlaylistEngine::start()
 
     activeDeck = 0;
     loadIntoDeck(decks[activeDeck], file);
-    decks[activeDeck].transport.setGain(1.0f);
-    decks[activeDeck].transport.start();
     currentTrackFile = file;
+    currentTrackGain = gainFor(file);
+    decks[activeDeck].transport.setGain(currentTrackGain);
+    decks[activeDeck].transport.start();
 }
 
 bool PlaylistEngine::isAnyDeckPlaying() const
@@ -272,8 +300,9 @@ void PlaylistEngine::finishCrossfadeNow()
     decks[activeDeck].transport.stop();
     decks[activeDeck].transport.setGain(1.0f); // leave it clean for reuse
     activeDeck = 1 - activeDeck;
-    decks[activeDeck].transport.setGain(1.0f); // snap the incoming deck to full
     currentTrackFile = incomingTrackFile;
+    currentTrackGain = incomingTrackGain;
+    decks[activeDeck].transport.setGain(currentTrackGain); // snap the incoming deck to its own level
     crossfading = false;
     crossfadeElapsedSeconds = 0.0;
 }
@@ -288,6 +317,7 @@ void PlaylistEngine::beginCrossfadeTo(const juce::File& file)
     decks[incomingDeck].transport.setGain(0.0f);
     decks[incomingDeck].transport.start();
     incomingTrackFile = file;
+    incomingTrackGain = gainFor(file);
 
     crossfading = true;
     crossfadeElapsedSeconds = 0.0;
@@ -301,8 +331,10 @@ void PlaylistEngine::applyCrossfadeGains()
 
     // Equal-power crossfade so the perceived loudness stays roughly
     // constant through the transition instead of dipping in the middle.
-    decks[activeDeck].transport.setGain(std::cos(t * juce::MathConstants<float>::halfPi));
-    decks[incomingDeck].transport.setGain(std::sin(t * juce::MathConstants<float>::halfPi));
+    // Each deck's trim multiplies its side of the fade, so a quiet track
+    // fading into a loud one keeps both trims through the transition.
+    decks[activeDeck].transport.setGain(std::cos(t * juce::MathConstants<float>::halfPi) * currentTrackGain);
+    decks[incomingDeck].transport.setGain(std::sin(t * juce::MathConstants<float>::halfPi) * incomingTrackGain);
 }
 
 void PlaylistEngine::timerCallback()

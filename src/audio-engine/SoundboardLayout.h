@@ -31,8 +31,23 @@ struct SoundboardSlot
     // drag in juce_graphics. The GUI wraps it in juce::Colour.
     juce::uint32 colourArgb = 0xff3a4a5a;
 
+    // Per-button volume trim in dB. A soundboard is a pile of clips from
+    // all over the place, so their levels rarely match; 0 dB means
+    // untouched and is what every existing button gets.
+    float gainDb = 0.0f;
+
+    // Optional picture drawn as the button's background. {} for none.
+    juce::File imageFile;
+
     bool isEmpty() const { return file == juce::File(); }
 };
+
+namespace inkwyrd
+{
+    // Extension check only - deliberately in the model so the UI and the
+    // stored layout can never disagree about what counts as an image.
+    bool isImageFile(const juce::File& file);
+}
 
 class SoundboardLayout
 {
@@ -74,6 +89,16 @@ public:
 
     void setColour(int index, juce::uint32 colourArgb);
 
+    // A trim, like the per-track one: mostly "pull this clip down".
+    static constexpr float kMinGainDb = -24.0f;
+    static constexpr float kMaxGainDb = 6.0f;
+    void setGainDb(int index, float db);
+    float getLinearGain(int index) const;
+
+    // Returns false if the file isn't an image this app recognises.
+    bool setImage(int index, const juce::File& imageFile);
+    void clearImage(int index);
+
     // Never removes a slot that has a sound in it: returns the count it
     // actually settled on.
     int setNumSlots(int count);
@@ -91,7 +116,10 @@ public:
     // Slots with a sound in them, in board order.
     juce::Array<SoundboardSlot> getFilledSlots() const;
 
-    static constexpr int kCurrentSchemaVersion = 1;
+    // 2 adds per-button gain and background images. An older build reads
+    // this as "newer version", leaves the file strictly alone and reports
+    // it, rather than rewriting it and silently dropping both.
+    static constexpr int kCurrentSchemaVersion = 2;
     static constexpr int kDefaultSlotCount = 24;
     static constexpr int kMaxSlotCount = 256;
 

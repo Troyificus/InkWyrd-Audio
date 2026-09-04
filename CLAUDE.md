@@ -782,6 +782,92 @@ never mistaken for a reordering. It also covers a missing and a corrupt
 cache file, both of which must degrade to "no plugins known yet" (which
 the app treats as "scan in the background") rather than crashing.
 
+## Volume: master fader, per-track trims, per-button trims
+
+Three separate controls, deliberately modelled differently:
+
+- **Master** is a FADER: 0-100%, applied in `MasterEngine`'s callback to
+  the finished mix, so it affects local monitoring AND what Discord
+  receives. Ramped from the previous block's value
+  (`applyGainRamp`) rather than applied flat, or dragging it steps the
+  gain between blocks and clicks. Persisted in `AppSettings`.
+- **Per-track** and **per-soundboard-button** are TRIMS: dB, -24..+6,
+  0 = untouched. They exist to fix material that was exported at the
+  wrong level, not to mix with.
+
+**Per-track trims are keyed by FILE, not by (playlist, file).** A track
+exported hotter than everything else is loud wherever it appears, so
+turning it down once fixes it everywhere - and, importantly, a
+folder-linked playlist has no per-track rows of its own to hang a setting
+off, so a per-playlist model would have left exactly the common case
+uncovered. Stored in `TrackGainStore`
+(`%APPDATA%\Inkwyrd Audio\track-gains.json`), 0 dB stored as *no entry*
+so an untouched library has an empty file. Keys are lowercased: Windows
+paths are case-insensitive and the same track reached two ways must not
+end up with two trims.
+
+`PlaylistEngine` takes a `setTrackGainProvider()` callback rather than
+owning a map, and folds the answer into the deck gain **alongside** the
+crossfade curve (`cos(t) * currentTrackGain`), so a trim and a fade
+multiply rather than one overwriting the other. `refreshTrackGains()`
+re-applies them so dragging a slider is audible on the track that is
+already playing. `getCurrentTrackGain()` exists so the self-test can
+assert the trim reached the deck, not merely that nothing crashed.
+
+Soundboard trims live on the slot and are passed to
+`SoundboardEngine::registerSound(name, file, linearGain)`, applied at
+trigger time - these are one-shots, so there is nothing sensible to do to
+a clip already halfway through.
+
+**`soundboard.json` went to schemaVersion 2** for the trim and the
+picture. An older build then reads it as "newer version", leaves it
+strictly alone and reports it, rather than rewriting it and silently
+dropping both. `track-gains.json` is a new file at version 1, so no
+compatibility question arises.
+
+### The volume bars
+
+Both the soundboard buttons and the playlist's track rows draw a small
+level bar, and clicking the BAR opens a slider (`gui/VolumeCallout.h`,
+shared so the two can't drift apart) while clicking elsewhere does the
+normal thing. Two details that are easy to get wrong:
+
+- **The bar has a tick at unity.** The range is -24..+6 dB, so an
+  untouched item sits at 80% of the bar and reads as "turned up loud"
+  without one. Against the tick it reads as "at the mark". Untouched also
+  draws dimmer; boosted draws amber, so "louder than recorded" and
+  "quieter than recorded" are distinguishable at a glance.
+- **The track row's hit test uses the ROW width, not the ListBox width**
+  (`PlaylistPanel::trackRowWidth()`). Once the list scrolls, rows are
+  narrower by the scrollbar, and testing against the ListBox would put
+  the clickable area a scrollbar's width right of the visible bar.
+
+`SlotButton` had to stop being a `TextButton`: a background image, a
+label over it and a level bar do not survive the LookAndFeel's own
+painting, and one rectangle now has to distinguish three different
+presses (fire / menu / volume), which `Button::onClick` can't express.
+Background images are decoded once into a cache keyed by path - a grid of
+photographs would otherwise decode them on every repaint - and cached
+even when decoding FAILS, so a bad file isn't retried forever.
+
+Adjusting a button's volume deliberately does NOT call `notifyChanged()`:
+that rebuilds every button, which would destroy the one the callout is
+anchored to while it is still open. It re-registers with the engine and
+repaints just that button instead.
+
+### INKWYRD_RENDERTEST
+
+`INKWYRD_RENDERTEST=<out.png>` on the AudioEngineTest binary paints the
+soundboard grid and the playlist panel **offscreen** via
+`createComponentSnapshot()` and writes them side by side.
+
+This exists because the app shares `%APPDATA%` with the user's live
+session, and seeding a fixture there while they are using it has already
+cost one accidental clobbering of their real settings (see the launch
+notes above). Painting the components headlessly verifies the actual
+paint code - bars, ticks, background pictures, colours - with zero risk
+to their data and without needing their app closed.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`

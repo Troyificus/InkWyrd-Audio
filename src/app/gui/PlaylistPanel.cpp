@@ -1,9 +1,51 @@
 #include "PlaylistPanel.h"
 
 #include "Dialogs.h"
+#include "VolumeCallout.h"
 
 namespace
 {
+    // The per-track volume bar lives at the right-hand end of a row.
+    // Same idea as the soundboard buttons: a readout you can see at a
+    // glance, that opens a slider when you click it.
+    constexpr int kTrackVolumeBarWidth = 44;
+    constexpr int kTrackVolumeBarHeight = 5;
+    constexpr int kTrackVolumeRightInset = 8;
+
+    juce::Rectangle<int> trackVolumeBarBounds(int rowWidth, int rowHeight)
+    {
+        return { rowWidth - kTrackVolumeBarWidth - kTrackVolumeRightInset,
+                  (rowHeight - kTrackVolumeBarHeight) / 2,
+                  kTrackVolumeBarWidth,
+                  kTrackVolumeBarHeight };
+    }
+
+    float trackGainFraction(float gainDb)
+    {
+        return juce::jlimit(0.0f, 1.0f,
+                             (gainDb - TrackGainStore::kMinDb)
+                              / (TrackGainStore::kMaxDb - TrackGainStore::kMinDb));
+    }
+
+    void drawTrackGainBar(juce::Graphics& g, juce::Rectangle<float> bar, float gainDb)
+    {
+        g.setColour(juce::Colours::black.withAlpha(0.45f));
+        g.fillRoundedRectangle(bar, 2.0f);
+
+        auto untouched = juce::approximatelyEqual(gainDb, 0.0f);
+        g.setColour(gainDb > 0.0f ? juce::Colours::orange.withAlpha(0.85f)
+                                   : juce::Colours::white.withAlpha(untouched ? 0.25f : 0.80f));
+        g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * trackGainFraction(gainDb)), 2.0f);
+
+        // Unity tick - see the matching comment in the soundboard grid.
+        auto tickX = bar.getX() + bar.getWidth() * trackGainFraction(0.0f);
+        g.setColour(juce::Colours::white.withAlpha(0.5f));
+        g.fillRect(juce::Rectangle<float>(tickX - 0.5f, bar.getY() - 1.0f, 1.0f, bar.getHeight() + 2.0f));
+
+        g.setColour(juce::Colours::white.withAlpha(0.25f));
+        g.drawRoundedRectangle(bar, 2.0f, 1.0f);
+    }
+
     constexpr int kRowHeight = 24;
     constexpr int kCaptionHeight = 22;
     constexpr int kButtonHeight = 26;
@@ -60,8 +102,26 @@ public:
 
         auto playing = file == owner.engine.getCurrentTrackFile();
         g.setColour(playing ? juce::Colours::lightgreen : juce::Colours::white);
+
+        auto bar = trackVolumeBarBounds(width, height);
         g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   ")) + file.getFileNameWithoutExtension(),
-                    6, 0, width - 12, height, juce::Justification::centredLeft, true);
+                    6, 0, bar.getX() - 12, height, juce::Justification::centredLeft, true);
+
+        drawTrackGainBar(g, bar.toFloat(), owner.trackGains.getGainDb(file));
+    }
+
+    void listBoxItemClicked(int row, const juce::MouseEvent& event) override
+    {
+        if (!juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()))
+            return;
+
+        // Clicking the bar (or right-clicking anywhere on the row) adjusts
+        // the track's level instead of just selecting it. The hit area is
+        // wider than the bar looks - it is only five pixels tall.
+        auto bar = trackVolumeBarBounds(owner.trackRowWidth(), kRowHeight).expanded(4, 8);
+
+        if (event.mods.isPopupMenu() || bar.contains(event.getPosition()))
+            owner.showTrackVolumeCallout(row);
     }
 
     void listBoxItemDoubleClicked(int row, const juce::MouseEvent&) override
@@ -77,10 +137,12 @@ private:
 //==============================================================================
 PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
                               PlaylistEngine& engineToUse,
+                              TrackGainStore& trackGainsToUse,
                               std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
                               std::function<void(const juce::Uuid&)> onPlaylistEditedToUse)
     : library(libraryToUse),
       engine(engineToUse),
+      trackGains(trackGainsToUse),
       onActivatePlaylist(std::move(onActivatePlaylistToUse)),
       onPlaylistEdited(std::move(onPlaylistEditedToUse))
 {
@@ -149,6 +211,50 @@ void PlaylistPanel::selectPlaylist(int row)
 
     refreshTracks();
     updateButtonEnablement();
+}
+
+int PlaylistPanel::trackRowWidth()
+{
+    // Once the list is long enough to scroll, rows are narrower than the
+    // ListBox by the width of the scrollbar - and the volume bar is drawn
+    // relative to the ROW. Hit-testing against the ListBox width instead
+    // would put the clickable area a scrollbar's width to the right of
+    // the bar you can actually see.
+    auto& scrollBar = trackListBox.getVerticalScrollBar();
+    return trackListBox.getWidth() - (scrollBar.isVisible() ? scrollBar.getWidth() : 0);
+}
+
+void PlaylistPanel::showTrackVolumeCallout(int row)
+{
+    if (!juce::isPositiveAndBelow(row, resolvedTracks.files.size()))
+        return;
+
+    auto file = resolvedTracks.files[row];
+
+    auto content = std::make_unique<VolumeCallout>(
+        file.getFileNameWithoutExtension(),
+        trackGains.getGainDb(file),
+        TrackGainStore::kMinDb,
+        TrackGainStore::kMaxDb,
+        [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this), file](float db)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        trackGains.setGainDb(file, db);
+
+        // Audible straight away if this track happens to be the one
+        // playing, rather than only from its next play.
+        engine.refreshTrackGains();
+        trackListBox.repaint();
+    });
+
+    // Anchored to the row itself, so it is obvious which track is being
+    // adjusted when several have been turned down.
+    auto rowArea = trackListBox.getRowPosition(row, true)
+                        .translated(trackListBox.getX(), trackListBox.getY());
+
+    juce::CallOutBox::launchAsynchronously(std::move(content), rowArea, this);
 }
 
 void PlaylistPanel::refresh()

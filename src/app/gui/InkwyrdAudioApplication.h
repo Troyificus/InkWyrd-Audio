@@ -12,6 +12,7 @@
 #include "DiscordConnector.h"
 #include "MainWindow.h"
 #include "PlaylistLibrary.h"
+#include "TrackGainStore.h"
 #include "MasterEngine.h"
 #include "DiscordAudioSender.h"
 #include "ControlServer.h"
@@ -96,6 +97,7 @@ private:
 
     PlaylistLibrary library { formatManager };
     SoundboardLayout soundboardLayout { formatManager };
+    TrackGainStore trackGains;
 
     juce::Array<juce::PluginDescription> foundPlugins;
 

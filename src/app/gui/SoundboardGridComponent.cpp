@@ -1,6 +1,7 @@
 #include "SoundboardGridComponent.h"
 
 #include "Dialogs.h"
+#include "VolumeCallout.h"
 
 namespace
 {
@@ -10,6 +11,10 @@ namespace
     constexpr int kCaptionHeight = 26;
     constexpr int kHintHeight = 18;
     constexpr int kSlotStep = 8; // how many slots the +/- buttons add or remove
+
+    constexpr int kVolumeBarHeight = 6;
+    constexpr int kVolumeBarBottomInset = 6;
+    constexpr int kVolumeBarSideInset = 8;
 
     // A small fixed palette rather than a full ColourSelector: on a board
     // meant to be scanned at a glance mid-session, a handful of clearly
@@ -26,24 +31,142 @@ namespace
         { "Blue",   0xff2f4a8c },
         { "Purple", 0xff5a2f8c },
     };
+
+    // Where a gain sits within the trim range, 0..1, for drawing the bar.
+    float gainFractionFor(float gainDb)
+    {
+        return juce::jlimit(0.0f, 1.0f,
+                             (gainDb - SoundboardLayout::kMinGainDb)
+                              / (SoundboardLayout::kMaxGainDb - SoundboardLayout::kMinGainDb));
+    }
+
+    // Draws one of the little level bars, with a tick at unity.
+    //
+    // The tick matters: the range is -24..+6 dB, so an UNTOUCHED item
+    // sits at 80% of the bar and would otherwise read as "turned up
+    // loud" rather than "normal". Against the tick it reads as "at the
+    // mark", and anything trimmed reads as off it.
+    void drawGainBar(juce::Graphics& g, juce::Rectangle<float> bar, float gainDb,
+                      float unityFraction)
+    {
+        g.setColour(juce::Colours::black.withAlpha(0.55f));
+        g.fillRoundedRectangle(bar, 2.0f);
+
+        auto untouched = juce::approximatelyEqual(gainDb, 0.0f);
+        g.setColour(gainDb > 0.0f ? juce::Colours::orange.withAlpha(0.85f)
+                                   : juce::Colours::white.withAlpha(untouched ? 0.30f : 0.80f));
+        g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * gainFractionFor(gainDb)), 2.0f);
+
+        auto tickX = bar.getX() + bar.getWidth() * unityFraction;
+        g.setColour(juce::Colours::white.withAlpha(0.55f));
+        g.fillRect(juce::Rectangle<float>(tickX - 0.5f, bar.getY() - 1.0f, 1.0f, bar.getHeight() + 2.0f));
+
+        g.setColour(juce::Colours::white.withAlpha(0.35f));
+        g.drawRoundedRectangle(bar, 2.0f, 1.0f);
+    }
 }
 
 //==============================================================================
-// A TextButton that also reports right-clicks, so one button can be both
-// "fire this sound" and "open this slot's menu".
-class SoundboardGridComponent::SlotButton final : public juce::TextButton
+// A button that paints itself: an optional background image, the sound's
+// name, and a thin volume bar along the bottom.
+//
+// Not a TextButton, because none of that survives the LookAndFeel's own
+// painting. It also has to distinguish three different presses on the
+// same rectangle - fire the sound, open the slot menu, adjust the volume
+// - which a plain Button::onClick can't express.
+class SoundboardGridComponent::SlotButton final : public juce::Button
 {
 public:
-    SlotButton(int slotIndex, std::function<void(int)> onRightClickToUse)
-        : index(slotIndex), onRightClick(std::move(onRightClickToUse))
+    SlotButton(int slotIndex,
+                std::function<void(int)> onRightClickToUse,
+                std::function<void(int)> onVolumeClickToUse)
+        : juce::Button({}),
+          index(slotIndex),
+          onRightClick(std::move(onRightClickToUse)),
+          onVolumeClick(std::move(onVolumeClickToUse))
     {
+    }
+
+    void setAppearance(const juce::String& text,
+                        juce::Colour backgroundToUse,
+                        juce::Colour foregroundToUse,
+                        bool showVolumeBar,
+                        float gainDbToUse,
+                        juce::Image backgroundImageToUse)
+    {
+        setButtonText(text);
+        background = backgroundToUse;
+        foreground = foregroundToUse;
+        showVolume = showVolumeBar;
+        gainDb = gainDbToUse;
+        backgroundImage = std::move(backgroundImageToUse);
+        repaint();
+    }
+
+    juce::Rectangle<int> getVolumeBarBounds() const
+    {
+        auto r = getLocalBounds().reduced(kVolumeBarSideInset, 0);
+        r = r.removeFromBottom(kVolumeBarHeight + kVolumeBarBottomInset);
+        r.removeFromBottom(kVolumeBarBottomInset);
+        return r;
+    }
+
+    void paintButton(juce::Graphics& g, bool highlighted, bool down) override
+    {
+        auto bounds = getLocalBounds().toFloat();
+        constexpr float corner = 4.0f;
+
+        if (backgroundImage.isValid())
+        {
+            juce::Graphics::ScopedSaveState saved(g);
+
+            juce::Path clip;
+            clip.addRoundedRectangle(bounds, corner);
+            g.reduceClipRegion(clip);
+
+            g.drawImage(backgroundImage, bounds, juce::RectanglePlacement::fillDestination);
+
+            // Darken it: the point of the picture is recognising the
+            // button at a glance, and an unreadable label defeats that.
+            g.setColour(juce::Colours::black.withAlpha(0.45f));
+            g.fillRoundedRectangle(bounds, corner);
+        }
+        else
+        {
+            g.setColour(background);
+            g.fillRoundedRectangle(bounds, corner);
+        }
+
+        if (down || highlighted)
+        {
+            g.setColour(juce::Colours::white.withAlpha(down ? 0.18f : 0.08f));
+            g.fillRoundedRectangle(bounds, corner);
+        }
+
+        g.setColour(juce::Colours::white.withAlpha(0.25f));
+        g.drawRoundedRectangle(bounds.reduced(0.5f), corner, 1.0f);
+
+        auto textArea = getLocalBounds().reduced(6);
+        if (showVolume)
+            textArea.removeFromBottom(kVolumeBarHeight + kVolumeBarBottomInset);
+
+        g.setColour(foreground);
+        g.setFont(juce::Font(juce::FontOptions(14.0f)));
+        g.drawFittedText(getButtonText(), textArea, juce::Justification::centred, 3, 0.8f);
+
+        if (!showVolume)
+            return;
+
+        // Amber above unity, so "this one is boosted" reads differently
+        // from "this one is turned down".
+        drawGainBar(g, getVolumeBarBounds().toFloat(), gainDb, gainFractionFor(0.0f));
     }
 
     void mouseDown(const juce::MouseEvent& event) override
     {
         if (event.mods.isPopupMenu())
         {
-            // Deliberately NOT calling through to TextButton: letting it
+            // Deliberately NOT calling through to Button: letting it
             // register a press here would fire the sound as well as open
             // the menu.
             if (onRightClick)
@@ -52,14 +175,30 @@ public:
             return;
         }
 
-        juce::TextButton::mouseDown(event);
+        // The bar is only a few pixels tall, so its hit area is taller
+        // than it looks - otherwise it's a game of pixel-hunting during
+        // a session.
+        if (showVolume && getVolumeBarBounds().expanded(0, 6).contains(event.getPosition()))
+        {
+            if (onVolumeClick)
+                onVolumeClick(index);
+
+            return;
+        }
+
+        juce::Button::mouseDown(event);
     }
 
     int getSlotIndex() const { return index; }
 
 private:
     int index;
-    std::function<void(int)> onRightClick;
+    std::function<void(int)> onRightClick, onVolumeClick;
+
+    juce::Colour background { 0xff3a4a5a }, foreground { juce::Colours::white };
+    bool showVolume = false;
+    float gainDb = 0.0f;
+    juce::Image backgroundImage;
 };
 
 //==============================================================================
@@ -79,8 +218,8 @@ SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToU
     for (auto* button : { &importButton, &addSlotsButton, &removeSlotsButton })
         addAndMakeVisible(button);
 
-    hint.setText("Click an empty button to assign a sound, or drag files in. "
-                  "Right-click to rename, recolour or clear.",
+    hint.setText("Click an empty button to assign a sound, or drag files in. Click a button's volume "
+                  "bar to adjust it. Right-click to rename, recolour, add a picture or clear.",
                   juce::dontSendNotification);
     hint.setColour(juce::Label::textColourId, juce::Colours::grey);
     hint.setFont(juce::Font(juce::FontOptions(12.0f)));
@@ -109,37 +248,59 @@ void SoundboardGridComponent::notifyChanged()
     refresh();
 }
 
+juce::Image SoundboardGridComponent::imageFor(const juce::File& file)
+{
+    if (file == juce::File() || !file.existsAsFile())
+        return {};
+
+    auto key = file.getFullPathName().toLowerCase();
+    auto cached = imageCache.find(key);
+    if (cached != imageCache.end())
+        return cached->second;
+
+    auto loaded = juce::ImageFileFormat::loadFrom(file);
+    imageCache[key] = loaded; // cached even when invalid, so a bad file isn't retried every repaint
+    return loaded;
+}
+
+void SoundboardGridComponent::applyAppearance(int index)
+{
+    if (!juce::isPositiveAndBelow(index, buttons.size()))
+        return;
+
+    const auto& slot = layout.getSlot(index);
+    auto* button = buttons[index];
+
+    if (slot.isEmpty())
+    {
+        button->setAppearance("+", juce::Colour(0xff2a2a2a), juce::Colours::grey, false, 0.0f, {});
+        return;
+    }
+
+    auto missing = !slot.file.existsAsFile();
+
+    // Say so on the button itself. A sound that silently does nothing
+    // when pressed mid-session is the worst outcome here.
+    button->setAppearance(missing ? slot.name + " (file missing)" : slot.name,
+                           missing ? juce::Colour(0xff4a3030) : juce::Colour(slot.colourArgb),
+                           missing ? juce::Colours::lightgrey : juce::Colours::white,
+                           !missing,
+                           slot.gainDb,
+                           missing ? juce::Image() : imageFor(slot.imageFile));
+}
+
 void SoundboardGridComponent::rebuildButtons()
 {
     buttons.clear();
 
     for (int i = 0; i < layout.getNumSlots(); ++i)
     {
-        const auto& slot = layout.getSlot(i);
-
-        auto* button = buttons.add(new SlotButton(i, [this](int index) { slotRightClicked(index); }));
+        auto* button = buttons.add(new SlotButton(i,
+                                                   [this](int index) { slotRightClicked(index); },
+                                                   [this](int index) { showVolumeCallout(index); }));
         gridPanel.addAndMakeVisible(button);
-
-        if (slot.isEmpty())
-        {
-            button->setButtonText("+");
-            button->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a2a2a));
-            button->setColour(juce::TextButton::textColourOffId, juce::Colours::grey);
-        }
-        else
-        {
-            auto missing = !slot.file.existsAsFile();
-
-            // Say so on the button itself. A sound that silently does
-            // nothing when pressed mid-session is the worst outcome here.
-            button->setButtonText(missing ? slot.name + " (file missing)" : slot.name);
-            button->setColour(juce::TextButton::buttonColourId,
-                               missing ? juce::Colour(0xff4a3030) : juce::Colour(slot.colourArgb));
-            button->setColour(juce::TextButton::textColourOffId,
-                               missing ? juce::Colours::lightgrey : juce::Colours::white);
-        }
-
         button->onClick = [this, i] { slotClicked(i); };
+        applyAppearance(i);
     }
 
     removeSlotsButton.setEnabled(layout.getNumSlots() > 1);
@@ -161,12 +322,46 @@ void SoundboardGridComponent::slotClicked(int index)
         soundboard.trigger(slot.name);
 }
 
+void SoundboardGridComponent::showVolumeCallout(int index)
+{
+    if (!layout.isValidIndex(index) || !juce::isPositiveAndBelow(index, buttons.size()))
+        return;
+
+    const auto& slot = layout.getSlot(index);
+
+    auto content = std::make_unique<VolumeCallout>(slot.name, slot.gainDb,
+                                                    SoundboardLayout::kMinGainDb,
+                                                    SoundboardLayout::kMaxGainDb,
+        [this, safeThis = juce::Component::SafePointer<SoundboardGridComponent>(this), index](float db)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        layout.setGainDb(index, db);
+
+        // Deliberately NOT notifyChanged(): that rebuilds every button,
+        // which would destroy the one this callout is anchored to while
+        // it's still open. Re-register with the engine and repaint just
+        // this button instead.
+        if (onLayoutChanged)
+            onLayoutChanged();
+
+        applyAppearance(index);
+    });
+
+    juce::CallOutBox::launchAsynchronously(std::move(content),
+                                            getLocalArea(&gridPanel, buttons[index]->getBounds()),
+                                            this);
+}
+
 void SoundboardGridComponent::slotRightClicked(int index)
 {
     if (!layout.isValidIndex(index))
         return;
 
-    auto empty = layout.getSlot(index).isEmpty();
+    const auto& slot = layout.getSlot(index);
+    auto empty = slot.isEmpty();
+    auto hasImage = slot.imageFile != juce::File();
     const int numPresets = (int) juce::numElementsInArray(kPresetColours);
 
     juce::PopupMenu menu;
@@ -179,12 +374,15 @@ void SoundboardGridComponent::slotRightClicked(int index)
     {
         menu.addItem(1, "Replace sound...");
         menu.addItem(2, "Rename...");
+        menu.addItem(6, "Volume...");
 
         juce::PopupMenu colours;
         for (int i = 0; i < numPresets; ++i)
             colours.addItem(100 + i, kPresetColours[i].name);
 
         menu.addSubMenu("Colour", colours);
+        menu.addItem(4, hasImage ? "Change picture..." : "Set a picture...");
+        menu.addItem(5, "Remove picture", hasImage);
         menu.addSeparator();
         menu.addItem(3, "Clear this button");
     }
@@ -202,6 +400,17 @@ void SoundboardGridComponent::slotRightClicked(int index)
             renameSlot(index);
         else if (result == 3)
             clearSlot(index);
+        else if (result == 4)
+            chooseImageForSlot(index);
+        else if (result == 5)
+        {
+            layout.clearImage(index);
+            refresh(); // picture is cosmetic - nothing to re-register
+        }
+        else if (result == 6)
+        {
+            showVolumeCallout(index);
+        }
         else if (result >= 100 && result < 100 + numPresets)
         {
             layout.setColour(index, kPresetColours[result - 100].argb);
@@ -238,6 +447,32 @@ void SoundboardGridComponent::assignToSlot(int index)
         }
 
         notifyChanged();
+    });
+}
+
+void SoundboardGridComponent::chooseImageForSlot(int index)
+{
+    activeChooser = std::make_unique<juce::FileChooser>("Choose a picture for this button", juce::File(),
+                                                         "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp");
+    activeChooser->launchAsync(juce::FileBrowserComponent::openMode
+                                   | juce::FileBrowserComponent::canSelectFiles,
+                                [this, safeThis = juce::Component::SafePointer<SoundboardGridComponent>(this), index]
+                                (const juce::FileChooser& chooser)
+    {
+        auto file = chooser.getResult();
+        if (file == juce::File() || safeThis == nullptr)
+            return;
+
+        if (!layout.setImage(index, file))
+        {
+            inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::WarningIcon,
+                                  "Not a picture",
+                                  "That file isn't an image this app recognises. Supported: PNG, "
+                                  "JPEG, GIF, BMP and WebP.");
+            return;
+        }
+
+        refresh(); // cosmetic only - nothing to re-register with the engine
     });
 }
 
@@ -395,15 +630,45 @@ void SoundboardGridComponent::filesDropped(const juce::StringArray& paths, int x
     dragTargetSlot = -1;
     repaint();
 
-    juce::Array<juce::File> files;
+    juce::Array<juce::File> audioFiles;
+    juce::File droppedImage;
+
     for (const auto& path : paths)
     {
         juce::File file(path);
-        if (file.existsAsFile())
-            files.add(file);
+        if (!file.existsAsFile())
+            continue;
+
+        // An image dropped on a button is unambiguous - it can only mean
+        // "use this as the picture" - so it doesn't need a menu.
+        if (inkwyrd::isImageFile(file))
+        {
+            if (droppedImage == juce::File())
+                droppedImage = file;
+        }
+        else
+        {
+            audioFiles.add(file);
+        }
     }
 
-    if (files.isEmpty())
+    if (audioFiles.isEmpty() && droppedImage != juce::File())
+    {
+        if (target < 0 || layout.getSlot(target).isEmpty())
+        {
+            inkwyrd::showMessage(this, juce::MessageBoxIconType::InfoIcon,
+                                  "Drop it on a sound",
+                                  "Pictures are backgrounds for a button that already has a sound on "
+                                  "it. Assign a sound first, then drop the picture onto that button.");
+            return;
+        }
+
+        layout.setImage(target, droppedImage);
+        refresh();
+        return;
+    }
+
+    if (audioFiles.isEmpty())
         return;
 
     // Dropped in the gap between buttons: fall back to the first free
@@ -418,7 +683,7 @@ void SoundboardGridComponent::filesDropped(const juce::StringArray& paths, int x
             target = layout.getNumSlots(); // past the end - assignFrom grows the board
     }
 
-    if (layout.assignFrom(target, files) == 0)
+    if (layout.assignFrom(target, audioFiles) == 0)
     {
         inkwyrd::showMessage(this, juce::MessageBoxIconType::WarningIcon,
                               "Nothing to add",
@@ -426,6 +691,10 @@ void SoundboardGridComponent::filesDropped(const juce::StringArray& paths, int x
                               "WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A and WMA.");
         return;
     }
+
+    // A sound and its picture dropped together in one go.
+    if (droppedImage != juce::File() && layout.isValidIndex(target))
+        layout.setImage(target, droppedImage);
 
     notifyChanged();
 }

@@ -9,6 +9,8 @@ namespace
     constexpr const char* kKeyName = "name";
     constexpr const char* kKeyPath = "path";
     constexpr const char* kKeyColour = "colour";
+    constexpr const char* kKeyGainDb = "gainDb";
+    constexpr const char* kKeyImage = "image";
 }
 
 SoundboardLayout::SoundboardLayout(juce::AudioFormatManager& formatManagerToUse)
@@ -88,6 +90,12 @@ void SoundboardLayout::load()
             slot.file = juce::File(path);
             slot.name = slotVar.getProperty(kKeyName, slot.file.getFileNameWithoutExtension()).toString();
             slot.colourArgb = (juce::uint32) (juce::int64) slotVar.getProperty(kKeyColour, (juce::int64) 0xff3a4a5a);
+            slot.gainDb = juce::jlimit(kMinGainDb, kMaxGainDb,
+                                        (float) (double) slotVar.getProperty(kKeyGainDb, 0.0));
+
+            auto imagePath = slotVar.getProperty(kKeyImage, "").toString();
+            if (imagePath.isNotEmpty())
+                slot.imageFile = juce::File(imagePath);
 
             // A missing file is kept, not dropped: an unplugged drive
             // must not silently wipe someone's board layout. The GUI
@@ -221,6 +229,54 @@ bool SoundboardLayout::rename(int index, const juce::String& newName)
     return true;
 }
 
+namespace inkwyrd
+{
+    bool isImageFile(const juce::File& file)
+    {
+        return file.hasFileExtension("png;jpg;jpeg;gif;bmp;webp");
+    }
+}
+
+void SoundboardLayout::setGainDb(int index, float db)
+{
+    if (!isValidIndex(index))
+        return;
+
+    auto slot = slots.getReference(index);
+    slot.gainDb = juce::jlimit(kMinGainDb, kMaxGainDb, db);
+    slots.set(index, slot);
+    save();
+}
+
+float SoundboardLayout::getLinearGain(int index) const
+{
+    auto db = getSlot(index).gainDb;
+    return db == 0.0f ? 1.0f : juce::Decibels::decibelsToGain(db);
+}
+
+bool SoundboardLayout::setImage(int index, const juce::File& imageFile)
+{
+    if (!isValidIndex(index) || !inkwyrd::isImageFile(imageFile))
+        return false;
+
+    auto slot = slots.getReference(index);
+    slot.imageFile = imageFile;
+    slots.set(index, slot);
+    save();
+    return true;
+}
+
+void SoundboardLayout::clearImage(int index)
+{
+    if (!isValidIndex(index))
+        return;
+
+    auto slot = slots.getReference(index);
+    slot.imageFile = juce::File();
+    slots.set(index, slot);
+    save();
+}
+
 void SoundboardLayout::setColour(int index, juce::uint32 colourArgb)
 {
     if (!isValidIndex(index))
@@ -343,6 +399,15 @@ void SoundboardLayout::save()
         slotObject->setProperty(kKeyName, slot.name);
         slotObject->setProperty(kKeyPath, slot.file.getFullPathName());
         slotObject->setProperty(kKeyColour, (juce::int64) slot.colourArgb);
+
+        // Only written when set, so an untouched board's file stays as
+        // small and readable as it was before these existed.
+        if (slot.gainDb != 0.0f)
+            slotObject->setProperty(kKeyGainDb, (double) slot.gainDb);
+
+        if (slot.imageFile != juce::File())
+            slotObject->setProperty(kKeyImage, slot.imageFile.getFullPathName());
+
         slotVars.add(juce::var(slotObject.get()));
     }
     root->setProperty(kKeySlots, juce::var(slotVars));

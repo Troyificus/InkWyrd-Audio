@@ -33,6 +33,12 @@ public:
     juce::String getChannelId() const;
     void setChannelId(const juce::String& channelId);
 
+    // Master fader position, 0..1. Remembered between sessions - coming
+    // back up at full volume after someone deliberately turned it down
+    // would be a nasty surprise mid-session.
+    float getMasterVolume() const;
+    void setMasterVolume(float volume);
+
     // Which playlist was last activated, so the app comes back up on it.
     juce::String getActivePlaylistId() const;
     void setActivePlaylistId(const juce::String& id);

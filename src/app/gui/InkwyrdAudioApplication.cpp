@@ -81,6 +81,16 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     migratePlaylistLibraryIfNeeded();
     logPhase("loading playlists");
 
+    // Per-track trims, and the master fader position, both restored
+    // before anything starts playing so nothing is briefly loud.
+    trackGains.setFile(TrackGainStore::getDefaultFile());
+    trackGains.load();
+    playlist.setTrackGainProvider([this](const juce::File& file)
+    {
+        return trackGains.getLinearGain(file);
+    });
+    masterEngine.setMasterGain(settings.getMasterVolume());
+
     soundboardLayout.load();
     migrateSoundboardLayoutIfNeeded();
     registerSoundboardLayout();
@@ -333,7 +343,7 @@ void InkwyrdAudioApplication::showPlayer()
     hasShownPlayer = true;
 
     mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain, foundPlugins,
-                                library, soundboardLayout,
+                                library, soundboardLayout, trackGains,
                                 [this](const juce::Uuid& id) { activatePlaylist(id); },
                                 [this] { registerSoundboardLayout(); },
                                 [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
@@ -347,6 +357,12 @@ void InkwyrdAudioApplication::showPlayer()
         player->setAvailablePlugins(foundPlugins);
         player->setPluginScanInProgress(pluginScanRunning.load());
         player->setRescanPluginsCallback([this] { startPluginScan(); });
+        player->setMasterVolume(settings.getMasterVolume());
+        player->setMasterVolumeChangedCallback([this](float volume)
+        {
+            settings.setMasterVolume(volume);
+            settings.save();
+        });
 
         if (!activePlaylistId.isNull())
             player->setPlayingPlaylistId(activePlaylistId);
@@ -543,6 +559,7 @@ void InkwyrdAudioApplication::registerSoundboardLayout()
         // ON the board - the button shows it as missing - but isn't
         // registered, so pressing it does nothing rather than throwing.
         if (slot.file.existsAsFile())
-            soundboard.registerSound(slot.name, slot.file);
+            soundboard.registerSound(slot.name, slot.file,
+                                      juce::Decibels::decibelsToGain(slot.gainDb));
     }
 }

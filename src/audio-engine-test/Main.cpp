@@ -17,6 +17,7 @@
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
 #include "SoundboardLayout.h"
+#include "TrackGainStore.h"
 #include "SoundboardGridComponent.h"
 #include "SoundboardEngine.h"
 #include "Mp3AudioFormat.h"
@@ -283,7 +284,10 @@ namespace
             juce::Uuid editedId;
             int editCount = 0;
 
-            PlaylistPanel panel(dropLibrary, dropEngine,
+            TrackGainStore dropGains;
+            dropGains.setFile(scratch.getChildFile("drop-gains.json"));
+
+            PlaylistPanel panel(dropLibrary, dropEngine, dropGains,
                                  [](const juce::Uuid&) {},
                                  [&](const juce::Uuid& id)
             {
@@ -382,6 +386,135 @@ namespace
             engine.resume();
             check(engine.isPlaying(), "Play works again after stopping mid-crossfade");
             engine.stop();
+        }
+
+        {
+            // Per-track volume trims.
+            TrackGainStore gains;
+            gains.setFile(scratch.getChildFile("gains.json"));
+            gains.load();
+
+            auto loud = folderTracks[0];
+            auto quiet = folderTracks[1];
+
+            check(gains.getGainDb(loud) == 0.0f && gains.getLinearGain(loud) == 1.0f,
+                   "a track with no trim set plays at its own level");
+
+            gains.setGainDb(loud, -6.0f);
+            check(gains.getGainDb(loud) == -6.0f, "a trim is remembered");
+            check(gains.getLinearGain(loud) < 1.0f, "a negative trim actually turns the track down");
+            check(gains.getNumEntries() == 1, "only trimmed tracks take up space");
+
+            gains.setGainDb(loud, -200.0f);
+            check(gains.getGainDb(loud) == TrackGainStore::kMinDb,
+                   "a trim beyond the usable range is clamped, not stored as-is");
+
+            gains.setGainDb(loud, 0.0f);
+            check(gains.getNumEntries() == 0,
+                   "setting a track back to normal removes the entry rather than storing a no-op");
+
+            gains.setGainDb(loud, -3.5f);
+            gains.setGainDb(quiet, 2.0f);
+
+            {
+                TrackGainStore reloaded;
+                reloaded.setFile(scratch.getChildFile("gains.json"));
+                reloaded.load();
+                check(reloaded.getGainDb(loud) == -3.5f && reloaded.getGainDb(quiet) == 2.0f,
+                       "trims survive a round-trip to disk");
+
+                // Windows paths are case-insensitive; the same track
+                // reached two ways must not end up with two trims.
+                juce::File shouted(loud.getFullPathName().toUpperCase());
+                check(reloaded.getGainDb(shouted) == -3.5f,
+                       "a trim is found regardless of how the path was cased");
+            }
+
+            {
+                auto future = scratch.getChildFile("future-gains.json");
+                future.replaceWithText("{ \"schemaVersion\": 99 }");
+                auto before = future.loadFileAsString();
+
+                TrackGainStore newer;
+                newer.setFile(future);
+                newer.load();
+                check(!newer.getLoadWarnings().isEmpty(), "a newer trims file is reported");
+                check(future.loadFileAsString() == before, "a newer trims file is left untouched");
+
+                auto broken = scratch.getChildFile("broken-gains.json");
+                broken.replaceWithText("{ not json");
+                TrackGainStore bad;
+                bad.setFile(broken);
+                bad.load();
+                check(!bad.getLoadWarnings().isEmpty(), "an unreadable trims file is reported, not fatal");
+            }
+
+            // The trim has to actually reach the deck, not just the file.
+            PlaylistEngine trimmed(formatManager);
+            trimmed.setShuffle(false);
+            trimmed.setTrackGainProvider([&gains](const juce::File& f) { return gains.getLinearGain(f); });
+            trimmed.setTracks(folderTracks);
+            trimmed.start();
+
+            check(juce::approximatelyEqual(trimmed.getCurrentTrackGain(),
+                                            juce::Decibels::decibelsToGain(-3.5f)),
+                   "a track's trim is applied to the deck when it starts playing");
+
+            gains.setGainDb(loud, -12.0f);
+            trimmed.refreshTrackGains();
+            check(juce::approximatelyEqual(trimmed.getCurrentTrackGain(),
+                                            juce::Decibels::decibelsToGain(-12.0f)),
+                   "changing a trim while that track plays takes effect immediately");
+            trimmed.stop();
+        }
+
+        {
+            // Per-button soundboard volume and background pictures.
+            auto boardFile2 = scratch.getChildFile("board-extras.json");
+            SoundboardLayout extras(formatManager);
+            extras.setFile(boardFile2);
+            extras.load();
+            extras.assign(0, folderTracks[0]);
+
+            check(extras.getSlot(0).gainDb == 0.0f && extras.getLinearGain(0) == 1.0f,
+                   "a new soundboard button starts at its sound's own level");
+
+            extras.setGainDb(0, -8.0f);
+            check(extras.getLinearGain(0) < 1.0f, "a button's trim turns its sound down");
+            extras.setGainDb(0, 99.0f);
+            check(extras.getSlot(0).gainDb == SoundboardLayout::kMaxGainDb,
+                   "a button's trim is clamped to the usable range");
+            extras.setGainDb(0, -8.0f);
+
+            check(inkwyrd::isImageFile(juce::File("C:/x/art.PNG")), "a picture is recognised by extension");
+            check(!inkwyrd::isImageFile(folderTracks[0]), "an audio file is not treated as a picture");
+
+            auto picture = scratch.getChildFile("button.png");
+            picture.replaceWithText("not really a png, but the layout only checks the extension");
+            check(extras.setImage(0, picture), "a picture can be set on a button");
+            check(!extras.setImage(0, folderTracks[0]), "a non-picture is refused as a background");
+            check(extras.getSlot(0).imageFile == picture, "the refused one didn't replace the good one");
+
+            {
+                SoundboardLayout reloaded(formatManager);
+                reloaded.setFile(boardFile2);
+                reloaded.load();
+                check(reloaded.getSlot(0).gainDb == -8.0f, "a button's trim survives a round-trip");
+                check(reloaded.getSlot(0).imageFile == picture, "a button's picture survives a round-trip");
+
+                reloaded.clearImage(0);
+                check(reloaded.getSlot(0).imageFile == juce::File(), "a picture can be removed");
+                check(reloaded.getSlot(0).gainDb == -8.0f,
+                       "removing the picture leaves the trim alone");
+            }
+
+            // Trims and pictures are why the schema went to 2: an older
+            // build must refuse the file rather than rewrite it without
+            // them.
+            check(SoundboardLayout::kCurrentSchemaVersion == 2,
+                   "the soundboard schema version was bumped for the new fields");
+            check(boardFile2.loadFileAsString().contains("\"schemaVersion\": 2"),
+                   "the new schema version is what actually gets written");
         }
 
         {
@@ -626,6 +759,102 @@ int main(int argc, char* argv[])
     {
         std::cout << "Set PLAYLIST_FOLDER (and optionally SOUNDBOARD_FOLDER) env vars first." << std::endl;
         return 1;
+    }
+
+    // INKWYRD_RENDERTEST=<out.png> paints the soundboard grid and the
+    // playlist panel offscreen and saves the result.
+    //
+    // Component::createComponentSnapshot() runs the real paint code
+    // without a desktop window, so the new per-button volume bars and
+    // background pictures can be checked without launching the app -
+    // which matters because the app shares %APPDATA% with the user's live
+    // session, and seeding a fixture there while they are using it has
+    // already cost one accidental clobbering of their settings.
+    {
+        auto renderTo = juce::SystemStats::getEnvironmentVariable("INKWYRD_RENDERTEST", "");
+        if (renderTo.isNotEmpty())
+        {
+            juce::ScopedJuceInitialiser_GUI juceInitialiser;
+            juce::AudioFormatManager fm;
+            fm.registerBasicFormats();
+
+            auto scratch = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                .getChildFile("inkwyrd-render-test");
+            scratch.deleteRecursively();
+            scratch.createDirectory();
+
+            auto musicFolder = juce::File(playlistFolder);
+            auto tracks = inkwyrd::scanFolderForAudio(musicFolder, fm, true);
+            if (tracks.size() < 3)
+            {
+                std::cout << "RENDER TEST needs at least 3 audio files in PLAYLIST_FOLDER" << std::endl;
+                return 1;
+            }
+
+            // A real picture, so the button actually has something to draw.
+            juce::Image art(juce::Image::RGB, 160, 100, false);
+            {
+                juce::Graphics g(art);
+                g.setGradientFill(juce::ColourGradient(juce::Colours::darkorange, 0.0f, 0.0f,
+                                                        juce::Colours::darkblue, 160.0f, 100.0f, false));
+                g.fillAll();
+            }
+            auto artFile = scratch.getChildFile("art.png");
+            {
+                juce::FileOutputStream out(artFile);
+                juce::PNGImageFormat png;
+                png.writeImageToStream(art, out);
+            }
+
+            TrackGainStore gains;
+            gains.setFile(scratch.getChildFile("gains.json"));
+            gains.setGainDb(tracks[0], -12.0f);
+            gains.setGainDb(tracks[1], 4.0f);
+
+            SoundboardLayout board(fm);
+            board.setFile(scratch.getChildFile("board.json"));
+            board.load();
+            board.assign(0, tracks[0], "Door creak");
+            board.setGainDb(0, -9.0f);
+            board.setImage(0, artFile);
+            board.assign(1, tracks[1], "Thunder");
+            board.assign(2, tracks[2], "Sword clash");
+            board.setGainDb(2, 4.5f);
+            board.setColour(2, 0xff8c2f2f);
+
+            SoundboardEngine sfx(fm);
+            SoundboardGridComponent grid(sfx, board, [] {});
+            grid.setSize(700, 400);
+
+            PlaylistLibrary library(fm);
+            library.setDirectory(scratch.getChildFile("playlists"));
+            library.loadAll();
+            auto& list = library.createPlaylist("Ambient");
+            library.addFolderLink(list.id, musicFolder, true);
+
+            PlaylistEngine engine(fm);
+            PlaylistPanel panel(library, engine, gains, [](const juce::Uuid&) {}, [](const juce::Uuid&) {});
+            panel.setSize(440, 400);
+
+            // Side by side, the way they appear in the app.
+            juce::Image sheet(juce::Image::RGB, 440 + 700 + 24, 400, true);
+            {
+                juce::Graphics g(sheet);
+                g.fillAll(juce::Colour(0xff2b3540));
+                g.drawImageAt(panel.createComponentSnapshot(panel.getLocalBounds()), 0, 0);
+                g.drawImageAt(grid.createComponentSnapshot(grid.getLocalBounds()), 464, 0);
+            }
+
+            juce::File outFile(renderTo);
+            outFile.deleteFile();
+            juce::FileOutputStream out(outFile);
+            juce::PNGImageFormat png;
+            auto ok = png.writeImageToStream(sheet, out);
+
+            std::cout << (ok ? "RENDER TEST wrote " : "RENDER TEST FAILED writing ")
+                       << outFile.getFullPathName().toStdString() << std::endl;
+            return ok ? 0 : 1;
+        }
     }
 
     // TEMPORARY diagnostic: INKWYRD_TIMELOAD="fileA|fileB" measures how

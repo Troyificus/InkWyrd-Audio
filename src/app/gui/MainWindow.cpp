@@ -22,13 +22,14 @@ void MainWindow::showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soun
                                  juce::Array<juce::PluginDescription> availablePlugins,
                                  PlaylistLibrary& library,
                                  SoundboardLayout& soundboardLayout,
+                                 TrackGainStore& trackGains,
                                  std::function<void(const juce::Uuid&)> onActivatePlaylist,
                                  std::function<void()> onSoundboardLayoutChanged,
                                  std::function<void(const juce::Uuid&)> onPlaylistEdited,
                                  std::function<void()> onSettingsClicked)
 {
     auto* component = new PlayerComponent(playlist, soundboard, masterEngine, scanner, voiceChain,
-                                           std::move(availablePlugins), library, soundboardLayout,
+                                           std::move(availablePlugins), library, soundboardLayout, trackGains,
                                            std::move(onActivatePlaylist),
                                            std::move(onSoundboardLayoutChanged),
                                            std::move(onPlaylistEdited),

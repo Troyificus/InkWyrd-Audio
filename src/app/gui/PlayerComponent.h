@@ -7,6 +7,7 @@
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
+#include "TrackGainStore.h"
 #include "PluginChain.h"
 #include "PluginScanner.h"
 #include "SoundboardEngine.h"
@@ -31,6 +32,7 @@ public:
                      juce::Array<juce::PluginDescription> availablePluginsToUse,
                      PlaylistLibrary& libraryToUse,
                      SoundboardLayout& soundboardLayoutToUse,
+                     TrackGainStore& trackGainsToUse,
                      std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
                      std::function<void()> onSoundboardLayoutChangedToUse,
                      std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
@@ -67,6 +69,11 @@ public:
     void setAvailablePlugins(juce::Array<juce::PluginDescription> plugins);
     void setPluginScanInProgress(bool scanning);
     void setRescanPluginsCallback(std::function<void()> callback);
+
+    // The master fader, 0..1. Set once from the saved value at startup;
+    // the callback fires when the user moves it so it can be persisted.
+    void setMasterVolume(float volume);
+    void setMasterVolumeChangedCallback(std::function<void(float)> callback);
     void setPlayingPlaylistId(const juce::Uuid& id);
     PlaylistPanel& getPlaylistPanel() { return playlistPanel; }
 
@@ -98,6 +105,10 @@ private:
     juce::TextButton shuffleButton;
     juce::TextButton muteButton;
     juce::TextButton monitorButton;
+    juce::Label masterVolumeCaption { {}, "Master" };
+    juce::Slider masterVolumeSlider;
+    std::function<void(float)> onMasterVolumeChanged;
+
     juce::TextButton voiceFxButton { "Voice FX..." };
     juce::TextButton settingsButton { "Settings" };
 

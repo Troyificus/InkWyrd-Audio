@@ -15,7 +15,11 @@ public:
     explicit SoundboardEngine(juce::AudioFormatManager& formatManagerToUse);
     ~SoundboardEngine() override;
 
-    void registerSound(const juce::String& name, const juce::File& file);
+    // linearGain is the button's own volume trim. Applied when the sound
+    // is triggered, so changing it takes effect from the next press
+    // (these are one-shots - there is nothing sensible to do to a clip
+    // that is already halfway through playing).
+    void registerSound(const juce::String& name, const juce::File& file, float linearGain = 1.0f);
 
     // A name that isn't registered is a no-op, not an error - Stream Deck
     // buttons carry free-text names typed by the user, so a mismatch is
@@ -48,7 +52,13 @@ private:
 
     juce::AudioFormatManager& formatManager;
     juce::TimeSliceThread readAheadThread { "SoundboardEngine read-ahead" };
-    std::map<juce::String, juce::File> registeredSounds;
+    struct RegisteredSound
+    {
+        juce::File file;
+        float gain = 1.0f;
+    };
+
+    std::map<juce::String, RegisteredSound> registeredSounds;
     juce::OwnedArray<Voice> voices;
     juce::MixerAudioSource mixer;
 

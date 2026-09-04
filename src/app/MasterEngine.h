@@ -41,6 +41,14 @@ public:
     void setLocalMonitoring(bool shouldMonitor) { localMonitoring.store(shouldMonitor); }
     bool isLocalMonitoring() const { return localMonitoring.load(); }
 
+    // The master fader: 0 = silence, 1 = unity. Applied to the finished
+    // mix, so it affects BOTH local monitoring and what Discord receives
+    // - that is what makes it the master rather than a monitor trim.
+    // Safe from any thread; the audio thread ramps towards it rather
+    // than jumping, so dragging the slider doesn't produce zipper noise.
+    void setMasterGain(float gain) { masterGain.store(juce::jlimit(0.0f, 1.0f, gain)); }
+    float getMasterGain() const { return masterGain.load(); }
+
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
                                            int numInputChannels,
                                            float* const* outputChannelData,
@@ -60,6 +68,10 @@ private:
     std::atomic<DiscordAudioSender*> discordSender { nullptr };
     std::atomic<bool> micMuted { false };
     std::atomic<bool> localMonitoring { true };
+    std::atomic<float> masterGain { 1.0f };
+
+    // Audio thread only - where the gain ramp got to last block.
+    float lastMasterGain = 1.0f;
 
     juce::AudioBuffer<float> micBuffer, masterBuffer;
     juce::MidiBuffer scratchMidi;

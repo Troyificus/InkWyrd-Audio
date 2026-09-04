@@ -1,14 +1,16 @@
-add_library(AudioEngine STATIC
+﻿add_library(AudioEngine STATIC
     PlaylistEngine.cpp
     PlaylistLibrary.cpp
     SoundboardEngine.cpp
     SoundboardLayout.cpp
+    TrackGainStore.cpp
     Mp3AudioFormat.cpp
     MediaFoundationAudioFormat.cpp
     PlaylistEngine.h
     PlaylistLibrary.h
     SoundboardEngine.h
     SoundboardLayout.h
+    TrackGainStore.h
     Mp3AudioFormat.h
     MediaFoundationAudioFormat.h
 )

@@ -22,6 +22,7 @@ public:
                          juce::Array<juce::PluginDescription> availablePlugins,
                          PlaylistLibrary& library,
                          SoundboardLayout& soundboardLayout,
+                         TrackGainStore& trackGains,
                          std::function<void(const juce::Uuid&)> onActivatePlaylist,
                          std::function<void()> onSoundboardLayoutChanged,
                          std::function<void(const juce::Uuid&)> onPlaylistEdited,

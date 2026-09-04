@@ -63,6 +63,20 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
     masterBuffer.addFrom(0, 0, micBuffer, 0, 0, numSamples);
     masterBuffer.addFrom(1, 0, micBuffer, 1, 0, numSamples);
 
+    // 3b. Master fader. Ramped from wherever the last block ended rather
+    // than applied flat, so dragging the slider doesn't step the gain
+    // between blocks and click.
+    auto targetGain = masterGain.load();
+    if (targetGain != lastMasterGain)
+    {
+        masterBuffer.applyGainRamp(0, numSamples, lastMasterGain, targetGain);
+        lastMasterGain = targetGain;
+    }
+    else if (targetGain != 1.0f)
+    {
+        masterBuffer.applyGain(targetGain);
+    }
+
     // 4. Local speakers. Silenced while streaming to Discord - the host
     // is in the call too and hears the bot's stream there, so playing it
     // locally as well doubles everything with a slight offset.

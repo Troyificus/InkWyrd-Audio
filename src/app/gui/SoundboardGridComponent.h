@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <map>
 #include <memory>
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -13,9 +14,14 @@
 //
 // Every button is a fixed SLOT, filled or empty. Left-click a filled one
 // to fire it, an empty one to assign a sound; right-click for rename,
-// colour, replace and clear. Audio files can also be dragged straight in
-// from Explorer onto a specific slot - the same JUCE file-drop mechanics
-// PlaylistPanel uses.
+// colour, background image, volume, replace and clear. Audio files can
+// also be dragged straight in from Explorer onto a specific slot, and so
+// can an image, which becomes that button's background.
+//
+// Each filled button carries a thin volume bar along its bottom edge.
+// Clicking the BAR (rather than the button) opens a slider instead of
+// firing the sound - the bar is a live readout the rest of the time, so
+// a button that has been turned down says so at a glance.
 //
 // The layout owns the truth and saves itself on every change; this
 // component just drives it and calls onLayoutChanged() so the app can
@@ -50,11 +56,14 @@ private:
     class SlotButton;
 
     void rebuildButtons();
+    void applyAppearance(int index);
     void layOutGrid();
 
     void slotClicked(int index);
     void slotRightClicked(int index);
+    void showVolumeCallout(int index);
     void assignToSlot(int index);
+    void chooseImageForSlot(int index);
     void renameSlot(int index);
     void clearSlot(int index);
     void importFolderIntoBoard();
@@ -62,6 +71,10 @@ private:
 
     int slotIndexAt(int x, int y) const;
     void notifyChanged();
+
+    // Decoded once per distinct path rather than on every repaint - a
+    // grid of large photographs would otherwise decode them continuously.
+    juce::Image imageFor(const juce::File& file);
 
     SoundboardEngine& soundboard;
     SoundboardLayout& layout;
@@ -76,6 +89,8 @@ private:
     juce::Viewport viewport;
     juce::Component gridPanel;
     juce::OwnedArray<SlotButton> buttons;
+
+    std::map<juce::String, juce::Image> imageCache;
 
     std::unique_ptr<juce::FileChooser> activeChooser;
 

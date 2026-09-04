@@ -10,6 +10,7 @@ namespace
     constexpr const char* kActivePlaylistIdKey = "activePlaylistId";
     constexpr const char* kPlaylistLibraryMigratedKey = "playlistLibraryMigrated";
     constexpr const char* kSoundboardLayoutMigratedKey = "soundboardLayoutMigrated";
+    constexpr const char* kMasterVolumeKey = "masterVolume";
 }
 
 AppSettings::AppSettings()
@@ -96,6 +97,16 @@ bool AppSettings::isPlaylistLibraryMigrated() const
 void AppSettings::setPlaylistLibraryMigrated(bool migrated)
 {
     settings()->setValue(kPlaylistLibraryMigratedKey, migrated);
+}
+
+float AppSettings::getMasterVolume() const
+{
+    return (float) juce::jlimit(0.0, 1.0, settings()->getDoubleValue(kMasterVolumeKey, 1.0));
+}
+
+void AppSettings::setMasterVolume(float volume)
+{
+    settings()->setValue(kMasterVolumeKey, (double) juce::jlimit(0.0f, 1.0f, volume));
 }
 
 bool AppSettings::isSoundboardLayoutMigrated() const

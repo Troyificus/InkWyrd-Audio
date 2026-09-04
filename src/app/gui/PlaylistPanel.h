@@ -6,6 +6,7 @@
 
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
+#include "TrackGainStore.h"
 
 // Left-hand column: the playlist library on top, the selected playlist's
 // tracks underneath.
@@ -26,6 +27,7 @@ class PlaylistPanel : public juce::Component,
 public:
     PlaylistPanel(PlaylistLibrary& libraryToUse,
                    PlaylistEngine& engineToUse,
+                   TrackGainStore& trackGainsToUse,
                    std::function<void(const juce::Uuid&)> onActivatePlaylist,
                    // Fired with the id of a playlist whose CONTENTS changed,
                    // so the app can push the edit into the engine if it
@@ -75,6 +77,12 @@ private:
     // then adds them.
     void addFoldersWithPrompt(const juce::Uuid& id, const juce::Array<juce::File>& folders);
 
+    // Opens the volume slider for one track, anchored to its row.
+    void showTrackVolumeCallout(int row);
+
+    // The width a track row is actually painted at - see the .cpp.
+    int trackRowWidth();
+
     int playlistRowAt(int x, int y);
     void updateDragTarget(int x, int y);
     void clearDragTarget();
@@ -87,6 +95,7 @@ private:
 
     PlaylistLibrary& library;
     PlaylistEngine& engine;
+    TrackGainStore& trackGains;
     std::function<void(const juce::Uuid&)> onActivatePlaylist;
     std::function<void(const juce::Uuid&)> onPlaylistEdited;
 

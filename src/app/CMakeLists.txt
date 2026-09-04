@@ -1,4 +1,4 @@
-juce_add_gui_app(InkwyrdAudioApp
+﻿juce_add_gui_app(InkwyrdAudioApp
     PRODUCT_NAME "Inkwyrd Audio"
 )
 
@@ -30,6 +30,7 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/AppSettings.h
     gui/Dialogs.cpp
     gui/Dialogs.h
+    gui/VolumeCallout.h
     gui/DiscordConnector.cpp
     gui/DiscordConnector.h
 )

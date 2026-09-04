@@ -16,6 +16,7 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
                                   juce::Array<juce::PluginDescription> availablePluginsToUse,
                                   PlaylistLibrary& libraryToUse,
                                   SoundboardLayout& soundboardLayoutToUse,
+                                  TrackGainStore& trackGainsToUse,
                                   std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
                                   std::function<void()> onSoundboardLayoutChangedToUse,
                                   std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
@@ -26,7 +27,8 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
       scanner(scannerToUse),
       voiceChain(voiceChainToUse),
       availablePlugins(std::move(availablePluginsToUse)),
-      playlistPanel(libraryToUse, playlistToUse, std::move(onActivatePlaylistToUse),
+      playlistPanel(libraryToUse, playlistToUse, trackGainsToUse,
+                     std::move(onActivatePlaylistToUse),
                      std::move(onPlaylistEditedToUse)),
       soundboardGrid(soundboardToUse, soundboardLayoutToUse, std::move(onSoundboardLayoutChangedToUse))
 {
@@ -84,6 +86,24 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
         updateMonitorButtonText();
     };
 
+    masterVolumeCaption.setJustificationType(juce::Justification::centredRight);
+    addAndMakeVisible(masterVolumeCaption);
+
+    masterVolumeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    masterVolumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 48, 22);
+    masterVolumeSlider.setRange(0.0, 100.0, 1.0);
+    masterVolumeSlider.setTextValueSuffix("%");
+    masterVolumeSlider.setValue(100.0, juce::dontSendNotification);
+    masterVolumeSlider.onValueChange = [this]
+    {
+        auto gain = (float) (masterVolumeSlider.getValue() / 100.0);
+        masterEngine.setMasterGain(gain);
+
+        if (onMasterVolumeChanged)
+            onMasterVolumeChanged(gain);
+    };
+    addAndMakeVisible(masterVolumeSlider);
+
     addAndMakeVisible(voiceFxButton);
     voiceFxButton.onClick = [this] { showVoiceFxWindow(); };
 
@@ -138,6 +158,19 @@ void PlayerComponent::setPluginScanInProgress(bool scanning)
 void PlayerComponent::setRescanPluginsCallback(std::function<void()> callback)
 {
     onRescanPlugins = std::move(callback);
+}
+
+void PlayerComponent::setMasterVolume(float volume)
+{
+    // dontSendNotification: this is restoring a saved value, not the user
+    // moving the fader, so it must not write straight back to settings.
+    masterVolumeSlider.setValue(juce::jlimit(0.0, 100.0, volume * 100.0), juce::dontSendNotification);
+    masterEngine.setMasterGain(volume);
+}
+
+void PlayerComponent::setMasterVolumeChangedCallback(std::function<void(float)> callback)
+{
+    onMasterVolumeChanged = std::move(callback);
 }
 
 void PlayerComponent::setDiscordConfigured(bool configured)
@@ -294,7 +327,11 @@ void PlayerComponent::resized()
     muteButton.setBounds(buttonRow.removeFromLeft(100));
     buttonRow.removeFromLeft(8);
     monitorButton.setBounds(buttonRow.removeFromLeft(120));
+
     voiceFxButton.setBounds(buttonRow.removeFromRight(110));
+    buttonRow.removeFromRight(12);
+    masterVolumeSlider.setBounds(buttonRow.removeFromRight(190));
+    masterVolumeCaption.setBounds(buttonRow.removeFromRight(56));
     area.removeFromTop(16);
 
     playlistPanel.setBounds(area.removeFromLeft(kLeftColumnWidth));
