@@ -762,6 +762,19 @@ list and a scanned list come out *identical* rather than merely
 equivalent - the cache test caught a difference in order - but it also
 makes the Voice FX list findable instead of filesystem-ordered.
 
+**Measured end to end after the fix** (Release, cache present): the main
+window appears in **4.5-4.8 s**, down from ~18 s of frozen UI. The
+watchdog now reports a single ~4.3-4.6 s stall, and permanent startup
+phase logging (`[App] startup: ... took N ms`, only logged above 100 ms)
+attributes it: **opening the audio device ~3.0 s** and **creating the
+first window ~1.6 s**. Both are platform costs - WASAPI device
+enumeration and JUCE's first window/graphics init - not repeated waste
+like the scan was, so they were left alone. If that last few seconds ever
+matters, the lever is showing the window BEFORE opening the audio device
+so the app appears at ~1.6 s; `showPlayer()` currently depends on the
+device state (warning banner, monitoring default), so that reorder is not
+free.
+
 **`INKWYRD_CACHETEST=1`** on the VstHostingTest binary does a real scan,
 saves and restores the cache, and checks the restored list against the
 scanned one **as a set** before checking order, so a missing plugin is

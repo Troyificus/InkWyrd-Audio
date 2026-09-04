@@ -28,6 +28,23 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     }
     ix::initNetSystem();
 
+    // Startup phase timing, kept permanently. The VST3 scan used to
+    // block this thread for 18 seconds and nobody knew until a watchdog
+    // was added; when a user reports a slow launch, the log should say
+    // which step it was rather than needing another instrumented build.
+    auto phaseStart = juce::Time::getMillisecondCounterHiRes();
+    auto logPhase = [&phaseStart](const char* what)
+    {
+        auto now = juce::Time::getMillisecondCounterHiRes();
+        auto elapsed = now - phaseStart;
+        phaseStart = now;
+
+        // Only the slow ones - a log line per trivial step is noise.
+        if (elapsed >= 100.0)
+            logLine("[App] startup: " + juce::String(what) + " took "
+                     + juce::String(elapsed, 0) + " ms");
+    };
+
     formatManager.registerBasicFormats(); // WAV/AIFF/FLAC/Ogg Vorbis
     formatManager.registerFormat(new Mp3AudioFormat(), false);
     formatManager.registerFormat(new MediaFoundationAudioFormat(), false); // AAC/M4A + WMA
@@ -38,6 +55,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     scanner.restoreFromCache(getPluginCacheFile());
     foundPlugins = scanner.getKnownPlugins();
     logLine("[App] " + juce::String(foundPlugins.size()) + " plugin(s) loaded from cache.");
+    logPhase("loading the plugin cache");
 
     constexpr int kControlServerPort = 39231; // matches streamdeck-plugin/src/audioAppClient.ts
     if (!controlServer.start(kControlServerPort))
@@ -45,6 +63,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
                  + " (Stream Deck integration won't work this run).");
 
     audioDeviceError = deviceManager.initialiseWithDefaultDevices(1, 2); // mic in, stereo out
+    logPhase("opening the audio device");
     if (audioDeviceError.isNotEmpty())
         logLine("[App] Failed to open audio device: " + audioDeviceError);
     else
@@ -60,17 +79,21 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
 
     library.loadAll();
     migratePlaylistLibraryIfNeeded();
+    logPhase("loading playlists");
 
     soundboardLayout.load();
     migrateSoundboardLayoutIfNeeded();
     registerSoundboardLayout();
+    logPhase("loading the soundboard");
 
     mainWindow = std::make_unique<MainWindow>(getApplicationName());
+    logPhase("creating the window");
 
     if (!library.isEmpty() || settings.isPlaylistFolderSet())
     {
         applyDefaultLocalMonitoring();
         showPlayer(); // after the above, so the Monitor button opens showing the right state
+        logPhase("building the player screen");
 
         // Come back up on whichever playlist was last in use.
         auto* startupPlaylist = library.findById(juce::Uuid(settings.getActivePlaylistId()));
@@ -79,6 +102,8 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
 
         if (startupPlaylist != nullptr)
             activatePlaylist(startupPlaylist->id);
+
+        logPhase("starting the first playlist");
 
         startDiscordConnectIfConfigured();
     }
