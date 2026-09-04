@@ -14,6 +14,8 @@ namespace
     constexpr const char* kCrossfadeEnabledKey = "crossfadeEnabled";
     constexpr const char* kCrossfadeSecondsKey = "crossfadeSeconds";
     constexpr const char* kFadeOutSecondsKey = "fadeOutSeconds";
+    constexpr const char* kLoopEnabledKey = "loopEnabled";
+    constexpr const char* kLoopGapSecondsKey = "loopGapSeconds";
 }
 
 AppSettings::AppSettings()
@@ -140,6 +142,26 @@ double AppSettings::getFadeOutSeconds() const
 void AppSettings::setFadeOutSeconds(double seconds)
 {
     settings()->setValue(kFadeOutSecondsKey, seconds);
+}
+
+bool AppSettings::isLoopEnabled() const
+{
+    return settings()->getBoolValue(kLoopEnabledKey, false);
+}
+
+void AppSettings::setLoopEnabled(bool enabled)
+{
+    settings()->setValue(kLoopEnabledKey, enabled);
+}
+
+double AppSettings::getLoopGapSeconds() const
+{
+    return settings()->getDoubleValue(kLoopGapSecondsKey, 0.0);
+}
+
+void AppSettings::setLoopGapSeconds(double seconds)
+{
+    settings()->setValue(kLoopGapSecondsKey, seconds);
 }
 
 bool AppSettings::isSoundboardLayoutMigrated() const

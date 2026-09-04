@@ -147,6 +147,23 @@ public:
     void setCrossfadeEnabled(bool shouldCrossfade);
     bool isCrossfadeEnabled() const { return crossfadeEnabled; }
 
+    // Repeat the CURRENT TRACK instead of moving on - for a single
+    // looping bed rather than a playlist that starts over. Skip still
+    // moves to the next track: looping only governs what happens when a
+    // track reaches its own end.
+    void setLoopEnabled(bool shouldLoop);
+    bool isLoopEnabled() const { return loopEnabled; }
+
+    // Silence between repeats. 0 hands the track over exactly as a normal
+    // transition would - so with crossfade on, it dissolves into itself
+    // and loops seamlessly.
+    static constexpr double kMaxLoopGapSeconds = 10.0;
+    void setLoopGapSeconds(double seconds);
+    double getLoopGapSeconds() const { return loopGapSeconds; }
+
+    // True while sitting in the silence between repeats.
+    bool isWaitingForLoopGap() const { return waitingForLoopGap; }
+
     static constexpr double kMinCrossfadeSeconds = 0.5;
     static constexpr double kMaxCrossfadeSeconds = 15.0;
     void setCrossfadeSeconds(double seconds);
@@ -193,6 +210,14 @@ private:
     // leaving: its own, or the global default if it hasn't got one.
     double fadeSecondsFor(const juce::File& file) const;
 
+    // What the timer does at the end of a track while looping.
+    void advanceLooping(Deck& deck, double dt);
+    void restartCurrentTrack();
+
+    // True once the current track has finished. Writes how much of it is
+    // left into remainingOut along the way, since every caller wants both.
+    bool hasReachedEndOfTrack(const Deck& deck, double& remainingOut) const;
+
     juce::AudioFormatManager& formatManager;
     juce::Array<juce::File> playOrder;
     int nextOrderIndex = 0;
@@ -214,6 +239,17 @@ private:
     // The length of the fade actually in progress, captured when it
     // started. Changing a setting mid-fade must not make the ramp jump.
     double activeCrossfadeSeconds = 3.0;
+
+    // Whether the user has asked for playback at all. Needed because
+    // AudioTransportSource STOPS ITSELF when it reaches the end of a
+    // track, so "the deck isn't playing" means either "it finished" or
+    // "you pressed Pause" - and those want opposite responses.
+    bool playbackRequested = false;
+
+    bool loopEnabled = false;
+    double loopGapSeconds = 0.0;
+    bool waitingForLoopGap = false;
+    double loopGapElapsedSeconds = 0.0;
 
     bool fadingOut = false;
     double fadeOutElapsedSeconds = 0.0;

@@ -200,6 +200,9 @@ void PlaylistEngine::start()
     currentTrackGain = gainFor(file);
     decks[activeDeck].transport.setGain(currentTrackGain);
     decks[activeDeck].transport.start();
+
+    // After stop() above, which cleared it.
+    playbackRequested = true;
 }
 
 bool PlaylistEngine::isAnyDeckPlaying() const
@@ -260,6 +263,7 @@ void PlaylistEngine::crossfadeToTrackInCurrentList(const juce::File& file)
 
 void PlaylistEngine::stop()
 {
+    playbackRequested = false;
     decks[0].transport.stop();
     decks[1].transport.stop();
     crossfading = false;
@@ -267,6 +271,11 @@ void PlaylistEngine::stop()
 
 void PlaylistEngine::pause()
 {
+    // Before anything else: the timer treats "deck stopped while playback
+    // was asked for" as end-of-track, so leaving this set would make
+    // Pause instantly start the next track instead.
+    playbackRequested = false;
+
     // Collapse an in-flight fade first, so resuming doesn't come back
     // with two decks stuck at partial gain.
     finishCrossfadeNow();
@@ -278,6 +287,11 @@ void PlaylistEngine::pause()
     fadeGain = 1.0f;
     applyDeckGains();
 
+    // Same for a pending loop gap: pausing inside the silence between
+    // repeats and then resuming must not leave a countdown running.
+    waitingForLoopGap = false;
+    loopGapElapsedSeconds = 0.0;
+
     decks[0].transport.stop();
     decks[1].transport.stop();
 }
@@ -286,6 +300,16 @@ void PlaylistEngine::resume()
 {
     if (playOrder.isEmpty())
         return;
+
+    // Play out of the silence between loop repeats restarts the track
+    // rather than waiting the rest of the gap out.
+    if (waitingForLoopGap)
+    {
+        waitingForLoopGap = false;
+        loopGapElapsedSeconds = 0.0;
+        restartCurrentTrack();
+        return;
+    }
 
     // Pressing Play during a fade-out cancels it and comes straight back
     // up to level, rather than continuing to fade.
@@ -307,6 +331,7 @@ void PlaylistEngine::resume()
         return;
     }
 
+    playbackRequested = true;
     decks[activeDeck].transport.start();
 }
 
@@ -352,6 +377,7 @@ void PlaylistEngine::beginCrossfadeTo(const juce::File& file)
     if (file == juce::File())
         return;
 
+    playbackRequested = true;
     int incomingDeck = 1 - activeDeck;
 
     if (!crossfadeEnabled)
@@ -425,6 +451,100 @@ double PlaylistEngine::transitionLookAheadSeconds() const
     return crossfadeEnabled ? fadeSecondsFor(currentTrackFile) : 0.05;
 }
 
+void PlaylistEngine::setLoopEnabled(bool shouldLoop)
+{
+    loopEnabled = shouldLoop;
+
+    // Turning it off part-way through the silence between repeats would
+    // otherwise leave the track stopped and nothing to restart it.
+    if (!loopEnabled && waitingForLoopGap)
+    {
+        waitingForLoopGap = false;
+        loopGapElapsedSeconds = 0.0;
+        restartCurrentTrack();
+    }
+}
+
+void PlaylistEngine::setLoopGapSeconds(double seconds)
+{
+    loopGapSeconds = juce::jlimit(0.0, kMaxLoopGapSeconds, seconds);
+}
+
+void PlaylistEngine::restartCurrentTrack()
+{
+    if (currentTrackFile == juce::File())
+        return;
+
+    auto& deck = decks[activeDeck];
+
+    // setPosition rather than reloading: the reader and its read-ahead
+    // buffer are already there, and re-opening the file would give the
+    // buffer time to run dry at exactly the moment the loop restarts.
+    deck.transport.setPosition(0.0);
+    currentTrackGain = gainFor(currentTrackFile);
+    applyDeckGains();
+    playbackRequested = true;
+    deck.transport.start();
+}
+
+bool PlaylistEngine::hasReachedEndOfTrack(const Deck& deck, double& remainingOut) const
+{
+    auto length = deck.transport.getLengthInSeconds();
+    remainingOut = length;
+
+    // A length of zero means the file never loaded. Treating that as
+    // "finished" would race through the whole playlist in a few timer
+    // ticks, so it counts as neither playing nor ended.
+    if (length <= 0.0)
+        return false;
+
+    remainingOut = length - deck.transport.getCurrentPosition();
+
+    // AudioTransportSource stops itself at the end of its source, so a
+    // deck that isn't playing while playback was asked for has finished.
+    return !deck.transport.isPlaying() || remainingOut <= 0.0;
+}
+
+void PlaylistEngine::advanceLooping(Deck& deck, double dt)
+{
+    if (waitingForLoopGap)
+    {
+        loopGapElapsedSeconds += dt;
+        if (loopGapElapsedSeconds < loopGapSeconds)
+            return;
+
+        waitingForLoopGap = false;
+        loopGapElapsedSeconds = 0.0;
+        restartCurrentTrack();
+        return;
+    }
+
+    if (!playbackRequested)
+        return;
+
+    double remaining = 0.0;
+    auto reachedEnd = hasReachedEndOfTrack(deck, remaining);
+
+    if (loopGapSeconds > 0.0)
+    {
+        // Let it play right out, THEN hold the silence. Handing over
+        // early the way a normal transition does would eat the end of the
+        // track and then add a gap on top of it.
+        if (!reachedEnd)
+            return;
+
+        deck.transport.stop();
+        waitingForLoopGap = true;
+        loopGapElapsedSeconds = 0.0;
+        return;
+    }
+
+    // No gap: hand over exactly as a normal transition would, but to the
+    // same file - so with crossfade on the track dissolves into itself.
+    if (reachedEnd || remaining <= transitionLookAheadSeconds())
+        beginCrossfadeTo(currentTrackFile);
+}
+
 void PlaylistEngine::setCrossfadeEnabled(bool shouldCrossfade)
 {
     crossfadeEnabled = shouldCrossfade;
@@ -441,6 +561,8 @@ void PlaylistEngine::hardStop()
 
     fadingOut = false;
     fadeGain = 1.0f;
+    waitingForLoopGap = false;
+    loopGapElapsedSeconds = 0.0;
     decks[0].transport.setGain(1.0f);
     decks[1].transport.setGain(1.0f);
 
@@ -503,11 +625,24 @@ void PlaylistEngine::timerCallback()
         return;
 
     auto& deck = decks[activeDeck];
-    if (!deck.transport.isPlaying())
+
+    if (loopEnabled && currentTrackFile != juce::File())
+    {
+        advanceLooping(deck, dt);
+        return;
+    }
+
+    if (!playbackRequested)
         return;
 
-    auto remaining = deck.transport.getLengthInSeconds() - deck.transport.getCurrentPosition();
-    if (remaining <= transitionLookAheadSeconds())
+    double remaining = 0.0;
+    auto reachedEnd = hasReachedEndOfTrack(deck, remaining);
+
+    // reachedEnd matters on its own, not just as "remaining is small":
+    // with crossfading OFF the look-ahead is 50 ms, and the transport can
+    // finish and stop itself between two 30 ms ticks - which used to
+    // leave playback dead at the end of the first track.
+    if (reachedEnd || remaining <= transitionLookAheadSeconds())
         beginCrossfade();
 }
 

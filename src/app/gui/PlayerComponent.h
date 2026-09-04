@@ -78,7 +78,8 @@ public:
     // Crossfade on/off, its length, and the Fade out length. Set from
     // saved settings at startup; the callback fires when the user changes
     // any of them so they can be persisted.
-    void setPlaybackSettings(bool crossfadeEnabled, double crossfadeSeconds, double fadeOutSeconds);
+    void setPlaybackSettings(bool crossfadeEnabled, double crossfadeSeconds, double fadeOutSeconds,
+                              bool loopEnabled, double loopGapSeconds);
     void setPlaybackSettingsChangedCallback(std::function<void()> callback);
     double getFadeOutSeconds() const { return fadeOutSlider.getValue(); }
     void setPlayingPlaylistId(const juce::Uuid& id);
@@ -91,6 +92,7 @@ private:
     void updateMonitorButtonText();
     void updatePlayButtonText();
     void updateCrossfadeToggleText();
+    void updateLoopToggleText();
     void updateMonitorHint();
     void showVoiceFxWindow();
 
@@ -118,7 +120,11 @@ private:
     juce::Label crossfadeCaption { {}, "Crossfade" };
     juce::TextButton crossfadeToggle;
     juce::Slider crossfadeSlider;
-    juce::Label fadeOutCaption { {}, "Fade out over" };
+    juce::Label loopCaption { {}, "Loop track" };
+    juce::TextButton loopToggle;
+    juce::Slider loopGapSlider;
+
+    juce::Label fadeOutCaption { {}, "Fade out" };
     juce::Slider fadeOutSlider;
     std::function<void()> onPlaybackSettingsChanged;
 

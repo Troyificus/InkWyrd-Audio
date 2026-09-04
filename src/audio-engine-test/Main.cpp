@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <iostream>
+#include <chrono>
 #include <thread>
 
 #ifdef _WIN32
@@ -929,16 +930,34 @@ namespace
                 std::atomic<bool> pulling { true };
                 std::atomic<float> magnitude { 0.0f };
 
+                // Locked to the WALL CLOCK, not to sleep_for. Windows'
+                // default timer granularity is ~15.6 ms, so sleeping 11 ms
+                // per 512-sample block plays audio at about three-quarters
+                // speed - which silently turns every timing assertion
+                // below into a measurement of the wrong thing. This pulls
+                // however many blocks real time says are owed.
                 std::thread puller([&]
                 {
                     juce::AudioBuffer<float> buffer(2, 512);
+                    auto startTime = std::chrono::steady_clock::now();
+                    juce::int64 samplesPulled = 0;
+
                     while (pulling.load())
                     {
-                        buffer.clear();
-                        juce::AudioSourceChannelInfo info(&buffer, 0, 512);
-                        engine.getNextAudioBlock(info);
-                        magnitude.store(buffer.getMagnitude(0, 512));
-                        std::this_thread::sleep_for(std::chrono::milliseconds(11));
+                        auto elapsed = std::chrono::duration<double>(
+                                            std::chrono::steady_clock::now() - startTime).count();
+                        auto owed = (juce::int64) (elapsed * 44100.0);
+
+                        while (samplesPulled < owed && pulling.load())
+                        {
+                            buffer.clear();
+                            juce::AudioSourceChannelInfo info(&buffer, 0, 512);
+                            engine.getNextAudioBlock(info);
+                            magnitude.store(buffer.getMagnitude(0, 512));
+                            samplesPulled += 512;
+                        }
+
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
                     }
                 });
 
@@ -966,6 +985,116 @@ namespace
                 engine.resume();
                 juce::MessageManager::getInstance()->runDispatchLoopUntil(400);
                 check(magnitude.load() > 0.01f, "and Play brings it back");
+
+                pulling.store(false);
+                puller.join();
+
+                engine.hardStop();
+                engine.releaseResources();
+            }
+
+            // Looping a single track. A SHORT tone, so a whole loop cycle
+            // - play out, hold the gap, start again - happens inside the
+            // test rather than eight seconds later. The entire feature is
+            // "what happens when a track reaches its end", which no
+            // amount of poking at state can observe.
+            auto shortTone = scratch.getChildFile("tone-short.wav");
+            auto shortOk = makeTone(shortTone, 220.0, 2);
+            check(shortOk, "a short test tone was written");
+
+            if (shortOk)
+            {
+                juce::Array<juce::File> oneTone;
+                oneTone.add(shortTone);
+
+                PlaylistEngine engine(formatManager);
+                engine.setShuffle(false);
+                engine.setCrossfadeEnabled(false); // straight cut, so the gap is the only silence
+                engine.setTracks(oneTone);
+                engine.prepareToPlay(512, 44100.0);
+
+                check(!engine.isLoopEnabled(), "looping is off unless asked for");
+                engine.setLoopEnabled(true);
+                engine.setLoopGapSeconds(99.0);
+                check(engine.getLoopGapSeconds() == PlaylistEngine::kMaxLoopGapSeconds,
+                       "an absurd loop gap is clamped");
+                engine.setLoopGapSeconds(1.0);
+
+                std::atomic<bool> pulling { true };
+                std::atomic<float> magnitude { 0.0f };
+
+                // Locked to the WALL CLOCK, not to sleep_for. Windows'
+                // default timer granularity is ~15.6 ms, so sleeping 11 ms
+                // per 512-sample block plays audio at about three-quarters
+                // speed - which silently turns every timing assertion
+                // below into a measurement of the wrong thing. This pulls
+                // however many blocks real time says are owed.
+                std::thread puller([&]
+                {
+                    juce::AudioBuffer<float> buffer(2, 512);
+                    auto startTime = std::chrono::steady_clock::now();
+                    juce::int64 samplesPulled = 0;
+
+                    while (pulling.load())
+                    {
+                        auto elapsed = std::chrono::duration<double>(
+                                            std::chrono::steady_clock::now() - startTime).count();
+                        auto owed = (juce::int64) (elapsed * 44100.0);
+
+                        while (samplesPulled < owed && pulling.load())
+                        {
+                            buffer.clear();
+                            juce::AudioSourceChannelInfo info(&buffer, 0, 512);
+                            engine.getNextAudioBlock(info);
+                            magnitude.store(buffer.getMagnitude(0, 512));
+                            samplesPulled += 512;
+                        }
+
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    }
+                });
+
+                engine.resume();
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(600);
+                check(magnitude.load() > 0.01f, "the looping track starts playing");
+
+                // Past the end of a 2 s tone, so it should now be sitting
+                // in the 1 s of silence between repeats.
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(1900);
+                check(engine.isWaitingForLoopGap(), "the track holds the gap after it plays out");
+                check(magnitude.load() < 0.01f, "and the gap really is silent");
+                check(engine.getCurrentTrackFile() == shortTone,
+                       "the track it will come back to is still the same one");
+
+                // ...and then comes back on its own.
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(1200);
+                check(!engine.isWaitingForLoopGap(), "the gap ends by itself");
+                check(magnitude.load() > 0.01f, "and the track starts again - it LOOPED");
+
+                // Play out of a gap should restart immediately rather than
+                // waiting the remainder out.
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(1900);
+                if (engine.isWaitingForLoopGap())
+                {
+                    engine.resume();
+                    juce::MessageManager::getInstance()->runDispatchLoopUntil(300);
+                    check(!engine.isWaitingForLoopGap() && magnitude.load() > 0.01f,
+                           "Play during the gap starts the track again straight away");
+                }
+
+                engine.pause();
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(200);
+                check(!engine.isWaitingForLoopGap(),
+                       "Pause doesn't leave a gap counting down with nothing to end it");
+                check(magnitude.load() < 0.01f, "and Pause silences a looping track");
+
+                engine.resume();
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(400);
+                check(magnitude.load() > 0.01f, "Play brings the loop back");
+
+                engine.setLoopEnabled(false);
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(200);
+                check(magnitude.load() > 0.01f, "switching looping off doesn't stop what's playing");
 
                 pulling.store(false);
                 puller.join();

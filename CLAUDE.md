@@ -991,6 +991,56 @@ behaviour that happens *at the end of a timed process* - a crossfade
 completing, a fade-out reaching zero, an end-of-track transition - is
 invisible to state-poking tests. Those need the pumped-loop harness.
 
+## Looping, and the end-of-track problem underneath it
+
+**Loop track** repeats the current track rather than starting the
+playlist over - the case is a single ambient bed left running. Skip is
+unaffected: looping only governs what happens when a track reaches its
+own end.
+
+The gap between repeats is 0-10 s. **Zero is not a special case**: it
+hands over through the normal transition path to the same file, so with
+crossfade on the track dissolves into itself and loops seamlessly, and
+with crossfade off it cuts straight round. A gap greater than zero
+instead lets the track play right OUT and then holds silence - handing
+over early the way a normal transition does would eat the end of the
+track and then add a gap on top of it.
+
+### The real bug this exposed
+
+`AudioTransportSource` **stops itself** when it reaches the end of its
+source. The old end-of-track check was `if (! isPlaying()) return;`
+followed by "is the remaining time small?", which means a deck that has
+already finished was read as "not playing, nothing to do".
+
+With a 3 s crossfade look-ahead that never mattered - the transition
+always fired seconds before the end. But **beta.8's crossfade-off mode
+uses a 50 ms look-ahead**, and the transport can finish and stop itself
+between two 30 ms timer ticks, which would leave playback dead at the end
+of the first track. Looping made it obvious because a gap-based loop has
+to wait for the end deliberately.
+
+Fixed with `hasReachedEndOfTrack()`, which treats "stopped while playback
+was asked for" as finished, plus a `playbackRequested` flag - because
+"the deck isn't playing" otherwise means either "it finished" or "you
+pressed Pause", and those want opposite responses. Every place that
+starts or stops playback maintains that flag; **`pause()` in particular
+must clear it**, or Pause instantly starts the next track.
+
+A length of zero (a file that never loaded) counts as neither playing nor
+finished, so a bad file can't send the engine racing through the whole
+playlist in a few ticks.
+
+### The test harness needed fixing too
+
+The first attempt at a looping test failed for a reason worth recording:
+the audio-pulling thread slept 11 ms per 512-sample block, and
+**Windows' default timer granularity is ~15.6 ms**, so it played audio at
+about three-quarters speed. A two-second tone hadn't finished after two
+and a half seconds of test time, and every timing assertion was
+measuring the wrong thing. The pullers now pull however many blocks the
+wall clock says are owed rather than trusting sleep_for.
+
 ## Agreed but not yet built
 
 - **Host-selectable Opus bitrate.** `DiscordAudioSender::kDefaultBitrate`

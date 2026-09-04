@@ -96,6 +96,8 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     masterEngine.setMasterGain(settings.getMasterVolume());
     playlist.setCrossfadeEnabled(settings.isCrossfadeEnabled());
     playlist.setCrossfadeSeconds(settings.getCrossfadeSeconds());
+    playlist.setLoopEnabled(settings.isLoopEnabled());
+    playlist.setLoopGapSeconds(settings.getLoopGapSeconds());
 
     soundboardLayout.load();
     migrateSoundboardLayoutIfNeeded();
@@ -366,7 +368,9 @@ void InkwyrdAudioApplication::showPlayer()
         player->setMasterVolume(settings.getMasterVolume());
         player->setPlaybackSettings(settings.isCrossfadeEnabled(),
                                      settings.getCrossfadeSeconds(),
-                                     settings.getFadeOutSeconds());
+                                     settings.getFadeOutSeconds(),
+                                     settings.isLoopEnabled(),
+                                     settings.getLoopGapSeconds());
         player->setPlaybackSettingsChangedCallback([this]
         {
             if (auto* p = mainWindow->getPlayerComponent())
@@ -374,6 +378,8 @@ void InkwyrdAudioApplication::showPlayer()
                 settings.setCrossfadeEnabled(playlist.isCrossfadeEnabled());
                 settings.setCrossfadeSeconds(playlist.getCrossfadeSeconds());
                 settings.setFadeOutSeconds(p->getFadeOutSeconds());
+                settings.setLoopEnabled(playlist.isLoopEnabled());
+                settings.setLoopGapSeconds(playlist.getLoopGapSeconds());
                 settings.save();
             }
         });

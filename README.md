@@ -84,8 +84,15 @@ over everything the app sends out: your speakers *and* Discord.
 
 **The row below** is how the app behaves rather than what it's doing now:
 **Mic** mute, **Monitor**, whether tracks **Crossfade** into each other
-and over how long, and how long **Fade out** takes. All of it is
-remembered between sessions.
+and over how long, **Loop track**, and how long **Fade out** takes. All
+of it is remembered between sessions.
+
+**Loop track** repeats whatever is playing instead of moving on, for a
+single ambient bed you want running all session. The slider next to it
+sets the silence between repeats: leave it on **No gap** and the track
+goes straight back round - with Crossfade on, it dissolves into itself
+and loops seamlessly. Skip still moves to the next track; looping only
+governs what happens when a track reaches its own end.
 
 Fade out only takes the *music* down, not your microphone - fading
 yourself out mid-sentence isn't what a button next to Stop should do. Use

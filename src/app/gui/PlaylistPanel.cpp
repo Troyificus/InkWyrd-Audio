@@ -294,6 +294,15 @@ void PlaylistPanel::refresh()
     library.loadAll();
     playlistListBox.updateContent();
 
+    // updateContent() is NOT enough on its own. ListBox only repaints a
+    // row when its index or its selected state changes (see
+    // updateRowAndSelection in juce_ListBox.cpp), so a rename - same row,
+    // same selection, different text - left the old name on screen until
+    // something else forced a repaint, like clicking a different
+    // playlist. The track list has always called repaint() explicitly for
+    // the same reason.
+    playlistListBox.repaint();
+
     // Keep the selection if that playlist still exists, otherwise fall
     // back to the first one so the panel is never left blank.
     if (library.findById(selectedId) == nullptr)

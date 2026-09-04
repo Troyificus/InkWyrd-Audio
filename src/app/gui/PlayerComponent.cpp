@@ -101,6 +101,37 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     };
     addAndMakeVisible(crossfadeSlider);
 
+    updateLoopToggleText();
+    addAndMakeVisible(loopCaption);
+    addAndMakeVisible(loopToggle);
+    loopToggle.onClick = [this]
+    {
+        playlist.setLoopEnabled(!playlist.isLoopEnabled());
+        updateLoopToggleText();
+        loopGapSlider.setEnabled(playlist.isLoopEnabled());
+
+        if (onPlaybackSettingsChanged)
+            onPlaybackSettingsChanged();
+    };
+
+    loopGapSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    loopGapSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 22);
+    loopGapSlider.setRange(0.0, PlaylistEngine::kMaxLoopGapSeconds, 0.1);
+    loopGapSlider.textFromValueFunction = [](double value)
+    {
+        // "0.0 s" would read as a setting rather than as "straight back
+        // round with no break", which is what it actually means.
+        return value <= 0.0 ? juce::String("No gap") : juce::String(value, 1) + " s";
+    };
+    loopGapSlider.onValueChange = [this]
+    {
+        playlist.setLoopGapSeconds(loopGapSlider.getValue());
+
+        if (onPlaybackSettingsChanged)
+            onPlaybackSettingsChanged();
+    };
+    addAndMakeVisible(loopGapSlider);
+
     addAndMakeVisible(fadeOutCaption);
     fadeOutSlider.setSliderStyle(juce::Slider::LinearHorizontal);
     fadeOutSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 22);
@@ -246,18 +277,31 @@ void PlayerComponent::updateCrossfadeToggleText()
     crossfadeToggle.setButtonText(playlist.isCrossfadeEnabled() ? "On" : "Off");
 }
 
+void PlayerComponent::updateLoopToggleText()
+{
+    loopToggle.setButtonText(playlist.isLoopEnabled() ? "On" : "Off");
+}
+
 void PlayerComponent::setPlaybackSettings(bool crossfadeEnabled, double crossfadeSeconds,
-                                           double fadeOutSecondsToUse)
+                                           double fadeOutSecondsToUse,
+                                           bool loopEnabled, double loopGapSeconds)
 {
     playlist.setCrossfadeEnabled(crossfadeEnabled);
     playlist.setCrossfadeSeconds(crossfadeSeconds);
+    playlist.setLoopEnabled(loopEnabled);
+    playlist.setLoopGapSeconds(loopGapSeconds);
 
     // dontSendNotification: restoring saved values, not the user changing
     // them, so this must not write straight back to settings.
     crossfadeSlider.setValue(playlist.getCrossfadeSeconds(), juce::dontSendNotification);
     crossfadeSlider.setEnabled(crossfadeEnabled);
     fadeOutSlider.setValue(fadeOutSecondsToUse, juce::dontSendNotification);
+
+    loopGapSlider.setValue(playlist.getLoopGapSeconds(), juce::dontSendNotification);
+    loopGapSlider.setEnabled(loopEnabled);
+
     updateCrossfadeToggleText();
+    updateLoopToggleText();
 }
 
 void PlayerComponent::setPlaybackSettingsChangedCallback(std::function<void()> callback)
@@ -422,14 +466,19 @@ void PlayerComponent::resized()
     muteButton.setBounds(settingsRow.removeFromLeft(100));
     settingsRow.removeFromLeft(8);
     monitorButton.setBounds(settingsRow.removeFromLeft(120));
-    settingsRow.removeFromLeft(20);
-    crossfadeCaption.setBounds(settingsRow.removeFromLeft(70));
-    crossfadeToggle.setBounds(settingsRow.removeFromLeft(50));
-    settingsRow.removeFromLeft(6);
-    crossfadeSlider.setBounds(settingsRow.removeFromLeft(170));
-    settingsRow.removeFromLeft(20);
-    fadeOutCaption.setBounds(settingsRow.removeFromLeft(96));
-    fadeOutSlider.setBounds(settingsRow.removeFromLeft(160));
+    settingsRow.removeFromLeft(18);
+    crossfadeCaption.setBounds(settingsRow.removeFromLeft(68));
+    crossfadeToggle.setBounds(settingsRow.removeFromLeft(46));
+    settingsRow.removeFromLeft(4);
+    crossfadeSlider.setBounds(settingsRow.removeFromLeft(140));
+    settingsRow.removeFromLeft(18);
+    loopCaption.setBounds(settingsRow.removeFromLeft(66));
+    loopToggle.setBounds(settingsRow.removeFromLeft(46));
+    settingsRow.removeFromLeft(4);
+    loopGapSlider.setBounds(settingsRow.removeFromLeft(140));
+    settingsRow.removeFromLeft(18);
+    fadeOutCaption.setBounds(settingsRow.removeFromLeft(70));
+    fadeOutSlider.setBounds(settingsRow.removeFromLeft(140));
     area.removeFromTop(16);
 
     playlistPanel.setBounds(area.removeFromLeft(kLeftColumnWidth));

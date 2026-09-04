@@ -51,6 +51,13 @@ public:
     double getFadeOutSeconds() const;
     void setFadeOutSeconds(double seconds);
 
+    // Repeat the current track, and the silence between repeats.
+    bool isLoopEnabled() const;
+    void setLoopEnabled(bool enabled);
+
+    double getLoopGapSeconds() const;
+    void setLoopGapSeconds(double seconds);
+
     // Which playlist was last activated, so the app comes back up on it.
     juce::String getActivePlaylistId() const;
     void setActivePlaylistId(const juce::String& id);
