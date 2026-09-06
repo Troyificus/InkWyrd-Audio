@@ -1319,6 +1319,59 @@ window came back on a real, reachable display.
 - **The black/dark-green theme and "digital screen" Now Playing
   component** - deliberately deferred, see above.
 
+### Real-user feedback from testing beta.10 (not yet acted on)
+
+The user tried the beta.10 build (Phase 0+1 above) and reported the
+following. Explicitly told to hold off acting on it until a future
+session - recorded here so that session doesn't have to rediscover it.
+
+- **Library window's browsing behaviour is the wrong way round from
+  what the user wants**, and it changes the planned Phase 3 shape: today
+  clicking a different playlist in Library's own list changes what its
+  Tracks pane shows (browsing the SELECTED playlist - this is
+  `PlaylistPanel`'s existing, pre-this-project behaviour, untouched by
+  Phase 1). The user wants the opposite split: Library's Tracks pane
+  should be **static** - always the master list of every song added to
+  the app (i.e. this IS the Phase 3 Track Library, arriving sooner than
+  planned) - changing only when songs are added/removed from it, NOT
+  when a different playlist is selected. Clicking a playlist should
+  instead update the **Playlist window's** content to show. That's a
+  real change to the Playlist window's own scope, agreed as
+  display-only-of-whatever's-*playing* for Phase 1 - the user is now
+  describing display-of-whatever's-*selected-for-browsing* instead
+  (or possibly both - needs clarifying, not assuming, before building).
+- **Wants drag-and-drop from the master library into a playlist**, not
+  just the button-based add Phase 3 was planned to ship with first. This
+  confirms the "drag can follow once the layout itself is proven"
+  deferral called out in the Phase 3 plan should probably happen in the
+  SAME pass as the master list itself, not as a true fast-follow -
+  buttons alone apparently don't match the mental model here.
+- **No way to remove a single track from a playlist or the library** -
+  only whole-playlist delete exists today. Worth checking whether
+  `PlaylistLibrary::removeEntry()` (referenced in this project's own
+  plan file for the master-library work) is actually wired to any UI at
+  all currently, or exists engine-side with no caller.
+- **Real bug: minimizing the Soundboard window loses it completely** -
+  no taskbar entry, and clicking the Player window's "Soundboard..."
+  button again does nothing to bring it back. Working theory, NOT yet
+  confirmed by instrumentation (don't trust this without checking):
+  minimizing is a native/iconic state that likely leaves JUCE's own
+  `Component::isVisible()` still reporting `true` (minimized isn't
+  hidden), so the FIRST subsequent activator click does
+  `setVisible(!true)` = `setVisible(false)` - a real hide, destroying
+  the taskbar presence - and it's not obvious a second click's
+  `setVisible(true)` correctly un-minimizes a window whose native peer
+  was hidden while iconic. Needs real repro (minimize, click button,
+  observe `isVisible()`/`isMinimised()` directly) before touching code -
+  guessing the fix without reproducing it first is exactly the kind of
+  thing this project's own testing discipline exists to prevent.
+- **Cosmetic bug in Voice FX**: the chain hint text says "Edit opens the
+  plugin's own window," but there is no separate Edit button - the
+  plugin's own name IS the button, and clicking it already opens its
+  real GUI correctly (confirmed working by the user, "wonderfully").
+  Just needs the hint's wording corrected to match the actual UI, not a
+  behaviour change.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future
