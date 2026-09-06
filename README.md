@@ -1,25 +1,26 @@
 # Inkwyrd Audio
 
-**Beta** - a standalone Windows app for running D&D (or any tabletop)
+**Beta** A standalone Windows app for running D&D (or any tabletop)
 sessions over Discord: local music playlists with shuffle and crossfade,
 an on-demand soundboard, and live mic processing through your own VST3
-plugins - all mixed together and sent straight to Discord through the
-app's own bot connection. No virtual audio cable, no DAW routing, no
-Kenku FM.
+plugins, all mixed together and sent straight to Discord through the
+app's own bot connection. No virtual audio cable, no DAW routing.
+
+Heavily inspired by [Kenku FM](https://www.kenku.fm/).
 
 ## Download
 
 Grab the latest installer from the
 [Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases)
-(the newest one at the top - GitHub's "latest" shortcut skips
+(the newest one at the top, GitHub's "latest" shortcut skips
 pre-releases entirely, so it doesn't work while this is still a beta)
-and run it. It installs just for your own Windows account - no admin
+and run it. It installs just for your own Windows account, no admin
 rights needed.
 
 > Windows will likely show a **"Windows protected your PC"** SmartScreen
 > warning the first time you run the installer. This is a small beta
 > project without a paid code-signing certificate yet, not a sign
-> anything is wrong - click **More info -> Run anyway** to continue.
+> anything is wrong. Click **More info -> Run anyway** to continue.
 
 ## Setting up your Discord bot
 
@@ -31,7 +32,7 @@ needs their own bot application. It's free and takes about five minutes.
 2. Click **New Application**, give it a name (e.g. "Table Audio"), and
    create it.
 3. Open the **Bot** tab on the left. Click **Reset Token** and copy the
-   token that appears - this is your `DISCORD_BOT_TOKEN`. Keep it
+   token that appears, this is your `DISCORD_BOT_TOKEN`. Keep it
    private; anyone with it can control the bot.
 4. You don't need to enable any of the privileged "Gateway Intents" -
    the bot only joins voice channels, it never reads messages.
@@ -55,17 +56,17 @@ channel ID.
 1. Install and run the app as described under [Download](#download).
 2. **First run:** a Setup screen appears. Click **Browse...** and point
    it at a folder of music files (WAV, AIFF, FLAC, Ogg Vorbis, MP3,
-   AAC/M4A, or WMA) - that's the only required field. Optionally Browse
+   AAC/M4A, or WMA), that's the only required field. Optionally Browse
    to a folder of short sound-effect files to import onto the soundboard,
    and paste in the three values from the [Discord bot setup](#setting-up-your-discord-bot)
    above if you want to actually stream to Discord. Then click
    **Save & Launch**.
 
-   Leaving the Discord fields blank is fine - the app runs in
+   Leaving the Discord fields blank is fine, the app runs in
    **local-monitor-only mode**: mic, playlist, and soundboard mixed and
    played through your own speakers, nothing sent to Discord. That's a
    good way to try it out before setting up a bot at all. Everything you
-   enter is saved, so this screen only needs filling in once - a
+   enter is saved, so this screen only needs filling in once. A
    **Settings** button on the main screen brings it back later if you
    want to change folders or Discord details.
 3. **Wear headphones.** Mic input is mixed live into the same output as
@@ -78,7 +79,7 @@ then two rows of controls.
 
 **The transport row:** **Pause** (keeps your place), **Stop** (silences
 everything and starts the list from the top next time), **Fade out**
-(rides the music down to silence and then stops - for ending a scene),
+(rides the music down to silence and then stops. Useful for ending a scene, for exmaple),
 **Skip**, **Shuffle**, and the **Master** fader, which is one control
 over everything the app sends out: your speakers *and* Discord.
 
@@ -90,11 +91,11 @@ of it is remembered between sessions.
 **Loop track** repeats whatever is playing instead of moving on, for a
 single ambient bed you want running all session. The slider next to it
 sets the silence between repeats: leave it on **No gap** and the track
-goes straight back round - with Crossfade on, it dissolves into itself
+goes straight back round. With Crossfade on, it dissolves into itself
 and loops seamlessly. Skip still moves to the next track; looping only
 governs what happens when a track reaches its own end.
 
-Fade out only takes the *music* down, not your microphone - fading
+Fade out only takes the *music* down, not your microphone. Fading
 yourself out mid-sentence isn't what a button next to Stop should do. Use
 the Master fader if you want to take absolutely everything down.
 
@@ -102,20 +103,19 @@ the Master fader if you want to take absolutely everything down.
 comes out of *your own* speakers. When you're in the Discord call you
 already hear everything through the bot, so leaving it on would play
 every track twice, slightly offset. If you're running without a Discord
-bot, turn Monitor on - the app tells you when that's the only way you'd
-hear anything.
+bot, turn Monitor on.
 
-**Left - your playlists.** Keep as many as you like (one per scene, mood
+**Your playlists.** Keep as many as you like (one per scene, mood
 or session). Click one to look at its tracks; **double-click, or hit
-Play, to switch to it** - the music crossfades across rather than
+Play, to switch to it.** The music crossfades across rather than
 cutting. **Add folder...** either keeps the folder linked (files you add
 to it later show up automatically) or takes a one-time copy of what's in
 it, and **Add files...** adds individual tracks. You can also **drag
-files and folders straight in from Windows Explorer** - drop them on a
+files and folders straight in from Windows Explorer.** Drop them on a
 playlist in the list to add them to that one, or anywhere else on the
 left-hand side to add them to whichever playlist is selected. Shuffle is
 remembered per playlist and only ever picks from that list. Playlists are
-stored as readable JSON files - **Open folder** shows you where.
+stored as readable JSON files, **Open folder** shows you where.
 
 Adding tracks to the playlist you're currently listening to never
 interrupts it: the track playing carries on, and the new tracks join the
@@ -125,7 +125,7 @@ running order without it jumping back to the top.
 clicking the small bar at the right of its row.
 
 **Volume** is for the track that was exported hotter than everything else
-and makes everyone jump when shuffle lands on it - pull it down once and
+and makes everyone jump when shuffle lands on it. Pull it down once and
 it stays down. The small notch on each bar is normal volume.
 
 **Fade into next** sets how long *this* track takes to hand over to
@@ -138,10 +138,10 @@ Both settings belong to the *file*, so a track that appears in several
 playlists is fixed in all of them at once, and the volume applies
 straight away if that track is playing.
 
-**Right - the soundboard.** A grid of programmable buttons, like a
+**The soundboard.** A grid of programmable buttons, like a
 Stream Deck. Click an empty one to pick a sound for it, or **drag sound
 files straight onto a button** from Explorer. Click a filled button to
-fire it - sounds can overlap. **Right-click** any button to rename it,
+fire it, sounds can overlap. **Right-click** any button to rename it,
 give it a colour or a picture, swap its sound or clear it. Buttons stay
 where you put them, so adding a new sound never shuffles the board
 around. **+** and **-** change how many buttons there are (a button with
@@ -165,7 +165,7 @@ microphone.
 
 Click **Add VST3...** to pick the plugins you want. It opens at your
 system VST3 folder, and you can select several at once. Only what you
-pick appears in the list - the app doesn't trawl through everything
+pick appears in the list, the app doesn't trawl through everything
 installed, because most of it won't be anything you'd put on a mic.
 Your list is remembered between sessions, and **Forget** takes something
 off it.
@@ -176,15 +176,15 @@ DAW. **Edit** reopens that window later; **Remove** takes it out of the
 chain. Plugins run on your mic in the order listed.
 
 Changing a Discord bot token/server/channel via Settings takes effect on
-the next launch, not immediately - everything else applies right away.
+the next launch, not immediately. Everything else applies right away.
 
 ## Features
 
 - As many named playlists as you like, with equal-power crossfade both
-  between tracks and when you jump from one playlist to another - no
+  between tracks and when you jump from one playlist to another, no
   manual DJing during a session. Shuffle is per-playlist.
 - Build playlists from linked folders (which stay up to date as you add
-  files), one-off folder imports, or individual tracks - added through
+  files), one-off folder imports, or individual tracks, added through
   the buttons or dragged in from Windows Explorer.
 - A programmable soundboard: a grid of assignable buttons you arrange
   yourself, each with its own name, colour, volume and optional picture,
@@ -195,18 +195,15 @@ the next launch, not immediately - everything else applies right away.
   per soundboard button, and a trim per track so one loud export can't
   ambush the table when shuffle reaches it.
 - Live microphone processing through your own VST3 plugin chain (EQ,
-  compression, noise gates - whatever you already own), added and
+  compression, noise gates, whatever you already own), added and
   removed on the fly while a session is running.
-- Everything - music, soundboard, and processed mic - is mixed in one
+- Everything (music, soundboard, and processed mic) is mixed in one
   place and streamed to Discord through the app's own bot connection.
   No virtual audio cable, no separate DAW routing.
 - Broad format support: WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A, and
   WMA.
 - Fully implements Discord's mandatory end-to-end-encrypted voice
   protocol (DAVE), the same one the official Discord client uses.
-- Optional Elgato Stream Deck integration - map physical buttons to
-  skip/shuffle/soundboard/mic-mute (see `streamdeck-plugin/README.md`;
-  currently build-from-source only, not included in the installer).
 
 ## Known limitations (beta)
 
@@ -215,7 +212,7 @@ the next launch, not immediately - everything else applies right away.
 - The Stream Deck plugin needs to be built from source and requires
   physical Stream Deck hardware to fully test.
 - Changing your Discord bot token/server/channel via Settings takes
-  effect on the next launch, not immediately - the app won't drop an
+  effect on the next launch, not immediately. The app won't drop an
   active Discord connection to reconnect with new details mid-session.
 - No seek bar yet (planned).
 - Soundboard buttons can't be dragged from one position to another yet -
@@ -224,10 +221,3 @@ the next launch, not immediately - everything else applies right away.
 
 If you hit a bug, please open an issue on this repo with what you were
 doing and (if possible) a screenshot of the status line/error.
-
----
-
-### For developers
-
-See `CLAUDE.md` for the full dev environment setup, architecture notes,
-and build order; `docs/design-brief.md` for the original design brief.
