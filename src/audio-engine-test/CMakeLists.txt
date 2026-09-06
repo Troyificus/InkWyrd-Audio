@@ -12,6 +12,9 @@ target_sources(AudioEngineTest PRIVATE
     ../app/gui/PlaylistPanel.cpp
     ../app/gui/SoundboardGridComponent.cpp
     ../app/gui/Dialogs.cpp
+    # Pure geometry, no Component/peer needed - covers the magnetic-snap
+    # math headlessly rather than only by manual dragging.
+    ../app/gui/WindowSnapping.cpp
 )
 
 target_include_directories(AudioEngineTest PRIVATE ../app/gui)

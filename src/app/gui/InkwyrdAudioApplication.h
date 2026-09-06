@@ -10,8 +10,13 @@
 
 #include "AppSettings.h"
 #include "DiscordConnector.h"
+#include "LibraryWindow.h"
 #include "MainWindow.h"
+#include "PlayerWindow.h"
 #include "PlaylistLibrary.h"
+#include "PlaylistWindow.h"
+#include "SoundboardWindow.h"
+#include "VoiceFxWindow.h"
 #include "TrackSettingsStore.h"
 #include "MasterEngine.h"
 #include "DiscordAudioSender.h"
@@ -122,7 +127,26 @@ private:
     // "Save & Launch").
     bool hasShownPlayer = false;
 
+    // Setup/Settings only, now - see MainWindow.h. Always exists once
+    // initialise() creates it; never destroyed until shutdown().
     std::unique_ptr<MainWindow> mainWindow;
+
+    // The Winamp-style layout: created once, the first time showPlayer()
+    // runs, and kept alive for the rest of the app's life from then on -
+    // Settings hides these, it never destroys them, so nothing a
+    // satellite points into can be pulled out from under it.
+    std::unique_ptr<PlayerWindow> playerWindow;
+    std::unique_ptr<PlaylistWindow> playlistWindow;
+    std::unique_ptr<LibraryWindow> libraryWindow;
+    std::unique_ptr<VoiceFxWindow> voiceFxWindow;
+    std::unique_ptr<SoundboardWindow> soundboardWindow;
+
+    // Voice FX/Soundboard are hideable independent of the Setup
+    // transition (their own activator buttons/close boxes). Remembered
+    // here so going into Settings and back restores exactly how the user
+    // had them, rather than forcing them open or leaving them hidden.
+    bool voiceFxWasVisibleBeforeSetup = false;
+    bool soundboardWasVisibleBeforeSetup = false;
 
     // Last member, so it's destroyed first and its thread is joined
     // before anything it might log about goes away.

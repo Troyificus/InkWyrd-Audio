@@ -4,34 +4,25 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "AppSettings.h"
+#include "DetachableWindow.h"
 #include "SetupComponent.h"
-#include "PlayerComponent.h"
 
-// Thin window chrome - owns no engine state itself, just swaps its
-// content component between the Setup and Player views on request.
-class MainWindow : public juce::DocumentWindow
+// The Setup/Settings window. Used to also swap in and host PlayerComponent
+// directly - that moved out into its own PlayerWindow once the Winamp-
+// style layout split the single main window into five - so this now only
+// ever holds a SetupComponent, shown on first run and whenever the user
+// clicks Settings from the Player window.
+//
+// Also the first DetachableWindow in the app, from when this class WAS
+// the only window - proved bounds persist/restore/clamp correctly before
+// that base got multiplied out into five window classes.
+class MainWindow : public DetachableWindow
 {
 public:
-    explicit MainWindow(const juce::String& name);
+    MainWindow(const juce::String& name, AppSettings& settingsToUse);
 
     void showSetupView(AppSettings& settings, bool isFirstRun,
                         std::function<void(SetupComponent::Result)> onSaveAndLaunch);
 
-    void showPlayerView(PlaylistEngine& playlist, SoundboardEngine& soundboard, MasterEngine& masterEngine,
-                         PluginScanner& scanner, PluginChain& voiceChain,
-                         PlaylistLibrary& library,
-                         SoundboardLayout& soundboardLayout,
-                         TrackSettingsStore& trackGains,
-                         std::function<void(const juce::Uuid&)> onActivatePlaylist,
-                         std::function<void()> onSoundboardLayoutChanged,
-                         std::function<void(const juce::Uuid&)> onPlaylistEdited,
-                         std::function<void()> onSettingsClicked);
-
-    // nullptr if the Setup view is currently showing.
-    PlayerComponent* getPlayerComponent() const { return playerComponent; }
-
     void closeButtonPressed() override;
-
-private:
-    PlayerComponent* playerComponent = nullptr; // non-owning; tracks whatever setContentOwned currently holds
 };

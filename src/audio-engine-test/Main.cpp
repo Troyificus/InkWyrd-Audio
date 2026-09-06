@@ -22,6 +22,7 @@
 #include "SoundboardGridComponent.h"
 #include "VolumeCallout.h"
 #include "SoundboardEngine.h"
+#include "WindowSnapping.h"
 #include "Mp3AudioFormat.h"
 #include "MediaFoundationAudioFormat.h"
 
@@ -1111,6 +1112,64 @@ namespace
         return failures == 0 ? 0 : 1;
     }
 
+    // INKWYRD_SNAPTEST=1: the magnetic-snap geometry behind the
+    // Winamp-style multi-window layout, exercised without launching the
+    // app or dragging anything - snapRectangle() takes no Component/peer,
+    // so this is plain input/output checking.
+    int runSnapTest()
+    {
+        using juce::Rectangle;
+        constexpr int threshold = 10;
+
+        // Screen-edge snap: candidate's right edge is 8px short of the
+        // screen's right edge (within threshold) - it should snap flush.
+        {
+            Rectangle<int> screen(0, 0, 1920, 1080);
+            Rectangle<int> candidate(1612, 100, 300, 200); // right = 1912
+            auto result = inkwyrd::snapRectangle(candidate, {}, screen, threshold);
+            check(result.getRight() == screen.getRight(), "snaps flush to the screen's right edge");
+            check(result.getY() == candidate.getY(), "vertical position untouched by a horizontal-only snap");
+        }
+
+        // Single obstacle: candidate docks to the right of it (its left
+        // edge lines up with the obstacle's right edge).
+        {
+            Rectangle<int> screen(0, 0, 4000, 4000); // far enough away to never interfere
+            Rectangle<int> obstacle(100, 100, 300, 200); // right edge = 400
+            Rectangle<int> candidate(408, 300, 250, 150); // left = 408, 8px short of 400
+            auto result = inkwyrd::snapRectangle(candidate, { obstacle }, screen, threshold);
+            check(result.getX() == obstacle.getRight(), "docks flush to the right of a single obstacle");
+        }
+
+        // No snap when far: nothing within threshold on either axis -
+        // the rectangle comes back completely unchanged.
+        {
+            Rectangle<int> screen(0, 0, 4000, 4000);
+            Rectangle<int> obstacle(100, 100, 300, 200);
+            Rectangle<int> candidate(1000, 1000, 300, 200);
+            auto result = inkwyrd::snapRectangle(candidate, { obstacle }, screen, threshold);
+            check(result == candidate, "far from everything, the rectangle is returned unchanged");
+        }
+
+        // Multiple obstacles: only the nearby one should affect the
+        // result - a distant obstacle must not be mistaken for the close
+        // one. (Not named near/far: both are legacy macros in the
+        // Windows SDK headers JUCE pulls in on this platform.)
+        {
+            Rectangle<int> screen(0, 0, 4000, 4000);
+            Rectangle<int> distantObstacle(0, 0, 50, 50);
+            Rectangle<int> closeObstacle(500, 500, 200, 100); // bottom edge = 600
+            Rectangle<int> candidate(550, 608, 150, 150); // top = 608, 8px short of 600
+            auto result = inkwyrd::snapRectangle(candidate, { distantObstacle, closeObstacle }, screen, threshold);
+            check(result.getY() == closeObstacle.getBottom(), "snaps to the nearby obstacle's bottom edge, not the distant one");
+            check(result.getX() == candidate.getX(), "horizontal position untouched - no x-axis target was close");
+        }
+
+        std::cout << (failures == 0 ? "SNAP-TEST PASSED" : "SNAP-TEST FAILED")
+                   << " (" << failures << " failure(s))" << std::endl;
+        return failures == 0 ? 0 : 1;
+    }
+
     juce::StringArray registerSoundboardFolder(SoundboardEngine& soundboard,
                                                 juce::AudioFormatManager& formatManager,
                                                 const juce::File& folder)
@@ -1136,6 +1195,11 @@ int main(int argc, char* argv[])
 #ifdef _WIN32
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
 #endif
+
+    // Pure geometry, no files/folders/audio device involved - checked
+    // before the PLAYLIST_FOLDER requirement below applies to it.
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_SNAPTEST", "").isNotEmpty())
+        return runSnapTest();
 
     auto playlistFolder = juce::SystemStats::getEnvironmentVariable("PLAYLIST_FOLDER", "");
     auto soundboardFolder = juce::SystemStats::getEnvironmentVariable("SOUNDBOARD_FOLDER", "");

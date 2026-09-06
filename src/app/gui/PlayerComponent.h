@@ -5,17 +5,17 @@
 
 #include "MasterEngine.h"
 #include "PlaylistEngine.h"
-#include "PlaylistLibrary.h"
-#include "PlaylistPanel.h"
-#include "TrackSettingsStore.h"
-#include "PluginChain.h"
-#include "PluginScanner.h"
-#include "SoundboardEngine.h"
-#include "SoundboardGridComponent.h"
-#include "SoundboardLayout.h"
 
-// Main screen: status and transport across the top, then the playlist
-// library and its tracks on the left, the SFX board on the right.
+// The Player window's whole content: status/transport across the top,
+// then the things that shape playback behaviour (crossfade/loop/fade-out)
+// and master volume.
+//
+// The playlist library, the now-playing track list, Voice FX and the
+// soundboard used to all be embedded here directly. They're now each
+// their own DetachableWindow (LibraryWindow, PlaylistWindow, VoiceFxWindow,
+// SoundboardWindow) - this component only holds the two callbacks that
+// show/hide the latter two, fired from a pair of buttons here, the same
+// spot the old "Voice FX..." button always was.
 //
 // Calls straight into the engine objects from button handlers - JUCE
 // button callbacks already run on the message thread, which is the
@@ -25,19 +25,10 @@ class PlayerComponent : public juce::Component,
 {
 public:
     PlayerComponent(PlaylistEngine& playlistToUse,
-                     SoundboardEngine& soundboardToUse,
                      MasterEngine& masterEngineToUse,
-                     PluginScanner& scannerToUse,
-                     PluginChain& voiceChainToUse,
-                     PlaylistLibrary& libraryToUse,
-                     SoundboardLayout& soundboardLayoutToUse,
-                     TrackSettingsStore& trackGainsToUse,
-                     std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
-                     std::function<void()> onSoundboardLayoutChangedToUse,
-                     std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
+                     std::function<void()> onToggleVoiceFxToUse,
+                     std::function<void()> onToggleSoundboardToUse,
                      std::function<void()> onSettingsClickedToUse);
-
-    ~PlayerComponent() override;
 
     void resized() override;
 
@@ -56,16 +47,10 @@ public:
     // it (connecting to Discord turns local monitoring off).
     void refreshToggleStates();
 
-    void refreshSoundboard();
-
     // Whether Discord credentials are configured, so the transport can
     // point out that Monitor being off means nothing is audible ANYWHERE
     // rather than just "not locally".
     void setDiscordConfigured(bool configured);
-
-    // Fired when the user adds or forgets a plugin, so the list can be
-    // written back to disk.
-    void setPluginListChangedCallback(std::function<void()> callback);
 
     // The master fader, 0..1. Set once from the saved value at startup;
     // the callback fires when the user moves it so it can be persisted.
@@ -79,8 +64,6 @@ public:
                               bool loopEnabled, double loopGapSeconds);
     void setPlaybackSettingsChangedCallback(std::function<void()> callback);
     double getFadeOutSeconds() const { return fadeOutSlider.getValue(); }
-    void setPlayingPlaylistId(const juce::Uuid& id);
-    PlaylistPanel& getPlaylistPanel() { return playlistPanel; }
 
 private:
     void timerCallback() override;
@@ -91,13 +74,9 @@ private:
     void updateCrossfadeToggleText();
     void updateLoopToggleText();
     void updateMonitorHint();
-    void showVoiceFxWindow();
 
     PlaylistEngine& playlist;
-    SoundboardEngine& soundboard;
     MasterEngine& masterEngine;
-    PluginScanner& scanner;
-    PluginChain& voiceChain;
 
     juce::Label nowPlayingLabel;
     juce::Label discordStatusLabel;
@@ -129,15 +108,9 @@ private:
     std::function<void(float)> onMasterVolumeChanged;
 
     juce::TextButton voiceFxButton { "Voice FX..." };
+    juce::TextButton soundboardButton { "Soundboard..." };
     juce::TextButton settingsButton { "Settings" };
 
-    PlaylistPanel playlistPanel;
-    SoundboardGridComponent soundboardGrid;
-
-    juce::File lastSeenTrack; // so the track list only repaints when it changes
-
-    // Non-modal, so the user can keep driving the session while it's open.
-    juce::Component::SafePointer<juce::DialogWindow> voiceFxWindow;
-
-    std::function<void()> onPluginListChanged;
+    std::function<void()> onToggleVoiceFx;
+    std::function<void()> onToggleSoundboard;
 };

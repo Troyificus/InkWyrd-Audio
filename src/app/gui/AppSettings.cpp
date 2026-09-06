@@ -16,6 +16,8 @@ namespace
     constexpr const char* kFadeOutSecondsKey = "fadeOutSeconds";
     constexpr const char* kLoopEnabledKey = "loopEnabled";
     constexpr const char* kLoopGapSecondsKey = "loopGapSeconds";
+    constexpr const char* kWindowLayoutKey = "windowLayout";
+    constexpr const char* kTrackLibraryMigratedKey = "trackLibraryMigrated";
 }
 
 AppSettings::AppSettings()
@@ -172,6 +174,26 @@ bool AppSettings::isSoundboardLayoutMigrated() const
 void AppSettings::setSoundboardLayoutMigrated(bool migrated)
 {
     settings()->setValue(kSoundboardLayoutMigratedKey, migrated);
+}
+
+juce::String AppSettings::getWindowLayoutJson() const
+{
+    return settings()->getValue(kWindowLayoutKey);
+}
+
+void AppSettings::setWindowLayoutJson(const juce::String& json)
+{
+    settings()->setValue(kWindowLayoutKey, json);
+}
+
+bool AppSettings::isTrackLibraryMigrated() const
+{
+    return settings()->getBoolValue(kTrackLibraryMigratedKey, false);
+}
+
+void AppSettings::setTrackLibraryMigrated(bool migrated)
+{
+    settings()->setValue(kTrackLibraryMigratedKey, migrated);
 }
 
 bool AppSettings::isPlaylistFolderSet() const

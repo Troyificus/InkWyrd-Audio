@@ -104,7 +104,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     registerSoundboardLayout();
     logPhase("loading the soundboard");
 
-    mainWindow = std::make_unique<MainWindow>(getApplicationName());
+    mainWindow = std::make_unique<MainWindow>(getApplicationName(), settings);
     logPhase("creating the window");
 
     if (!library.isEmpty() || settings.isPlaylistFolderSet())
@@ -201,8 +201,10 @@ void InkwyrdAudioApplication::activatePlaylist(const juce::Uuid& id)
     // Crossfades if something is already playing, plain-starts if not.
     playlist.crossfadeToTracks(resolved.files, resumeFrom);
 
-    if (auto* player = mainWindow->getPlayerComponent())
-        player->setPlayingPlaylistId(id);
+    if (libraryWindow != nullptr)
+        libraryWindow->setPlayingPlaylistId(id);
+    if (playlistWindow != nullptr)
+        playlistWindow->getTrackList().setPlayingPlaylistName(target->name);
 
     updateWarningBanner();
 }
@@ -225,11 +227,12 @@ void InkwyrdAudioApplication::handlePlaylistEdited(const juce::Uuid& id)
         settings.setActivePlaylistId({});
         settings.save();
 
-        if (auto* player = mainWindow->getPlayerComponent())
-        {
-            player->setPlayingPlaylistId({});
-            player->refreshToggleStates();
-        }
+        if (libraryWindow != nullptr)
+            libraryWindow->setPlayingPlaylistId({});
+        if (playlistWindow != nullptr)
+            playlistWindow->getTrackList().setPlayingPlaylistName({});
+        if (playerWindow != nullptr)
+            playerWindow->getPlayerComponent().refreshToggleStates();
 
         updateWarningBanner();
         return;
@@ -254,6 +257,11 @@ void InkwyrdAudioApplication::shutdown()
     playlist.stop();
     controlServer.stop();
 
+    playerWindow.reset();
+    playlistWindow.reset();
+    libraryWindow.reset();
+    voiceFxWindow.reset();
+    soundboardWindow.reset();
     mainWindow.reset();
 
     ix::uninitNetSystem();
@@ -263,10 +271,33 @@ void InkwyrdAudioApplication::showSetup()
 {
     // First run is the case where there's nothing to come back to: no
     // player view has ever been shown this session.
-    auto isFirstRun = mainWindow->getPlayerComponent() == nullptr && !hasShownPlayer;
+    auto isFirstRun = playerWindow == nullptr && !hasShownPlayer;
+
+    // Hide every window in the Player-side layout before Setup takes
+    // over. They're independent windows now, not children of one
+    // PlayerComponent that Setup's content-swap would delete - "hide" is
+    // all that's needed, nothing is destroyed and nothing dangles.
+    if (playerWindow != nullptr)
+        playerWindow->setVisible(false);
+    if (playlistWindow != nullptr)
+        playlistWindow->setVisible(false);
+    if (libraryWindow != nullptr)
+        libraryWindow->setVisible(false);
+    if (voiceFxWindow != nullptr)
+    {
+        voiceFxWasVisibleBeforeSetup = voiceFxWindow->isVisible();
+        voiceFxWindow->setVisible(false);
+    }
+    if (soundboardWindow != nullptr)
+    {
+        soundboardWasVisibleBeforeSetup = soundboardWindow->isVisible();
+        soundboardWindow->setVisible(false);
+    }
 
     mainWindow->showSetupView(settings, isFirstRun,
                                [this](SetupComponent::Result result) { completeSetupAndLaunch(result); });
+    mainWindow->setVisible(true);
+    mainWindow->toFront(true);
 }
 
 juce::File InkwyrdAudioApplication::getVoicePluginsFile()
@@ -304,45 +335,86 @@ void InkwyrdAudioApplication::showPlayer()
 {
     hasShownPlayer = true;
 
-    mainWindow->showPlayerView(playlist, soundboard, masterEngine, scanner, voiceChain,
-                                library, soundboardLayout, trackGains,
-                                [this](const juce::Uuid& id) { activatePlaylist(id); },
-                                [this] { registerSoundboardLayout(); },
-                                [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
-                                [this] { showSetup(); });
+    mainWindow->setVisible(false);
 
-    if (auto* player = mainWindow->getPlayerComponent())
+    if (playerWindow == nullptr)
     {
-        // So it can point out that Monitor being off means silence when
-        // there's no Discord to send to either.
-        player->setDiscordConfigured(settings.hasDiscordCredentials());
-        player->setPluginListChangedCallback([this] { saveVoicePlugins(); });
-        player->setMasterVolume(settings.getMasterVolume());
-        player->setPlaybackSettings(settings.isCrossfadeEnabled(),
-                                     settings.getCrossfadeSeconds(),
-                                     settings.getFadeOutSeconds(),
-                                     settings.isLoopEnabled(),
-                                     settings.getLoopGapSeconds());
-        player->setPlaybackSettingsChangedCallback([this]
-        {
-            if (auto* p = mainWindow->getPlayerComponent())
+        // First time this run - build the whole layout. From here on
+        // these five windows live for the rest of the app's life;
+        // Settings only ever hides them (see showSetup()).
+        playerWindow = std::make_unique<PlayerWindow>(
+            settings, playlist, masterEngine,
+            [this]
             {
-                settings.setCrossfadeEnabled(playlist.isCrossfadeEnabled());
-                settings.setCrossfadeSeconds(playlist.getCrossfadeSeconds());
-                settings.setFadeOutSeconds(p->getFadeOutSeconds());
-                settings.setLoopEnabled(playlist.isLoopEnabled());
-                settings.setLoopGapSeconds(playlist.getLoopGapSeconds());
-                settings.save();
-            }
-        });
-        player->setMasterVolumeChangedCallback([this](float volume)
-        {
-            settings.setMasterVolume(volume);
-            settings.save();
-        });
+                if (voiceFxWindow != nullptr)
+                    voiceFxWindow->setVisible(!voiceFxWindow->isVisible());
+            },
+            [this]
+            {
+                if (soundboardWindow != nullptr)
+                    soundboardWindow->setVisible(!soundboardWindow->isVisible());
+            },
+            [this] { showSetup(); });
 
-        if (!activePlaylistId.isNull())
-            player->setPlayingPlaylistId(activePlaylistId);
+        playlistWindow = std::make_unique<PlaylistWindow>(settings, playlist);
+
+        libraryWindow = std::make_unique<LibraryWindow>(
+            settings, library, playlist, trackGains,
+            [this](const juce::Uuid& id) { activatePlaylist(id); },
+            [this](const juce::Uuid& id) { handlePlaylistEdited(id); });
+
+        voiceFxWindow = std::make_unique<VoiceFxWindow>(settings, scanner, voiceChain,
+                                                          [this] { saveVoicePlugins(); });
+
+        soundboardWindow = std::make_unique<SoundboardWindow>(settings, soundboard, soundboardLayout,
+                                                                [this] { registerSoundboardLayout(); });
+    }
+    else
+    {
+        // Returning from Settings. Player/Playlist/Library are core, so
+        // they always come back; Voice FX/Soundboard restore to exactly
+        // what they were right before Settings hid them, rather than
+        // being forced open.
+        playerWindow->setVisible(true);
+        playlistWindow->setVisible(true);
+        libraryWindow->setVisible(true);
+        if (voiceFxWindow != nullptr)
+            voiceFxWindow->setVisible(voiceFxWasVisibleBeforeSetup);
+        if (soundboardWindow != nullptr)
+            soundboardWindow->setVisible(soundboardWasVisibleBeforeSetup);
+    }
+
+    auto& player = playerWindow->getPlayerComponent();
+
+    // So it can point out that Monitor being off means silence when
+    // there's no Discord to send to either.
+    player.setDiscordConfigured(settings.hasDiscordCredentials());
+    player.setMasterVolume(settings.getMasterVolume());
+    player.setPlaybackSettings(settings.isCrossfadeEnabled(),
+                                settings.getCrossfadeSeconds(),
+                                settings.getFadeOutSeconds(),
+                                settings.isLoopEnabled(),
+                                settings.getLoopGapSeconds());
+    player.setPlaybackSettingsChangedCallback([this]
+    {
+        settings.setCrossfadeEnabled(playlist.isCrossfadeEnabled());
+        settings.setCrossfadeSeconds(playlist.getCrossfadeSeconds());
+        settings.setFadeOutSeconds(playerWindow->getPlayerComponent().getFadeOutSeconds());
+        settings.setLoopEnabled(playlist.isLoopEnabled());
+        settings.setLoopGapSeconds(playlist.getLoopGapSeconds());
+        settings.save();
+    });
+    player.setMasterVolumeChangedCallback([this](float volume)
+    {
+        settings.setMasterVolume(volume);
+        settings.save();
+    });
+
+    if (!activePlaylistId.isNull())
+    {
+        libraryWindow->setPlayingPlaylistId(activePlaylistId);
+        if (auto* active = library.findById(activePlaylistId))
+            playlistWindow->getTrackList().setPlayingPlaylistName(active->name);
     }
 
     updateWarningBanner();
@@ -350,7 +422,7 @@ void InkwyrdAudioApplication::showPlayer()
 
 void InkwyrdAudioApplication::updateWarningBanner()
 {
-    auto* player = mainWindow != nullptr ? mainWindow->getPlayerComponent() : nullptr;
+    auto* player = playerWindow != nullptr ? &playerWindow->getPlayerComponent() : nullptr;
     if (player == nullptr)
         return;
 
@@ -432,8 +504,10 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
         // after launching with an empty or cleared bot token.
         startDiscordConnectIfConfigured();
     }
-    else if (auto* player = mainWindow->getPlayerComponent())
+    else if (playerWindow != nullptr)
     {
+        auto& player = playerWindow->getPlayerComponent();
+
         // Discord credentials are never live-reconnected once a connect
         // attempt has already happened this run - the DAVE/MLS handshake
         // has only ever been verified via the connect-once-then-shutdown
@@ -443,14 +517,14 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
         // would misleadingly imply a Discord setting changed too.
         if (settings.hasDiscordCredentials())
         {
-            player->setDiscordStatus(discordConnector.isConnected()
-                                          ? "Connected - streaming to Discord. Restart to apply changed Discord settings."
-                                          : "Restart Inkwyrd Audio to apply changed Discord settings.");
+            player.setDiscordStatus(discordConnector.isConnected()
+                                         ? "Connected - streaming to Discord. Restart to apply changed Discord settings."
+                                         : "Restart Inkwyrd Audio to apply changed Discord settings.");
             offerRestart();
         }
         else
         {
-            player->setDiscordStatus("Local monitor only - no Discord credentials configured.");
+            player.setDiscordStatus("Local monitor only - no Discord credentials configured.");
         }
     }
 }
@@ -459,8 +533,8 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
 {
     if (!settings.hasDiscordCredentials())
     {
-        if (auto* player = mainWindow->getPlayerComponent())
-            player->setDiscordStatus("Local monitor only - no Discord credentials configured.");
+        if (playerWindow != nullptr)
+            playerWindow->getPlayerComponent().setDiscordStatus("Local monitor only - no Discord credentials configured.");
         return;
     }
 
@@ -469,13 +543,12 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
     discordConnector.connectAsync(settings.getBotToken(), settings.getGuildId(), settings.getChannelId(),
         [this](juce::String status)
         {
-            if (mainWindow != nullptr)
-                if (auto* player = mainWindow->getPlayerComponent())
-                    player->setDiscordStatus(status);
+            if (playerWindow != nullptr)
+                playerWindow->getPlayerComponent().setDiscordStatus(status);
         },
         [this](bool success)
         {
-            if (!success || mainWindow == nullptr)
+            if (!success || playerWindow == nullptr)
                 return;
 
             sender = std::make_unique<DiscordAudioSender>(*discordConnector.getVoiceGateway(), discordConnector.getUdpSocket());
@@ -486,14 +559,16 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
             // via the bot. Playing it locally as well doubles everything
             // with a slight offset, which reads as an annoying delay.
             masterEngine.setLocalMonitoring(false);
-            if (auto* player = mainWindow->getPlayerComponent())
-                player->refreshToggleStates();
+            playerWindow->getPlayerComponent().refreshToggleStates();
         });
 }
 
 void InkwyrdAudioApplication::offerRestart()
 {
-    auto options = inkwyrd::dialogOptions(mainWindow.get(), juce::MessageBoxIconType::QuestionIcon,
+    // Only ever called from the discordConnectStarted branch of
+    // completeSetupAndLaunch(), which requires Player to have already
+    // been shown this run - playerWindow is guaranteed to exist here.
+    auto options = inkwyrd::dialogOptions(playerWindow.get(), juce::MessageBoxIconType::QuestionIcon,
                                            "Restart to apply Discord settings",
                                            "Your settings are saved, but Discord settings only take "
                                            "effect when Inkwyrd Audio restarts.\n\n"

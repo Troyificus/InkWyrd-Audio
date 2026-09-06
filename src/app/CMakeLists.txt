@@ -16,14 +16,32 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/InkwyrdAudioApplication.h
     gui/MainWindow.cpp
     gui/MainWindow.h
+    gui/DetachableWindow.cpp
+    gui/DetachableWindow.h
+    gui/WindowLayoutStore.cpp
+    gui/WindowLayoutStore.h
+    gui/WindowSnapping.cpp
+    gui/WindowSnapping.h
     gui/SetupComponent.cpp
     gui/SetupComponent.h
+    gui/PlayerWindow.cpp
+    gui/PlayerWindow.h
     gui/PlayerComponent.cpp
     gui/PlayerComponent.h
+    gui/PlaylistWindow.cpp
+    gui/PlaylistWindow.h
+    gui/NowPlayingTrackListComponent.cpp
+    gui/NowPlayingTrackListComponent.h
+    gui/LibraryWindow.cpp
+    gui/LibraryWindow.h
     gui/PlaylistPanel.cpp
     gui/PlaylistPanel.h
+    gui/SoundboardWindow.cpp
+    gui/SoundboardWindow.h
     gui/SoundboardGridComponent.cpp
     gui/SoundboardGridComponent.h
+    gui/VoiceFxWindow.cpp
+    gui/VoiceFxWindow.h
     gui/VoiceFxComponent.cpp
     gui/VoiceFxComponent.h
     gui/PluginEditorWindow.cpp

@@ -1,34 +1,19 @@
 #include "PlayerComponent.h"
-#include "VoiceFxComponent.h"
 
 namespace
 {
     constexpr int kMargin = 16;
-    constexpr int kLeftColumnWidth = 440;
-    constexpr int kColumnGap = 16;
 }
 
 PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
-                                  SoundboardEngine& soundboardToUse,
                                   MasterEngine& masterEngineToUse,
-                                  PluginScanner& scannerToUse,
-                                  PluginChain& voiceChainToUse,
-                                  PlaylistLibrary& libraryToUse,
-                                  SoundboardLayout& soundboardLayoutToUse,
-                                  TrackSettingsStore& trackGainsToUse,
-                                  std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
-                                  std::function<void()> onSoundboardLayoutChangedToUse,
-                                  std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
+                                  std::function<void()> onToggleVoiceFxToUse,
+                                  std::function<void()> onToggleSoundboardToUse,
                                   std::function<void()> onSettingsClickedToUse)
     : playlist(playlistToUse),
-      soundboard(soundboardToUse),
       masterEngine(masterEngineToUse),
-      scanner(scannerToUse),
-      voiceChain(voiceChainToUse),
-      playlistPanel(libraryToUse, playlistToUse, trackGainsToUse,
-                     std::move(onActivatePlaylistToUse),
-                     std::move(onPlaylistEditedToUse)),
-      soundboardGrid(soundboardToUse, soundboardLayoutToUse, std::move(onSoundboardLayoutChangedToUse))
+      onToggleVoiceFx(std::move(onToggleVoiceFxToUse)),
+      onToggleSoundboard(std::move(onToggleSoundboardToUse))
 {
     nowPlayingLabel.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));
     addAndMakeVisible(nowPlayingLabel);
@@ -184,35 +169,26 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     addAndMakeVisible(masterVolumeSlider);
 
     addAndMakeVisible(voiceFxButton);
-    voiceFxButton.onClick = [this] { showVoiceFxWindow(); };
+    voiceFxButton.onClick = [this] { if (onToggleVoiceFx) onToggleVoiceFx(); };
+
+    addAndMakeVisible(soundboardButton);
+    soundboardButton.onClick = [this] { if (onToggleSoundboard) onToggleSoundboard(); };
 
     addAndMakeVisible(settingsButton);
     settingsButton.onClick = [onSettingsClickedToUse] { if (onSettingsClickedToUse) onSettingsClickedToUse(); };
-
-    addAndMakeVisible(playlistPanel);
-    addAndMakeVisible(soundboardGrid);
 
     startTimer(500);
 
     // setContentOwned(..., true) resizes the window to fit this
     // component's own size, so an explicit size here IS the window size.
-    setSize(1200, 760);
-}
-
-PlayerComponent::~PlayerComponent()
-{
-    if (voiceFxWindow != nullptr)
-        delete voiceFxWindow.getComponent();
+    // Tall enough for every row PLUS the warning banner and monitor hint
+    // both showing at once - the worst case, not just the common one.
+    setSize(640, 320);
 }
 
 void PlayerComponent::setDiscordStatus(const juce::String& text)
 {
     discordStatusLabel.setText(text, juce::dontSendNotification);
-}
-
-void PlayerComponent::setPluginListChangedCallback(std::function<void()> callback)
-{
-    onPluginListChanged = std::move(callback);
 }
 
 void PlayerComponent::setMasterVolume(float volume)
@@ -307,53 +283,12 @@ void PlayerComponent::setWarningBanner(const juce::String& text)
     resized(); // the banner's presence changes how much height everything below it gets
 }
 
-void PlayerComponent::refreshSoundboard()
-{
-    soundboardGrid.refresh();
-}
-
-void PlayerComponent::setPlayingPlaylistId(const juce::Uuid& id)
-{
-    playlistPanel.setPlayingPlaylistId(id);
-}
-
-void PlayerComponent::showVoiceFxWindow()
-{
-    if (voiceFxWindow != nullptr)
-    {
-        // Already open - focus it rather than stacking a second copy.
-        voiceFxWindow->toFront(true);
-        return;
-    }
-
-    juce::DialogWindow::LaunchOptions options;
-    options.dialogTitle = "Voice FX";
-    options.content.setOwned(new VoiceFxComponent(scanner, voiceChain,
-                                                   [this] { if (onPluginListChanged) onPluginListChanged(); }));
-    options.componentToCentreAround = this;
-    options.dialogBackgroundColour = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
-    options.escapeKeyTriggersCloseButton = true;
-    options.useNativeTitleBar = true;
-    options.resizable = true;
-
-    voiceFxWindow = options.launchAsync();
-}
-
 void PlayerComponent::timerCallback()
 {
     auto text = "Now playing: " + playlist.getCurrentTrackName();
     if (playlist.isCrossfading())
         text += " (crossfading)";
     nowPlayingLabel.setText(text, juce::dontSendNotification);
-
-    // Only repaint the track list when the track actually changed - this
-    // ticks twice a second and the list can be long.
-    auto current = playlist.getCurrentTrackFile();
-    if (current != lastSeenTrack)
-    {
-        lastSeenTrack = current;
-        playlistPanel.repaint();
-    }
 
     // Shuffle/mute can also change via the Stream Deck plugin's
     // ControlServer commands, and monitoring flips off when Discord
@@ -428,11 +363,6 @@ void PlayerComponent::resized()
     buttonRow.removeFromLeft(8);
     shuffleButton.setBounds(buttonRow.removeFromLeft(110));
 
-    voiceFxButton.setBounds(buttonRow.removeFromRight(110));
-    buttonRow.removeFromRight(12);
-    masterVolumeSlider.setBounds(buttonRow.removeFromRight(180));
-    masterVolumeCaption.setBounds(buttonRow.removeFromRight(56));
-
     area.removeFromTop(8);
 
     // Row two is how the app behaves - set once and mostly left alone.
@@ -445,17 +375,25 @@ void PlayerComponent::resized()
     crossfadeToggle.setBounds(settingsRow.removeFromLeft(46));
     settingsRow.removeFromLeft(4);
     crossfadeSlider.setBounds(settingsRow.removeFromLeft(140));
-    settingsRow.removeFromLeft(18);
-    loopCaption.setBounds(settingsRow.removeFromLeft(66));
-    loopToggle.setBounds(settingsRow.removeFromLeft(46));
-    settingsRow.removeFromLeft(4);
-    loopGapSlider.setBounds(settingsRow.removeFromLeft(140));
-    settingsRow.removeFromLeft(18);
-    fadeOutCaption.setBounds(settingsRow.removeFromLeft(70));
-    fadeOutSlider.setBounds(settingsRow.removeFromLeft(140));
-    area.removeFromTop(16);
+    area.removeFromTop(8);
 
-    playlistPanel.setBounds(area.removeFromLeft(kLeftColumnWidth));
-    area.removeFromLeft(kColumnGap);
-    soundboardGrid.setBounds(area);
+    auto loopRow = area.removeFromTop(28);
+    loopCaption.setBounds(loopRow.removeFromLeft(66));
+    loopToggle.setBounds(loopRow.removeFromLeft(46));
+    loopRow.removeFromLeft(4);
+    loopGapSlider.setBounds(loopRow.removeFromLeft(140));
+    loopRow.removeFromLeft(18);
+    fadeOutCaption.setBounds(loopRow.removeFromLeft(70));
+    fadeOutSlider.setBounds(loopRow.removeFromLeft(140));
+    area.removeFromTop(8);
+
+    // Row three: the two satellite-window activators and master volume.
+    auto activatorRow = area.removeFromTop(28);
+    voiceFxButton.setBounds(activatorRow.removeFromLeft(110));
+    activatorRow.removeFromLeft(8);
+    soundboardButton.setBounds(activatorRow.removeFromLeft(110));
+
+    masterVolumeSlider.setBounds(activatorRow.removeFromRight(180));
+    activatorRow.removeFromRight(12);
+    masterVolumeCaption.setBounds(activatorRow.removeFromRight(56));
 }

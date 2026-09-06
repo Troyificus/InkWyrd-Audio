@@ -76,6 +76,19 @@ public:
     bool isSoundboardLayoutMigrated() const;
     void setSoundboardLayoutMigrated(bool migrated);
 
+    // One JSON blob holding every DetachableWindow's bounds+visibility,
+    // keyed by window name. A single string key rather than one per
+    // window/field - PropertiesFile only stores flat scalars, and this
+    // needs a variable-length, variable-window-count structure.
+    juce::String getWindowLayoutJson() const;
+    void setWindowLayoutJson(const juce::String& json);
+
+    // Whether the one-time "union every existing playlist's tracks into
+    // the new master Track Library" migration has run. Same explicit-flag
+    // reasoning as the other two migration flags above.
+    bool isTrackLibraryMigrated() const;
+    void setTrackLibraryMigrated(bool migrated);
+
     bool isPlaylistFolderSet() const;
     bool hasDiscordCredentials() const;
 
