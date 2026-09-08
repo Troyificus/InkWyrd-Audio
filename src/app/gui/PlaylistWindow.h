@@ -17,6 +17,8 @@ public:
 
     NowPlayingTrackListComponent& getTrackList() { return *trackList; }
 
+    void closeButtonPressed() override;
+
 private:
     NowPlayingTrackListComponent* trackList = nullptr; // owned via setContentOwned
 };

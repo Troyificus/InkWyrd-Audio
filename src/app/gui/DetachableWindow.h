@@ -17,6 +17,8 @@
 // only window today) always shows itself regardless, since there is no
 // way to un-hide it yet. Satellite windows added later use it to come
 // back up hidden if that's how the user left them.
+#include "WindowSnapping.h"
+
 class DetachableWindow : public juce::DocumentWindow,
                           private juce::Timer
 {
@@ -28,9 +30,12 @@ public:
     // seen (no saved entry yet) - Player/Playlist/Library want to open
     // on a clean first launch, while Voice FX/Soundboard start hidden so
     // a first run isn't five overlapping windows.
+    // requiredButtons configures title bar buttons (e.g. Master window gets
+    // closeButton | minimizeButton; satellite windows default to closeButton only).
     DetachableWindow(const juce::String& windowName, juce::String windowId,
                       AppSettings& settingsToUse, juce::Rectangle<int> defaultBounds,
-                      bool defaultVisible = true);
+                      bool defaultVisible = true,
+                      int requiredButtons = DocumentWindow::closeButton);
 
     ~DetachableWindow() override;
 
@@ -42,6 +47,9 @@ public:
 
     const juce::String& getWindowId() const { return windowId; }
     bool wasVisibleWhenSaved() const { return restoredVisible; }
+
+    void userTriedToMoveWindow(juce::Rectangle<int> newBounds) override;
+    void closeButtonPressed() override;
 
     void moved() override;
     void resized() override;

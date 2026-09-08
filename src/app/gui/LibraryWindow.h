@@ -32,6 +32,8 @@ public:
     // library list can mark it. Forwarded straight to PlaylistPanel.
     void setPlayingPlaylistId(const juce::Uuid& id);
 
+    void closeButtonPressed() override;
+
 private:
     PlaylistPanel* playlistPanel = nullptr; // owned via setContentOwned
 };

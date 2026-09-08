@@ -18,11 +18,12 @@ namespace
 
 DetachableWindow::DetachableWindow(const juce::String& windowName, juce::String windowIdToUse,
                                     AppSettings& settingsToUse, juce::Rectangle<int> defaultBounds,
-                                    bool defaultVisible)
+                                    bool defaultVisible,
+                                    int requiredButtons)
     : DocumentWindow(windowName,
                       juce::Desktop::getInstance().getDefaultLookAndFeel()
                           .findColour(juce::ResizableWindow::backgroundColourId),
-                      DocumentWindow::allButtons),
+                      requiredButtons),
       windowId(std::move(windowIdToUse)),
       settings(settingsToUse),
       restoredVisible(defaultVisible)
@@ -47,6 +48,33 @@ DetachableWindow::~DetachableWindow()
 {
     stopTimer();
     activeWindows.removeFirstMatchingValue(this);
+}
+
+void DetachableWindow::userTriedToMoveWindow(juce::Rectangle<int> newBounds)
+{
+    juce::Array<juce::Rectangle<int>> obstacles;
+    for (auto* win : activeWindows)
+    {
+        if (win != this && win->isVisible() && !win->isMinimised())
+        {
+            obstacles.add(win->getBounds());
+        }
+    }
+
+    auto* display = juce::Desktop::getInstance().getDisplays().getDisplayForRect(newBounds);
+    auto screenArea = (display != nullptr)
+                          ? display->userArea
+                          : juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+
+    constexpr int kSnapThreshold = 12;
+    auto snapped = inkwyrd::snapRectangle(newBounds, obstacles, screenArea, kSnapThreshold);
+
+    setBounds(snapped);
+}
+
+void DetachableWindow::closeButtonPressed()
+{
+    setVisible(false);
 }
 
 void DetachableWindow::moved()

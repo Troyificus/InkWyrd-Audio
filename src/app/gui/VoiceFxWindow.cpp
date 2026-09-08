@@ -15,7 +15,7 @@ VoiceFxWindow::VoiceFxWindow(AppSettings& settingsToUse, PluginScanner& scanner,
                               std::function<void()> onPluginListChanged)
     // defaultVisible = false: a hideable satellite should open on a
     // clean first launch, not clutter the screen unasked.
-    : DetachableWindow("Voice FX", "voiceFx", settingsToUse, defaultVoiceFxBounds(), false)
+    : DetachableWindow("Voice FX", "voiceFx", settingsToUse, defaultVoiceFxBounds(), false, DocumentWindow::closeButton)
 {
     // VoiceFxComponent sets its own size (820x520) in its constructor,
     // matching defaultVoiceFxBounds() above. false - see PlayerWindow.cpp

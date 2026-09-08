@@ -15,7 +15,8 @@ namespace
 }
 
 MainWindow::MainWindow(const juce::String& name, AppSettings& settingsToUse)
-    : DetachableWindow(name, "main", settingsToUse, defaultMainWindowBounds())
+    : DetachableWindow(name, "main", settingsToUse, defaultMainWindowBounds(), true,
+                       DocumentWindow::closeButton | DocumentWindow::minimizeButton)
 {
     setVisible(true);
 }

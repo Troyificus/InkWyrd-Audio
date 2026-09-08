@@ -17,7 +17,8 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
                             std::function<void()> onToggleVoiceFx,
                             std::function<void()> onToggleSoundboard,
                             std::function<void()> onSettingsClicked)
-    : DetachableWindow("Inkwyrd Audio", "player", settingsToUse, defaultPlayerBounds())
+    : DetachableWindow("Inkwyrd Audio", "player", settingsToUse, defaultPlayerBounds(), true,
+                       DocumentWindow::closeButton | DocumentWindow::minimizeButton)
 {
     auto* component = new PlayerComponent(playlist, masterEngine,
                                            std::move(onToggleVoiceFx),
@@ -34,6 +35,36 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
     // content to fill whatever the window's real size is.
     setContentOwned(component, false);
     setVisible(true);
+}
+
+void PlayerWindow::setMinimised(bool shouldBeMinimised)
+{
+    if (shouldBeMinimised != isMinimised())
+    {
+        if (shouldBeMinimised)
+        {
+            satellitesVisibleBeforeMinimize.clear();
+            for (auto* win : getActiveWindows())
+            {
+                if (win != this && win->isVisible())
+                {
+                    satellitesVisibleBeforeMinimize.add(win);
+                    win->setVisible(false);
+                }
+            }
+        }
+        else
+        {
+            for (auto win : satellitesVisibleBeforeMinimize)
+            {
+                if (win != nullptr)
+                    win->setVisible(true);
+            }
+            satellitesVisibleBeforeMinimize.clear();
+        }
+    }
+
+    DocumentWindow::setMinimised(shouldBeMinimised);
 }
 
 void PlayerWindow::closeButtonPressed()

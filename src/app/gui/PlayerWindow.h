@@ -24,8 +24,10 @@ public:
 
     PlayerComponent& getPlayerComponent() { return *playerComponent; }
 
+    void setMinimised(bool shouldBeMinimised) override;
     void closeButtonPressed() override;
 
 private:
     PlayerComponent* playerComponent = nullptr; // owned via setContentOwned
+    juce::Array<juce::Component::SafePointer<DetachableWindow>> satellitesVisibleBeforeMinimize;
 };

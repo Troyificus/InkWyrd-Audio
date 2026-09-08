@@ -15,7 +15,7 @@ SoundboardWindow::SoundboardWindow(AppSettings& settingsToUse, SoundboardEngine&
                                     SoundboardLayout& soundboardLayout, std::function<void()> onLayoutChanged)
     // defaultVisible = false: a hideable satellite should open on a
     // clean first launch, not clutter the screen unasked.
-    : DetachableWindow("Soundboard", "soundboard", settingsToUse, defaultSoundboardBounds(), false)
+    : DetachableWindow("Soundboard", "soundboard", settingsToUse, defaultSoundboardBounds(), false, DocumentWindow::closeButton)
 {
     auto* grid = new SoundboardGridComponent(soundboard, soundboardLayout, std::move(onLayoutChanged));
     grid->setSize(560, 420);

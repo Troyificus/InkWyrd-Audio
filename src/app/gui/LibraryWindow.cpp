@@ -17,7 +17,7 @@ LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
                               TrackSettingsStore& trackGains,
                               std::function<void(const juce::Uuid&)> onActivatePlaylist,
                               std::function<void(const juce::Uuid&)> onPlaylistEdited)
-    : DetachableWindow("Library", "library", settingsToUse, defaultLibraryBounds())
+    : DetachableWindow("Library", "library", settingsToUse, defaultLibraryBounds(), true, DocumentWindow::closeButton)
 {
     auto* panel = new PlaylistPanel(library, playlist, trackGains,
                                      std::move(onActivatePlaylist),
@@ -36,4 +36,9 @@ void LibraryWindow::setPlayingPlaylistId(const juce::Uuid& id)
 {
     if (playlistPanel != nullptr)
         playlistPanel->setPlayingPlaylistId(id);
+}
+
+void LibraryWindow::closeButtonPressed()
+{
+    setVisible(false);
 }

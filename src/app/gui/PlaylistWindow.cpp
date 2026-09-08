@@ -12,7 +12,7 @@ namespace
 }
 
 PlaylistWindow::PlaylistWindow(AppSettings& settingsToUse, PlaylistEngine& playlist)
-    : DetachableWindow("Playlist", "playlist", settingsToUse, defaultPlaylistBounds())
+    : DetachableWindow("Playlist", "playlist", settingsToUse, defaultPlaylistBounds(), true, DocumentWindow::closeButton)
 {
     auto* component = new NowPlayingTrackListComponent(playlist);
     component->setSize(320, 480);
@@ -23,4 +23,9 @@ PlaylistWindow::PlaylistWindow(AppSettings& settingsToUse, PlaylistEngine& playl
     // setSize() above.
     setContentOwned(component, false);
     setVisible(true);
+}
+
+void PlaylistWindow::closeButtonPressed()
+{
+    setVisible(false);
 }
