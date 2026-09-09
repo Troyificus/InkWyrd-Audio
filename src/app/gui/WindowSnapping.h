@@ -25,4 +25,19 @@ namespace inkwyrd
                                         const juce::Array<juce::Rectangle<int>>& obstacles,
                                         juce::Rectangle<int> screenArea,
                                         int threshold);
+
+    // True when `a` and `b` are docked: flush (within `tolerance`) along one
+    // axis while genuinely OVERLAPPING on the other. The overlap requirement
+    // is the important half - without it two windows that merely clip past
+    // each other's corner, sharing no actual edge, would count as attached
+    // and get dragged around together.
+    bool areRectanglesDocked(juce::Rectangle<int> a, juce::Rectangle<int> b, int tolerance);
+
+    // Indices of every rectangle transitively docked to rectangles[startIndex],
+    // excluding startIndex itself. Transitive on purpose: dragging one window
+    // should carry a whole flush-attached chain (A-B-C moves as one when you
+    // grab A), not just its immediate neighbours.
+    juce::Array<int> findDockedGroup(const juce::Array<juce::Rectangle<int>>& rectangles,
+                                      int startIndex,
+                                      int tolerance);
 }

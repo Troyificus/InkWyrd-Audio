@@ -17,7 +17,9 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
                             std::function<void()> onToggleVoiceFx,
                             std::function<void()> onToggleSoundboard,
                             std::function<void()> onSettingsClicked)
-    : DetachableWindow("Inkwyrd Audio", "player", settingsToUse, defaultPlayerBounds())
+    // The master window is the only one that gets a minimise button.
+    : DetachableWindow("Inkwyrd Audio", "player", settingsToUse, defaultPlayerBounds(), true,
+                        juce::DocumentWindow::closeButton | juce::DocumentWindow::minimiseButton)
 {
     auto* component = new PlayerComponent(playlist, masterEngine,
                                            std::move(onToggleVoiceFx),
@@ -39,4 +41,39 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
 void PlayerWindow::closeButtonPressed()
 {
     juce::JUCEApplication::getInstance()->systemRequestedQuit();
+}
+
+void PlayerWindow::minimisationStateChanged(bool isNowMinimised)
+{
+    DetachableWindow::minimisationStateChanged(isNowMinimised);
+
+    // Idempotent: this can be called for reasons other than a genuine
+    // state flip, and hiding an already-hidden set would lose track of
+    // which satellites to bring back.
+    if (isNowMinimised == satellitesAreHidden)
+        return;
+
+    if (isNowMinimised)
+    {
+        satellitesHiddenOnMinimise.clear();
+
+        for (auto* window : getActiveWindows())
+        {
+            if (window == this || ! window->isVisible())
+                continue;
+
+            satellitesHiddenOnMinimise.add(window);
+            window->setHiddenByMasterMinimise(true);
+        }
+    }
+    else
+    {
+        for (auto& member : satellitesHiddenOnMinimise)
+            if (auto* window = member.getComponent())
+                window->setHiddenByMasterMinimise(false);
+
+        satellitesHiddenOnMinimise.clear();
+    }
+
+    satellitesAreHidden = isNowMinimised;
 }

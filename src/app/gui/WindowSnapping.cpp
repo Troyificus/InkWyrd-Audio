@@ -59,4 +59,61 @@ namespace inkwyrd
 
         return candidate.withPosition(candidate.getX() + deltaX, candidate.getY() + deltaY);
     }
+
+    bool areRectanglesDocked(juce::Rectangle<int> a, juce::Rectangle<int> b, int tolerance)
+    {
+        // Strictly positive overlap, not >= 0: two windows that only just
+        // touch corner-to-corner share a single point, no edge, and moving
+        // one shouldn't drag the other.
+        auto verticalOverlap = juce::jmin(a.getBottom(), b.getBottom()) - juce::jmax(a.getY(), b.getY());
+        auto horizontalOverlap = juce::jmin(a.getRight(), b.getRight()) - juce::jmax(a.getX(), b.getX());
+
+        // Side by side: one's right edge meeting the other's left.
+        if (verticalOverlap > 0
+            && (std::abs(a.getRight() - b.getX()) <= tolerance
+                || std::abs(b.getRight() - a.getX()) <= tolerance))
+            return true;
+
+        // Stacked: one's bottom edge meeting the other's top.
+        if (horizontalOverlap > 0
+            && (std::abs(a.getBottom() - b.getY()) <= tolerance
+                || std::abs(b.getBottom() - a.getY()) <= tolerance))
+            return true;
+
+        return false;
+    }
+
+    juce::Array<int> findDockedGroup(const juce::Array<juce::Rectangle<int>>& rectangles,
+                                      int startIndex,
+                                      int tolerance)
+    {
+        juce::Array<int> group;
+        if (! juce::isPositiveAndBelow(startIndex, rectangles.size()))
+            return group;
+
+        // Breadth/depth doesn't matter here, only reachability - walk out
+        // from the dragged rectangle collecting anything attached to
+        // something already in the group.
+        juce::Array<int> frontier;
+        frontier.add(startIndex);
+
+        while (! frontier.isEmpty())
+        {
+            auto current = frontier.removeAndReturn(frontier.size() - 1);
+
+            for (int i = 0; i < rectangles.size(); ++i)
+            {
+                if (i == startIndex || group.contains(i))
+                    continue;
+
+                if (areRectanglesDocked(rectangles[current], rectangles[i], tolerance))
+                {
+                    group.add(i);
+                    frontier.add(i);
+                }
+            }
+        }
+
+        return group;
+    }
 }

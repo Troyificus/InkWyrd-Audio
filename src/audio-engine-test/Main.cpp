@@ -1165,6 +1165,82 @@ namespace
             check(result.getX() == candidate.getX(), "horizontal position untouched - no x-axis target was close");
         }
 
+        // ---- docking, i.e. what a drag should carry along with it ----
+        constexpr int dockTolerance = 4;
+
+        // Side by side and flush: docked.
+        {
+            Rectangle<int> a(0, 0, 100, 100);
+            Rectangle<int> b(100, 0, 100, 100); // a's right edge == b's left
+            check(inkwyrd::areRectanglesDocked(a, b, dockTolerance), "flush side-by-side windows are docked");
+            check(inkwyrd::areRectanglesDocked(b, a, dockTolerance), "and docking is symmetric");
+        }
+
+        // Stacked and flush: docked.
+        {
+            Rectangle<int> a(0, 0, 100, 100);
+            Rectangle<int> b(0, 100, 100, 100); // a's bottom == b's top
+            check(inkwyrd::areRectanglesDocked(a, b, dockTolerance), "flush stacked windows are docked");
+        }
+
+        // A couple of pixels out, within tolerance: still docked, since a
+        // hand-placed window is rarely exactly flush.
+        {
+            Rectangle<int> a(0, 0, 100, 100);
+            Rectangle<int> b(102, 0, 100, 100);
+            check(inkwyrd::areRectanglesDocked(a, b, dockTolerance), "a 2px gap is still docked");
+        }
+
+        // Clearly apart: not docked.
+        {
+            Rectangle<int> a(0, 0, 100, 100);
+            Rectangle<int> b(400, 0, 100, 100);
+            check(! inkwyrd::areRectanglesDocked(a, b, dockTolerance), "windows far apart are not docked");
+        }
+
+        // THE important negative case: edges align numerically but the
+        // windows share no actual edge - only a corner. Dragging one must
+        // not drag the other.
+        {
+            Rectangle<int> a(0, 0, 100, 100);
+            Rectangle<int> b(100, 100, 100, 100); // touches a only at one point
+            check(! inkwyrd::areRectanglesDocked(a, b, dockTolerance),
+                   "corner-to-corner windows are NOT docked - they share a point, not an edge");
+        }
+
+        // Aligned on one axis but nowhere near on the other.
+        {
+            Rectangle<int> a(0, 0, 100, 100);
+            Rectangle<int> b(100, 500, 100, 100); // x flush, y miles away
+            check(! inkwyrd::areRectanglesDocked(a, b, dockTolerance),
+                   "a flush edge with no overlap on the other axis is not docked");
+        }
+
+        // Transitive chain: dragging A should carry B (touching A) AND C
+        // (touching only B), but not D sitting on its own.
+        {
+            juce::Array<Rectangle<int>> chain;
+            chain.add({ 0, 0, 100, 100 });      // 0: A, the dragged one
+            chain.add({ 100, 0, 100, 100 });    // 1: B, flush against A
+            chain.add({ 200, 0, 100, 100 });    // 2: C, flush against B only
+            chain.add({ 900, 900, 100, 100 });  // 3: D, unattached
+            auto group = inkwyrd::findDockedGroup(chain, 0, dockTolerance);
+            check(group.size() == 2, "a docked chain is followed transitively (A picks up B and C)");
+            check(group.contains(1) && group.contains(2), "and it's the right two");
+            check(! group.contains(3), "an unattached window is left behind");
+            check(! group.contains(0), "the dragged window isn't listed as its own follower");
+        }
+
+        // Nothing attached: empty group, and no crash on a lone window.
+        {
+            juce::Array<Rectangle<int>> lonely;
+            lonely.add({ 0, 0, 100, 100 });
+            check(inkwyrd::findDockedGroup(lonely, 0, dockTolerance).isEmpty(),
+                   "a window with no neighbours carries nothing");
+            check(inkwyrd::findDockedGroup(lonely, 7, dockTolerance).isEmpty(),
+                   "an out-of-range index is handled rather than read off the end");
+        }
+
         std::cout << (failures == 0 ? "SNAP-TEST PASSED" : "SNAP-TEST FAILED")
                    << " (" << failures << " failure(s))" << std::endl;
         return failures == 0 ? 0 : 1;

@@ -24,8 +24,3 @@ VoiceFxWindow::VoiceFxWindow(AppSettings& settingsToUse, PluginScanner& scanner,
     setContentOwned(new VoiceFxComponent(scanner, voiceChain, std::move(onPluginListChanged)), false);
     setVisible(wasVisibleWhenSaved());
 }
-
-void VoiceFxWindow::closeButtonPressed()
-{
-    setVisible(false);
-}

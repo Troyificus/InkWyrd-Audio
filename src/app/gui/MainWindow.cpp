@@ -15,7 +15,12 @@ namespace
 }
 
 MainWindow::MainWindow(const juce::String& name, AppSettings& settingsToUse)
-    : DetachableWindow(name, "main", settingsToUse, defaultMainWindowBounds())
+    // Setup is shown on its own, with every layout window hidden, so
+    // while it's up it IS the main window - it gets a minimise button on
+    // the same reasoning the Player window does. It needs no
+    // satellite-carrying logic precisely because nothing else is showing.
+    : DetachableWindow(name, "main", settingsToUse, defaultMainWindowBounds(), true,
+                        juce::DocumentWindow::closeButton | juce::DocumentWindow::minimiseButton)
 {
     setVisible(true);
 }

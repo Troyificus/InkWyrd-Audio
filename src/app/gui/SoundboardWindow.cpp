@@ -26,8 +26,3 @@ SoundboardWindow::SoundboardWindow(AppSettings& settingsToUse, SoundboardEngine&
     setContentOwned(grid, false);
     setVisible(wasVisibleWhenSaved());
 }
-
-void SoundboardWindow::closeButtonPressed()
-{
-    setVisible(false);
-}

@@ -1301,12 +1301,80 @@ off-screen clamp was verified by writing a deliberately impossible saved
 position (9000,9000) directly into the settings file and confirming the
 window came back on a real, reachable display.
 
+### Phase 2 - magnetism and the master window (shipped)
+
+Windows now snap flush to each other and to screen edges, dragging one
+carries anything docked to it, satellites have no minimise button, and
+minimising the Player window takes every open satellite down with it.
+
+**Three JUCE mechanisms were tried before one worked. The two that
+failed both LOOK correct and one of them compiles cleanly - worth
+knowing about before reaching for them again:**
+
+1. `ComponentBoundsConstrainer` + `setConstrainer()`. JUCE genuinely does
+   route title-bar drags through the constrainer
+   (`ResizableWindow::mouseDrag` -> `ComponentDragger::dragComponent` ->
+   `constrainer->setBoundsForComponent`), so this is the textbook answer
+   and it builds and runs. On Windows it cannot work for MOVES:
+   `HWNDComponentPeer::getConstrainedBounds` takes the constrainer's
+   modified SIZE, then explicitly forces the position back to the
+   requested one (`.withPosition (requestedPhysicalClient.getPosition())`)
+   - repositioning is only honoured for the edges being stretched during
+   a RESIZE. Caught by real drags landing 3px and 7px from a flush edge
+   with the snap silently doing nothing, not by reading the code.
+2. `mouseDown`/`mouseDrag`/`mouseUp` on the window. The Windows peer
+   reports the title bar as `HTCAPTION` (`WM_NCHITTEST` ->
+   `Kind::caption`), so **Windows performs the drag itself and JUCE never
+   sees those events** - drag-start bookkeeping keyed off them never
+   runs at all.
+3. What shipped: `moved()`. It fires throughout a native drag no matter
+   who is driving it. Docked windows are translated live from there, and
+   the snap is applied once movement settles (`kSettleMs` = 150ms after
+   the last `moved()`), because Windows owns the position mid-drag and
+   correcting it every frame produces judder rather than magnetism. Net
+   feel: the group follows in real time, the window lands flush a moment
+   after release.
+
+**The subtle bug in (3), found by instrumentation not inspection**: the
+docked group must be captured from the window's PRE-MOVE rectangle. By
+the time the first `moved()` arrives the window has already travelled
+~5px, which is enough to stop registering as flush against the neighbour
+it was docked to a moment earlier (`kDockTolerance` is 4px), so capturing
+from the current bounds reliably found an empty group and nothing ever
+followed. `lastMovedPosition` still holds the pre-burst position and is
+what the capture tests against.
+
+Geometry lives in `WindowSnapping.h/.cpp` alongside `snapRectangle()`:
+`areRectanglesDocked()` (flush within tolerance on one axis AND genuinely
+overlapping on the other - the overlap half is what stops two windows
+that merely clip past each other's corner from being dragged around
+together) and `findDockedGroup()` (transitive, so A-B-C moves as one).
+Both are pure and covered by `INKWYRD_SNAPTEST=1`, 19 checks including
+the corner-touch negative case.
+
+**Master window behaviour.** Satellites are constructed with
+`closeButton` only; Player and Setup get `closeButton | minimiseButton`.
+Minimise/restore is hooked via `Component::minimisationStateChanged` -
+NOT `DocumentWindow::minimiseButtonPressed`, which only covers the in-app
+button. `ComponentPeer::handleMovedOrResized` drives
+`minimisationStateChanged` whenever the peer's state actually changes, so
+one override covers the button, the taskbar, Win+D and Aero shake alike.
+Verified specifically through the OS path (`ShowWindow SW_MINIMIZE`),
+which is the one an in-app button handler would miss.
+
+**The persistence trap this creates, and the guard for it**: hiding
+satellites on minimise runs through `visibilityChanged()` ->
+`persistNow()`, so a naive version saves every satellite as
+`visible: false` - quit while minimised and they all come back hidden
+next launch. `DetachableWindow::setHiddenByMasterMinimise()` sets a flag
+that `persistNow()` ORs into the saved visibility, so the layout records
+what the user actually chose. Verified by closing one satellite by hand,
+minimising, killing the app while minimised, and relaunching: the three
+hidden-by-minimise windows came back visible and the hand-closed one
+stayed closed.
+
 ### Not yet built
 
-- **Phase 2 - magnetic snapping + custom title bars.** `DetachableWindow`
-  still uses a native/default JUCE title bar; no cross-window snapping
-  exists yet. `snapRectangle()` (Phase 0) is the geometry this will run
-  on.
 - **Phase 3 - the master Track Library.** "A master list of every track
   ever added, independent of which playlist(s) reference it" does not
   exist in the data model today - confirmed by reading

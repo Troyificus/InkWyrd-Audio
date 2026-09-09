@@ -15,11 +15,11 @@
 // ONCE and kept alive for the app's lifetime; the Player window's
 // "Voice FX..." button and this window's own close button both just
 // toggle visibility, so a hide/show cycle keeps everything intact.
+// (Hiding-on-close is DetachableWindow's own default now - satellites
+// don't need to restate it.)
 class VoiceFxWindow : public DetachableWindow
 {
 public:
     VoiceFxWindow(AppSettings& settingsToUse, PluginScanner& scanner, PluginChain& voiceChain,
                    std::function<void()> onPluginListChanged);
-
-    void closeButtonPressed() override;
 };
