@@ -1371,6 +1371,68 @@ session - recorded here so that session doesn't have to rediscover it.
   real GUI correctly (confirmed working by the user, "wonderfully").
   Just needs the hint's wording corrected to match the actual UI, not a
   behaviour change.
+- **Player ("Now Playing") is the master window; satellites should not
+  be independently minimisable.** Follow-up instruction, and it's the
+  intended fix for the vanishing-Soundboard bug above rather than a
+  separate feature: satellite windows (Playlist, Library, Voice FX,
+  Soundboard) should have **only an X** in their title bar - no minimise
+  button at all, since X already means "hide" for them. The **only**
+  minimise button belongs on the Player window, and minimising it should
+  take every open satellite down with it, restoring them all together
+  when it comes back. The user's words: "It's already annoying having to
+  minimise and maximise each window manually."
+  Note when building this: minimising the master by HIDING satellites
+  routes through `DetachableWindow::visibilityChanged()` ->
+  `persistNow()`, so a naive implementation writes `visible: false` into
+  the saved layout for every satellite - quit while minimised and they
+  all come back hidden next launch. The hide needs to bypass (or restore
+  after) visibility persistence. Also note `DocumentWindow::
+  minimiseButtonPressed()` only covers the in-app button; an OS-driven
+  minimise/restore (taskbar click, Win+D, Aero shake) does not route
+  through it at all, so "restore brings them back" needs a path that
+  survives being minimised/restored from outside the app.
+
+### An outside attempt at this (Jules, PR #1) - does not compile, do not merge as-is
+
+The user handed the magnetic-snapping + master-window work to Google's
+Jules agent while this project was idle; it opened PR #1 from branch
+`jules/magnetic-snapping-master-window-10345687088228013337`. Reviewed
+and actually built (Release, MSVC) rather than read: **it does not
+compile - three errors, two of them invented JUCE APIs.** No CI is
+configured on this repo, so nothing caught it before the PR was opened,
+and the PR body claims the features are "implemented" with no mention
+that it was never built. Recording the specifics because the *shape* of
+its approach is partly reusable and the errors are instructive:
+
+- `DetachableWindow::userTriedToMoveWindow(juce::Rectangle<int>)
+  override` - **no such method exists anywhere in JUCE** (grepped all
+  modules, zero hits). Hallucinated. The real mechanism for adjusting
+  bounds mid-drag is a `ComponentBoundsConstrainer` subclass
+  (override `checkBounds()`) installed via
+  `ResizableWindow::setConstrainer()` - which is what this project's own
+  Phase 2 plan already specified.
+- `PlayerWindow::setMinimised(bool) override` - `ResizableWindow::
+  setMinimised` is **not virtual** (`juce_ResizableWindow.h:208`), so it
+  can't be overridden. The virtual hook is
+  `DocumentWindow::minimiseButtonPressed()` (line 213) - with the
+  OS-path caveat noted above.
+- `DocumentWindow::minimizeButton` - wrong spelling; JUCE uses British
+  `minimiseButton` (`juce_DocumentWindow.h:73`).
+
+What IS worth keeping from it: threading a `requiredButtons` argument
+through `DetachableWindow`'s constructor (defaulting to `closeButton`,
+with Player/Main getting `closeButton | minimiseButton`) is the right
+shape for the no-minimise-on-satellites requirement, and its snapping
+call correctly reuses this project's existing
+`inkwyrd::snapRectangle(newBounds, obstacles, screenArea, 12)` with
+sensible obstacle gathering (skips self, hidden and minimised windows).
+What's missing even if it compiled: **no move-as-a-group behaviour** (a
+docked neighbour doesn't follow the window you drag, which is half of
+what "magnetic" was asked for), no tests, no null-guard on
+`getPrimaryDisplay()` where this codebase already has
+`WindowLayoutStore::primaryDisplayArea()` for exactly that, and
+redundant per-class `closeButtonPressed()` overrides now that the base
+class has one.
 
 ## Beta release process
 
