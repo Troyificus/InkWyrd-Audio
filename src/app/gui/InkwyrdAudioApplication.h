@@ -17,6 +17,7 @@
 #include "PlaylistWindow.h"
 #include "SoundboardWindow.h"
 #include "VoiceFxWindow.h"
+#include "TrackLibrary.h"
 #include "TrackSettingsStore.h"
 #include "MasterEngine.h"
 #include "DiscordAudioSender.h"
@@ -78,12 +79,28 @@ private:
     void saveVoicePlugins();
     void migratePlaylistLibraryIfNeeded();
     void migrateSoundboardLayoutIfNeeded();
+
+    // One-time: seed the new master track library from every track the
+    // existing playlists resolve to, so an upgrading user's music is
+    // already there rather than the list starting empty next to full
+    // playlists.
+    void migrateTrackLibraryIfNeeded();
+
     void activatePlaylist(const juce::Uuid& id);
 
     // A playlist's contents changed (files dropped in, a folder added, a
     // linked folder re-scanned). Only matters to the engine if it's the
     // one currently playing.
     void handlePlaylistEdited(const juce::Uuid& id);
+
+    // A different playlist was SELECTED for browsing - the Playlist
+    // window follows this. Never touches playback.
+    void handlePlaylistSelected(const juce::Uuid& id);
+
+    // Double-clicked a track in the Playlist window: play it, activating
+    // its playlist first if that isn't the one already running.
+    void playTrackInPlaylist(const juce::Uuid& playlistId, const juce::File& file);
+
     void updateWarningBanner();
 
     AppSettings settings;
@@ -100,6 +117,7 @@ private:
     PlaylistLibrary library { formatManager };
     SoundboardLayout soundboardLayout { formatManager };
     TrackSettingsStore trackGains;
+    TrackLibrary trackLibrary;
 
     juce::String audioDeviceError; // non-empty if initialiseWithDefaultDevices() failed - see initialise()
 

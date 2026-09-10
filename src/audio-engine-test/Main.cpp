@@ -17,6 +17,8 @@
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
+#include "PlaylistTrackListComponent.h"
+#include "TrackLibrary.h"
 #include "SoundboardLayout.h"
 #include "TrackSettingsStore.h"
 #include "SoundboardGridComponent.h"
@@ -271,6 +273,12 @@ namespace
             // confirmed by reading juce_ComponentPeer.cpp, not assumed),
             // so calling it directly with panel-local coordinates
             // exercises everything except the OS's own drag handoff.
+            //
+            // A drop now lands in the master TRACK LIBRARY, not on a
+            // playlist row. Playlists are assembled FROM the library
+            // (drag onto the Playlist window, or "Add to playlist"), so a
+            // drop that silently edited whichever playlist happened to be
+            // under the pointer would be the odd one out.
             auto notAudio = scratch.getChildFile("notes.txt");
             notAudio.replaceWithText("not an audio file");
 
@@ -279,30 +287,21 @@ namespace
             dropLibrary.loadAll();
 
             auto alphaId = dropLibrary.createPlaylist("Alpha").id;
-            auto betaId = dropLibrary.createPlaylist("Beta").id;
 
             PlaylistEngine dropEngine(formatManager);
             dropEngine.setShuffle(false);
 
-            juce::Uuid editedId;
-            int editCount = 0;
-
             TrackSettingsStore dropGains;
             dropGains.setFile(scratch.getChildFile("drop-gains.json"));
 
-            PlaylistPanel panel(dropLibrary, dropEngine, dropGains,
-                                 [](const juce::Uuid&) {},
-                                 [&](const juce::Uuid& id)
-            {
-                editedId = id;
-                ++editCount;
+            TrackLibrary dropTracks;
+            dropTracks.setFile(scratch.getChildFile("drop-track-library.json"));
+            dropTracks.load();
 
-                // Exactly what InkwyrdAudioApplication::handlePlaylistEdited
-                // does, so the whole chain is under test and not just the
-                // panel's half of it.
-                if (auto* edited = dropLibrary.findById(id))
-                    dropEngine.updateTracksPreservingOrder(dropLibrary.resolve(*edited).files);
-            });
+            PlaylistPanel panel(dropLibrary, dropTracks, dropEngine, dropGains,
+                                 [](const juce::Uuid&) {},
+                                 [](const juce::Uuid&) {},
+                                 [](const juce::Uuid&) {});
 
             panel.setSize(440, 700);
 
@@ -313,44 +312,154 @@ namespace
             check(!panel.isInterestedInFileDrag({ notAudio.getFullPathName() }),
                    "a drag of only non-audio files is refused outright");
 
-            // The panel selects the first playlist on construction, so a
-            // drop that lands away from the playlist rows goes to Alpha.
             juce::StringArray mixedDrop;
             mixedDrop.add(folderTracks[0].getFullPathName());
             mixedDrop.add(notAudio.getFullPathName());
             panel.filesDropped(mixedDrop, 100, 400);
 
-            check(dropLibrary.findById(alphaId)->entries.size() == 1,
-                   "a drop away from the playlist rows goes to the SELECTED playlist");
-            check(dropLibrary.resolve(*dropLibrary.findById(alphaId)).files.size() == 1,
-                   "a non-audio file in the drop is filtered out, not added");
-            check(editedId == alphaId && editCount == 1,
-                   "the drop reports which playlist changed, once");
-            check(dropEngine.getPlayOrder() == juce::Array<juce::File>({ folderTracks[0] }),
-                   "the dropped track reaches the engine, not just the playlist file");
+            check(dropTracks.getNumTracks() == 1, "a dropped audio file lands in the track library");
+            check(dropTracks.contains(folderTracks[0]), "and it's the file that was actually dropped");
+            check(!dropTracks.contains(notAudio), "a non-audio file in the drop is filtered out, not added");
+            check(dropLibrary.findById(alphaId)->entries.isEmpty(),
+                   "a drop does NOT quietly edit a playlist - the library is what receives it");
 
-            // Row 1 of the playlist list: caption (22px) then the list
-            // box, 24px rows - so y=58 is the second row, Beta, which is
-            // NOT the selected one.
-            panel.filesDropped({ folderTracks[1].getFullPathName() }, 100, 58);
+            // Dropping the whole folder brings in everything playable,
+            // and must not duplicate the file already dropped above.
+            panel.filesDropped({ musicFolder.getFullPathName() }, 100, 400);
+            check(dropTracks.getNumTracks() == folderTracks.size(),
+                   "dropping a folder adds every playable file in it, without duplicating one already there");
 
-            check(dropLibrary.findById(betaId)->entries.size() == 1,
-                   "a drop onto a playlist row goes to THAT playlist, not the selected one");
-            check(dropLibrary.findById(alphaId)->entries.size() == 1,
-                   "dropping onto another row leaves the previously edited playlist alone");
-            check(editedId == betaId, "the second drop reports the row it landed on");
+            {
+                TrackLibrary reloaded;
+                reloaded.setFile(scratch.getChildFile("drop-track-library.json"));
+                reloaded.load();
+                check(reloaded.getNumTracks() == folderTracks.size(),
+                       "a dropped file is saved to disk immediately, not just held in memory");
+            }
+        }
 
-            // The engine follows the playlist it's actually playing.
-            check(dropEngine.getPlayOrder() == juce::Array<juce::File>({ folderTracks[1] }),
-                   "editing the playlist being played pushes the new track list into the engine");
+        {
+            // The Playlist window's receiving half: a drop lands in the
+            // playlist being SHOWN. The sending half - dragging a row out
+            // of the Library window - is
+            // DragAndDropContainer::performExternalDragDropOfFiles, an
+            // OS-level drag loop that synthetic mouse input can't drive
+            // (this project has been bitten by synthetic input before,
+            // see CLAUDE.md), so it stays a by-hand check. This covers
+            // everything from the drop onwards, which is where the logic
+            // actually lives.
+            PlaylistLibrary dropLibrary(formatManager);
+            dropLibrary.setDirectory(scratch.getChildFile("track-drop"));
+            dropLibrary.loadAll();
+
+            auto targetId = dropLibrary.createPlaylist("Target").id;
+            auto otherId = dropLibrary.createPlaylist("Other").id;
+
+            PlaylistEngine dropEngine(formatManager);
+
+            juce::Uuid editedId;
+            int editCount = 0;
+
+            PlaylistTrackListComponent list(dropLibrary, dropEngine,
+                                             [&](const juce::Uuid& id) { editedId = id; ++editCount; },
+                                             [](const juce::Uuid&, const juce::File&) {});
+            list.setSize(320, 480);
+
+            check(! list.isInterestedInFileDrag({ folderTracks[0].getFullPathName() }),
+                   "with no playlist shown there is nothing to drop into, so the drag is refused");
+
+            list.setPlaylist(targetId);
+            check(list.isInterestedInFileDrag({ folderTracks[0].getFullPathName() }),
+                   "once a playlist is shown, an audio file is accepted");
+
+            auto notAudioFile = scratch.getChildFile("not-audio.txt");
+            notAudioFile.replaceWithText("nope");
+            check(! list.isInterestedInFileDrag({ notAudioFile.getFullPathName() }),
+                   "a non-audio drag is refused");
+
+            juce::StringArray drop;
+            drop.add(folderTracks[0].getFullPathName());
+            drop.add(notAudioFile.getFullPathName());
+            list.filesDropped(drop, 50, 50);
+
+            check(dropLibrary.findById(targetId)->entries.size() == 1,
+                   "a drop adds the track to the playlist being shown");
+            check(dropLibrary.findById(otherId)->entries.isEmpty(),
+                   "and not to any other playlist");
+            check(editedId == targetId && editCount == 1,
+                   "the drop reports exactly which playlist changed, once");
 
             {
                 PlaylistLibrary reloaded(formatManager);
-                reloaded.setDirectory(scratch.getChildFile("drop"));
+                reloaded.setDirectory(scratch.getChildFile("track-drop"));
                 reloaded.loadAll();
-                auto* beta = reloaded.findById(betaId);
-                check(beta != nullptr && reloaded.resolve(*beta).files.size() == 1,
-                       "a dropped file is saved to disk immediately, not just held in memory");
+                auto* target = reloaded.findById(targetId);
+                check(target != nullptr && reloaded.resolve(*target).files.size() == 1,
+                       "and it's on disk immediately, not just in memory");
+            }
+        }
+
+        {
+            // The master track library on its own: dedup, persistence,
+            // removal, and the newer-schema rule every other store here
+            // follows.
+            auto libraryFile = scratch.getChildFile("track-library-unit.json");
+
+            TrackLibrary tracks;
+            tracks.setFile(libraryFile);
+            tracks.load();
+            check(tracks.getNumTracks() == 0, "a fresh track library is empty rather than failing to load");
+
+            check(tracks.registerTrack(folderTracks[0]), "registering a new track reports that it was new");
+            check(!tracks.registerTrack(folderTracks[0]), "registering the same track again is a no-op");
+            check(tracks.getNumTracks() == 1, "and doesn't duplicate it");
+
+            // Windows paths are case-insensitive, so the same file
+            // reached through a differently-cased path is the same track.
+            juce::File sameFileOtherCase(folderTracks[0].getFullPathName().toUpperCase());
+            check(!tracks.registerTrack(sameFileOtherCase),
+                   "the same path in different case is recognised as the same track");
+            check(tracks.getNumTracks() == 1, "so case alone never creates a second row");
+
+            tracks.registerTracks(folderTracks);
+            check(tracks.getNumTracks() == folderTracks.size(), "registering a batch adds the rest");
+            tracks.save();
+
+            {
+                TrackLibrary reloaded;
+                reloaded.setFile(libraryFile);
+                reloaded.load();
+                check(reloaded.getNumTracks() == folderTracks.size(),
+                       "the library survives a save/load round trip");
+                check(reloaded.contains(folderTracks[1]), "with the right tracks in it");
+            }
+
+            tracks.removeTrack(folderTracks[0]);
+            check(!tracks.contains(folderTracks[0]), "a track can be removed");
+            check(tracks.getNumTracks() == folderTracks.size() - 1, "and only that one goes");
+
+            // Sorted by track name, not insertion order or full path.
+            auto all = tracks.getAllTracks();
+            bool sorted = true;
+            for (int i = 1; i < all.size(); ++i)
+                if (all[i - 1].getFileNameWithoutExtension()
+                        .compareIgnoreCase(all[i].getFileNameWithoutExtension()) > 0)
+                    sorted = false;
+            check(sorted, "the list comes back sorted by track name, so it's findable");
+
+            {
+                // A file from a NEWER version is reported and left alone,
+                // never half-read and written back in an older shape.
+                auto futureFile = scratch.getChildFile("track-library-future.json");
+                futureFile.replaceWithText("{\"schemaVersion\": 99, \"tracks\": [\"nope.wav\"]}");
+                auto before = futureFile.loadFileAsString();
+
+                TrackLibrary future;
+                future.setFile(futureFile);
+                future.load();
+                check(future.getNumTracks() == 0, "a newer schemaVersion is skipped rather than misread");
+                check(!future.getLoadWarnings().isEmpty(), "and reported rather than silently ignored");
+                check(futureFile.loadFileAsString() == before, "the newer file is left untouched on disk");
             }
         }
 
@@ -1360,7 +1469,13 @@ int main(int argc, char* argv[])
             library.addFolderLink(list.id, musicFolder, true);
 
             PlaylistEngine engine(fm);
-            PlaylistPanel panel(library, engine, gains, [](const juce::Uuid&) {}, [](const juce::Uuid&) {});
+            TrackLibrary renderTracks;
+            renderTracks.setFile(scratch.getChildFile("render-track-library.json"));
+            renderTracks.registerTracks(library.scanFolder(musicFolder, true));
+
+            PlaylistPanel panel(library, renderTracks, engine, gains,
+                                 [](const juce::Uuid&) {}, [](const juce::Uuid&) {},
+                                 [](const juce::Uuid&) {});
             panel.setSize(440, 400);
 
             // The popup a volume bar expands into. Rendered here because

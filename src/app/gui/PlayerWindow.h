@@ -39,6 +39,11 @@ public:
     // needs polling and no path is missed.
     void minimisationStateChanged(bool isNowMinimised) override;
 
+    // The master window, and the only one that carries docked windows
+    // along when dragged - satellites can therefore be pulled off the
+    // group freely. See DetachableWindow::carriesDockedWindows().
+    bool carriesDockedWindows() const override { return true; }
+
 private:
     PlayerComponent* playerComponent = nullptr; // owned via setContentOwned
 

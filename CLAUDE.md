@@ -1396,134 +1396,83 @@ minimising, killing the app while minimised, and relaunching: the three
 hidden-by-minimise windows came back visible and the hand-closed one
 stayed closed.
 
+### Phase 3 - the master track library and the window split (shipped)
+
+The Library window's lower pane used to show the SELECTED playlist's
+tracks, which meant clicking between playlists changed that pane while
+the separate Playlist window showed something else entirely - the split
+didn't match what the windows were called. Now:
+
+- **Library window** = created playlists on top, and the master list of
+  every track the app knows about underneath. That list is static: it
+  only changes when tracks are added to or removed from the library.
+- **Playlist window** = the tracks of whichever playlist is SELECTED,
+  following the Library's selection. Selection is still browsing only -
+  activating (double-click / Play) is what starts audio.
+
+**New `src/audio-engine/TrackLibrary.{h,cpp}`** - genuinely new ground,
+not a view over existing data. `PlaylistLibrary` is deliberately "a
+playlist is a list of ENTRIES, not a flat list of files", so before this
+a track existed only inside one particular playlist and there was no way
+to ask what music the app knows about. Modelled on `TrackSettingsStore`
+(one flat table keyed by lowercased path) rather than `PlaylistLibrary`
+(one file per named document), because it's a single set, not a
+collection of documents. `track-library.json`, schema-versioned, atomic
+write, newer-schema files left alone - the same discipline as every
+other store here.
+
+Membership is independent of playlist membership in BOTH directions:
+adding to a playlist registers the file here too, but removing a track
+from the library never touches a playlist that references it. A track
+can therefore vanish from "all tracks" while still playing fine inside a
+playlist - surprising enough to be worth stating in the confirmation
+dialog, which it is.
+
+Migration seeds the library by resolving every existing playlist, once,
+behind the `trackLibraryMigrated` flag (explicit flag, not "is it
+empty?", same as the other two migrations - clearing your library must
+not refill it on the next launch). Verified on a real upgrade: 59 tracks
+seeded from the existing playlists.
+
+**Getting music in and out**: "Add files..."/"Add folder..." add to the
+LIBRARY now, not to a playlist. Tracks get into a playlist by dragging
+them from the master list onto the Playlist window, or with "Add to
+playlist". Deletion exists in both directions at last - "Remove" takes
+tracks out of the library, "Remove from playlist" (or the Delete key)
+takes one out of the shown playlist.
+
+A track that came from a LINKED FOLDER can't be removed individually -
+it exists because the folder does, and removing the entry would silently
+take every other track from that folder with it. That case explains
+itself in a dialog instead of doing something drastic.
+
+**The cross-window drag is a real OS file drag**
+(`DragAndDropContainer::performExternalDragDropOfFiles`), not JUCE's own
+drag-and-drop. A `DragAndDropContainer` only covers its own component
+hierarchy and these are separate desktop windows, so the in-app route
+would never have worked. The upside is that a drag from the Library and
+a drag from Explorer arrive at the Playlist window through exactly the
+same `filesDropped` path rather than being two subtly different ways in.
+
+**What's covered by tests and what isn't**: the receiving half (a drop
+landing in the shown playlist, the wrong playlist staying untouched, the
+edit reaching disk) is in `INKWYRD_SELFTEST`, along with the library's
+dedup/case-insensitivity/round-trip/removal/sorting/newer-schema
+behaviour. The SENDING half - dragging a row out of the Library window -
+is an OS-level modal drag loop that synthetic mouse input can't drive
+(attempted, didn't register; this project has been bitten by synthetic
+input before), so it stays a by-hand check.
+
 ### Not yet built
 
-- **Phase 3 - the master Track Library.** "A master list of every track
-  ever added, independent of which playlist(s) reference it" does not
-  exist in the data model today - confirmed by reading
-  `PlaylistLibrary.h`'s own header comment ("a playlist is a list of
-  ENTRIES, not a flat list of files"). Needs a new `TrackLibrary` class
-  in `src/audio-engine/`, modeled on `TrackSettingsStore` (a flat table)
-  rather than `PlaylistLibrary` (one file per named item), plus a
-  migration unioning every existing playlist's resolved tracks so
-  upgrading users see their current library immediately.
 - **The black/dark-green theme and "digital screen" Now Playing
-  component** - deliberately deferred, see above.
-
-### Real-user feedback from testing beta.10 (not yet acted on)
-
-The user tried the beta.10 build (Phase 0+1 above) and reported the
-following. Explicitly told to hold off acting on it until a future
-session - recorded here so that session doesn't have to rediscover it.
-
-- **Library window's browsing behaviour is the wrong way round from
-  what the user wants**, and it changes the planned Phase 3 shape: today
-  clicking a different playlist in Library's own list changes what its
-  Tracks pane shows (browsing the SELECTED playlist - this is
-  `PlaylistPanel`'s existing, pre-this-project behaviour, untouched by
-  Phase 1). The user wants the opposite split: Library's Tracks pane
-  should be **static** - always the master list of every song added to
-  the app (i.e. this IS the Phase 3 Track Library, arriving sooner than
-  planned) - changing only when songs are added/removed from it, NOT
-  when a different playlist is selected. Clicking a playlist should
-  instead update the **Playlist window's** content to show. That's a
-  real change to the Playlist window's own scope, agreed as
-  display-only-of-whatever's-*playing* for Phase 1 - the user is now
-  describing display-of-whatever's-*selected-for-browsing* instead
-  (or possibly both - needs clarifying, not assuming, before building).
-- **Wants drag-and-drop from the master library into a playlist**, not
-  just the button-based add Phase 3 was planned to ship with first. This
-  confirms the "drag can follow once the layout itself is proven"
-  deferral called out in the Phase 3 plan should probably happen in the
-  SAME pass as the master list itself, not as a true fast-follow -
-  buttons alone apparently don't match the mental model here.
-- **No way to remove a single track from a playlist or the library** -
-  only whole-playlist delete exists today. Worth checking whether
-  `PlaylistLibrary::removeEntry()` (referenced in this project's own
-  plan file for the master-library work) is actually wired to any UI at
-  all currently, or exists engine-side with no caller.
-- **Real bug: minimizing the Soundboard window loses it completely** -
-  no taskbar entry, and clicking the Player window's "Soundboard..."
-  button again does nothing to bring it back. Working theory, NOT yet
-  confirmed by instrumentation (don't trust this without checking):
-  minimizing is a native/iconic state that likely leaves JUCE's own
-  `Component::isVisible()` still reporting `true` (minimized isn't
-  hidden), so the FIRST subsequent activator click does
-  `setVisible(!true)` = `setVisible(false)` - a real hide, destroying
-  the taskbar presence - and it's not obvious a second click's
-  `setVisible(true)` correctly un-minimizes a window whose native peer
-  was hidden while iconic. Needs real repro (minimize, click button,
-  observe `isVisible()`/`isMinimised()` directly) before touching code -
-  guessing the fix without reproducing it first is exactly the kind of
-  thing this project's own testing discipline exists to prevent.
-- **Cosmetic bug in Voice FX**: the chain hint text says "Edit opens the
-  plugin's own window," but there is no separate Edit button - the
-  plugin's own name IS the button, and clicking it already opens its
-  real GUI correctly (confirmed working by the user, "wonderfully").
-  Just needs the hint's wording corrected to match the actual UI, not a
-  behaviour change.
-- **Player ("Now Playing") is the master window; satellites should not
-  be independently minimisable.** Follow-up instruction, and it's the
-  intended fix for the vanishing-Soundboard bug above rather than a
-  separate feature: satellite windows (Playlist, Library, Voice FX,
-  Soundboard) should have **only an X** in their title bar - no minimise
-  button at all, since X already means "hide" for them. The **only**
-  minimise button belongs on the Player window, and minimising it should
-  take every open satellite down with it, restoring them all together
-  when it comes back. The user's words: "It's already annoying having to
-  minimise and maximise each window manually."
-  Note when building this: minimising the master by HIDING satellites
-  routes through `DetachableWindow::visibilityChanged()` ->
-  `persistNow()`, so a naive implementation writes `visible: false` into
-  the saved layout for every satellite - quit while minimised and they
-  all come back hidden next launch. The hide needs to bypass (or restore
-  after) visibility persistence. Also note `DocumentWindow::
-  minimiseButtonPressed()` only covers the in-app button; an OS-driven
-  minimise/restore (taskbar click, Win+D, Aero shake) does not route
-  through it at all, so "restore brings them back" needs a path that
-  survives being minimised/restored from outside the app.
-
-### An outside attempt at this (Jules, PR #1) - does not compile, do not merge as-is
-
-The user handed the magnetic-snapping + master-window work to Google's
-Jules agent while this project was idle; it opened PR #1 from branch
-`jules/magnetic-snapping-master-window-10345687088228013337`. Reviewed
-and actually built (Release, MSVC) rather than read: **it does not
-compile - three errors, two of them invented JUCE APIs.** No CI is
-configured on this repo, so nothing caught it before the PR was opened,
-and the PR body claims the features are "implemented" with no mention
-that it was never built. Recording the specifics because the *shape* of
-its approach is partly reusable and the errors are instructive:
-
-- `DetachableWindow::userTriedToMoveWindow(juce::Rectangle<int>)
-  override` - **no such method exists anywhere in JUCE** (grepped all
-  modules, zero hits). Hallucinated. The real mechanism for adjusting
-  bounds mid-drag is a `ComponentBoundsConstrainer` subclass
-  (override `checkBounds()`) installed via
-  `ResizableWindow::setConstrainer()` - which is what this project's own
-  Phase 2 plan already specified.
-- `PlayerWindow::setMinimised(bool) override` - `ResizableWindow::
-  setMinimised` is **not virtual** (`juce_ResizableWindow.h:208`), so it
-  can't be overridden. The virtual hook is
-  `DocumentWindow::minimiseButtonPressed()` (line 213) - with the
-  OS-path caveat noted above.
-- `DocumentWindow::minimizeButton` - wrong spelling; JUCE uses British
-  `minimiseButton` (`juce_DocumentWindow.h:73`).
-
-What IS worth keeping from it: threading a `requiredButtons` argument
-through `DetachableWindow`'s constructor (defaulting to `closeButton`,
-with Player/Main getting `closeButton | minimiseButton`) is the right
-shape for the no-minimise-on-satellites requirement, and its snapping
-call correctly reuses this project's existing
-`inkwyrd::snapRectangle(newBounds, obstacles, screenArea, 12)` with
-sensible obstacle gathering (skips self, hidden and minimised windows).
-What's missing even if it compiled: **no move-as-a-group behaviour** (a
-docked neighbour doesn't follow the window you drag, which is half of
-what "magnetic" was asked for), no tests, no null-guard on
-`getPrimaryDisplay()` where this codebase already has
-`WindowLayoutStore::primaryDisplayArea()` for exactly that, and
-redundant per-class `closeButtonPressed()` overrides now that the base
-class has one.
+  component** - still deliberately deferred, and now the only thing left
+  from the original Winamp-layout plan.
+- **Reopening a closed Playlist or Library window.** Both hide on close
+  like the other satellites, but only Voice FX and Soundboard have
+  activator buttons on the Player window, so those two are the only ones
+  that can be brought back without restarting. Worth an answer before
+  anyone closes one by accident.
 
 ## Beta release process
 

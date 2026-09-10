@@ -30,8 +30,8 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/PlayerComponent.h
     gui/PlaylistWindow.cpp
     gui/PlaylistWindow.h
-    gui/NowPlayingTrackListComponent.cpp
-    gui/NowPlayingTrackListComponent.h
+    gui/PlaylistTrackListComponent.cpp
+    gui/PlaylistTrackListComponent.h
     gui/LibraryWindow.cpp
     gui/LibraryWindow.h
     gui/PlaylistPanel.cpp

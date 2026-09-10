@@ -185,6 +185,9 @@ void DetachableWindow::moved()
     // such is what caused the runaway described in translateDockedGroup.
     if (isVisible() && ! applyingSnap && ! groupMoveInProgress)
     {
+        // movementInProgress gates the settle-snap, so EVERY window sets
+        // it - satellites still snap flush, they just don't drag the
+        // neighbourhood along while doing it.
         if (! movementInProgress)
         {
             movementInProgress = true;
@@ -195,11 +198,13 @@ void DetachableWindow::moved()
             // registering as flush against the neighbour it was docked
             // to a moment ago. lastMovedPosition still holds where it
             // was sitting before this burst started.
-            captureDockedGroup(getBounds().withPosition(lastMovedPosition));
+            if (carriesDockedWindows())
+                captureDockedGroup(getBounds().withPosition(lastMovedPosition));
         }
 
         // Applied on the first callback too, so the group catches up on
-        // the few pixels the leader had already covered by then.
+        // the few pixels the leader had already covered by then. A no-op
+        // for satellites, whose group is never captured.
         translateDockedGroup(position - lastMovedPosition);
     }
 

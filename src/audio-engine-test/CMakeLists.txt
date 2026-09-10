@@ -10,6 +10,7 @@ target_sources(AudioEngineTest PRIVATE
     # this keeps the drop logic covered by the same headless run as
     # everything else rather than relying on a manual drag.
     ../app/gui/PlaylistPanel.cpp
+    ../app/gui/PlaylistTrackListComponent.cpp
     ../app/gui/SoundboardGridComponent.cpp
     ../app/gui/Dialogs.cpp
     # Pure geometry, no Component/peer needed - covers the magnetic-snap

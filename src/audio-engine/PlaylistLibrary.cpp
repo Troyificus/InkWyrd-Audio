@@ -273,6 +273,11 @@ bool PlaylistLibrary::isPlayableFile(const juce::File& file) const
     return formatManager.findFormatForFileExtension(file.getFileExtension()) != nullptr;
 }
 
+juce::Array<juce::File> PlaylistLibrary::scanFolder(const juce::File& folder, bool recursive)
+{
+    return inkwyrd::scanFolderForAudio(folder, formatManager, recursive);
+}
+
 void PlaylistLibrary::addFiles(const juce::Uuid& id, const juce::Array<juce::File>& files)
 {
     auto* playlist = findById(id);

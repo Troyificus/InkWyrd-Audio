@@ -6,33 +6,43 @@
 
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
+#include "TrackLibrary.h"
 #include "TrackSettingsStore.h"
 
-// Left-hand column: the playlist library on top, the selected playlist's
-// tracks underneath.
+// The Library window: created playlists on top, and underneath the MASTER
+// LIST of every track added to the app.
 //
-// Selecting a playlist only browses it - activating (double-click, or the
-// Play button) is what crossfades the audio over to it. Browsing must
-// never interrupt what's playing mid-session.
+// That lower list used to show the selected playlist's contents, which
+// meant clicking between playlists changed this panel while the separate
+// Playlist window showed something else entirely. The split now matches
+// what the windows are called: this list is the fixed set of all known
+// music and only changes when tracks are added to or removed from it,
+// while the Playlist window follows the selection.
+//
+// Getting music IN happens here ("Add files..." / "Add folder..." add to
+// the library, not to any one playlist). Getting music into a PLAYLIST is
+// a drag from this list onto the Playlist window, or the "Add to
+// playlist" button - which is why this list is a drag source.
 //
 // Also a file drop target for Windows Explorer: audio files and folders
-// dragged anywhere onto this panel are added to the playlist row they
-// were dropped on, or to the selected playlist otherwise. Dropped
-// folders go through the same link-vs-snapshot question the
-// "Add folder..." button asks, so a drag is never a second, subtly
-// different way of doing the same thing.
+// dropped anywhere on this panel are added to the library.
 class PlaylistPanel : public juce::Component,
                        public juce::FileDragAndDropTarget
 {
 public:
     PlaylistPanel(PlaylistLibrary& libraryToUse,
+                   TrackLibrary& trackLibraryToUse,
                    PlaylistEngine& engineToUse,
                    TrackSettingsStore& trackGainsToUse,
                    std::function<void(const juce::Uuid&)> onActivatePlaylist,
                    // Fired with the id of a playlist whose CONTENTS changed,
                    // so the app can push the edit into the engine if it
                    // happens to be the one currently playing.
-                   std::function<void(const juce::Uuid&)> onPlaylistEdited);
+                   std::function<void(const juce::Uuid&)> onPlaylistEdited,
+                   // Fired when the SELECTED playlist changes, so the
+                   // Playlist window can show it. Selection is browsing
+                   // only - it never interrupts playback.
+                   std::function<void(const juce::Uuid&)> onPlaylistSelected);
 
     // Defined in the .cpp: the ListBoxModels below are forward-declared
     // here, and destroying a unique_ptr needs the complete type.
@@ -44,7 +54,6 @@ public:
     // juce::FileDragAndDropTarget
     bool isInterestedInFileDrag(const juce::StringArray& files) override;
     void fileDragEnter(const juce::StringArray& files, int x, int y) override;
-    void fileDragMove(const juce::StringArray& files, int x, int y) override;
     void fileDragExit(const juce::StringArray& files) override;
     void filesDropped(const juce::StringArray& files, int x, int y) override;
 
@@ -52,30 +61,23 @@ public:
     // marked in the list. {} for none.
     void setPlayingPlaylistId(const juce::Uuid& id);
 
-    // Re-read the library and the selected playlist's tracks from disk.
+    juce::Uuid getSelectedPlaylistId() const { return selectedId; }
+
+    // Re-read the playlists and the master track list from disk.
     void refresh();
 
 private:
     class PlaylistListModel;
-    class TrackListModel;
+    class LibraryTrackListModel;
+    class DraggableTrackListBox;
 
     Playlist* getSelectedPlaylist();
     void selectPlaylist(int row);
     void activateSelected();
-    void refreshTracks();
+    void refreshLibraryTracks();
     void updateButtonEnablement();
     void selectRowForSelectedId();
-
-    // Refresh the UI after a playlist's contents changed in memory (no
-    // disk reload - the library's mutators have already saved) and tell
-    // the app about it.
-    void finishEdit(const juce::Uuid& id);
     void notifyEdited(const juce::Uuid& id);
-
-    // Shared by the "Add folder..." button and a folder drop: counts what
-    // the folders contain, asks link-vs-snapshot ONCE for all of them,
-    // then adds them.
-    void addFoldersWithPrompt(const juce::Uuid& id, const juce::Array<juce::File>& folders);
 
     // Opens the volume slider for one track, anchored to its row.
     void showTrackVolumeCallout(int row);
@@ -83,25 +85,31 @@ private:
     // The width a track row is actually painted at - see the .cpp.
     int trackRowWidth();
 
-    int playlistRowAt(int x, int y);
-    void updateDragTarget(int x, int y);
-    void clearDragTarget();
-
     void createNewPlaylist();
-    void addFilesToSelected();
-    void addFolderToSelected();
+    void addFilesToLibrary();
+    void addFolderToLibrary();
+    void addSelectedTracksToPlaylist();
+    void removeSelectedTracksFromLibrary();
     void renameSelected();
     void deleteSelected();
 
+    // Every track currently selected in the master list.
+    juce::Array<juce::File> getSelectedLibraryTracks() const;
+
     PlaylistLibrary& library;
+    TrackLibrary& trackLibrary;
     PlaylistEngine& engine;
     TrackSettingsStore& trackGains;
     std::function<void(const juce::Uuid&)> onActivatePlaylist;
     std::function<void(const juce::Uuid&)> onPlaylistEdited;
+    std::function<void(const juce::Uuid&)> onPlaylistSelected;
 
     juce::Uuid selectedId;
     juce::Uuid playingId;
-    ResolvedPlaylist resolvedTracks;
+
+    // The master list, cached so painting a row doesn't re-sort the whole
+    // library on every repaint.
+    juce::Array<juce::File> libraryTracks;
 
     juce::Label playlistCaption { {}, "Playlists" };
     juce::ListBox playlistListBox;
@@ -109,19 +117,21 @@ private:
 
     juce::TextButton newButton { "New" };
     juce::TextButton playButton { "Play" };
-    juce::TextButton addFilesButton { "Add files..." };
-    juce::TextButton addFolderButton { "Add folder..." };
     juce::TextButton renameButton { "Rename" };
     juce::TextButton deleteButton { "Delete" };
     juce::TextButton refreshButton { "Refresh" };
     juce::TextButton openFolderButton { "Open folder" };
 
-    juce::Label trackCaption { {}, "Tracks" };
-    juce::ListBox trackListBox;
-    std::unique_ptr<TrackListModel> trackModel;
+    juce::Label trackCaption { {}, "All tracks" };
+    std::unique_ptr<DraggableTrackListBox> trackListBox;
+    std::unique_ptr<LibraryTrackListModel> trackModel;
+
+    juce::TextButton addFilesButton { "Add files..." };
+    juce::TextButton addFolderButton { "Add folder..." };
+    juce::TextButton addToPlaylistButton { "Add to playlist" };
+    juce::TextButton removeFromLibraryButton { "Remove" };
 
     std::unique_ptr<juce::FileChooser> activeChooser;
 
     bool dragActive = false;
-    int dragTargetRow = -1; // playlist row a drop would land on, -1 for "the selected one"
 };

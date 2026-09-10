@@ -13,16 +13,19 @@ namespace
 
 LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
                               PlaylistLibrary& library,
+                              TrackLibrary& trackLibrary,
                               PlaylistEngine& playlist,
                               TrackSettingsStore& trackGains,
                               std::function<void(const juce::Uuid&)> onActivatePlaylist,
-                              std::function<void(const juce::Uuid&)> onPlaylistEdited)
+                              std::function<void(const juce::Uuid&)> onPlaylistEdited,
+                              std::function<void(const juce::Uuid&)> onPlaylistSelected)
     : DetachableWindow("Library", "library", settingsToUse, defaultLibraryBounds())
 {
-    auto* panel = new PlaylistPanel(library, playlist, trackGains,
+    auto* panel = new PlaylistPanel(library, trackLibrary, playlist, trackGains,
                                      std::move(onActivatePlaylist),
-                                     std::move(onPlaylistEdited));
-    panel->setSize(440, 600);
+                                     std::move(onPlaylistEdited),
+                                     std::move(onPlaylistSelected));
+    panel->setSize(440, 620);
     playlistPanel = panel;
 
     // false - see PlayerWindow.cpp for why: the window's own (restored

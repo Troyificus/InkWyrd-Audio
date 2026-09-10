@@ -84,6 +84,15 @@ public:
     // override this again to quit the app instead.
     void closeButtonPressed() override;
 
+    // Whether dragging THIS window carries anything docked to it.
+    // Only the master (Player) window does. Satellites deliberately do
+    // not: if every window carried its neighbours, a docked satellite
+    // could never be pulled off the group again - dragging it just took
+    // the whole cluster along, which is exactly how it felt in beta.11.
+    // Winamp's own behaviour, and what was asked for: drag a satellite
+    // to detach it, drag the main window to move everything at once.
+    virtual bool carriesDockedWindows() const { return false; }
+
     void moved() override;
     void resized() override;
     void visibilityChanged() override;

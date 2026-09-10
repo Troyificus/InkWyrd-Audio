@@ -62,7 +62,10 @@ VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
 
     addAndMakeVisible(chainListCaption);
 
-    chainHint.setText("These run on your microphone, in order. Edit opens the plugin's own window.",
+    // Says what the UI actually does: the plugin's NAME is the button
+    // that opens it. There is no separate Edit button, and the old
+    // wording promised one.
+    chainHint.setText("These run on your microphone, in order. Click a plugin to open its own window.",
                        juce::dontSendNotification);
     chainHint.setColour(juce::Label::textColourId, juce::Colours::grey);
     chainHint.setFont(juce::Font(juce::FontOptions(12.0f)));

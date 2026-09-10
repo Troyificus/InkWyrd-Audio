@@ -4,6 +4,7 @@
     SoundboardEngine.cpp
     SoundboardLayout.cpp
     TrackSettingsStore.cpp
+    TrackLibrary.cpp
     Mp3AudioFormat.cpp
     MediaFoundationAudioFormat.cpp
     PlaylistEngine.h
@@ -11,6 +12,7 @@
     SoundboardEngine.h
     SoundboardLayout.h
     TrackSettingsStore.h
+    TrackLibrary.h
     Mp3AudioFormat.h
     MediaFoundationAudioFormat.h
 )

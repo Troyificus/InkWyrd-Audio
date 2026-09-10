@@ -11,10 +11,16 @@ namespace
     }
 }
 
-PlaylistWindow::PlaylistWindow(AppSettings& settingsToUse, PlaylistEngine& playlist)
+PlaylistWindow::PlaylistWindow(AppSettings& settingsToUse,
+                                PlaylistLibrary& library,
+                                PlaylistEngine& playlist,
+                                std::function<void(const juce::Uuid&)> onPlaylistEdited,
+                                std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack)
     : DetachableWindow("Playlist", "playlist", settingsToUse, defaultPlaylistBounds())
 {
-    auto* component = new NowPlayingTrackListComponent(playlist);
+    auto* component = new PlaylistTrackListComponent(library, playlist,
+                                                      std::move(onPlaylistEdited),
+                                                      std::move(onPlayTrack));
     component->setSize(320, 480);
     trackList = component;
 

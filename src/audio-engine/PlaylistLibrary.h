@@ -90,6 +90,12 @@ public:
     // extensions that could drift out of step with the engine's.
     bool isPlayableFile(const juce::File& file) const;
 
+    // Every playable audio file in a folder, by the same rules resolve()
+    // uses. Public so the UI can add a folder's contents to the master
+    // track library without keeping its own copy of the extension list,
+    // which is exactly how the two would drift apart.
+    juce::Array<juce::File> scanFolder(const juce::File& folder, bool recursive);
+
     void addFiles(const juce::Uuid& id, const juce::Array<juce::File>& files);
     void addFolderLink(const juce::Uuid& id, const juce::File& folder, bool recursive);
     void addFolderSnapshot(const juce::Uuid& id, const juce::File& folder, bool recursive);

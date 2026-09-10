@@ -81,6 +81,14 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     migratePlaylistLibraryIfNeeded();
     logPhase("loading playlists");
 
+    // The master track list. Loaded AFTER the playlists, because its
+    // one-time migration seeds itself from them.
+    trackLibrary.setFile(TrackLibrary::getDefaultFile());
+    trackLibrary.load();
+    migrateTrackLibraryIfNeeded();
+    logLine("[App] " + juce::String(trackLibrary.getNumTracks()) + " track(s) in your library.");
+    logPhase("loading the track library");
+
     // Per-track trims, and the master fader position, both restored
     // before anything starts playing so nothing is briefly loud.
     trackGains.setFile(TrackSettingsStore::getDefaultFile());
@@ -170,6 +178,30 @@ void InkwyrdAudioApplication::migrateSoundboardLayoutIfNeeded()
     settings.save(); // AppSettings has no autosave - this call is mandatory
 }
 
+void InkwyrdAudioApplication::migrateTrackLibraryIfNeeded()
+{
+    // An explicit flag, not "is the library empty?" - the same reasoning
+    // as the two migrations above. Someone who deliberately clears every
+    // track out of their library must not have it refilled from their
+    // playlists on the next launch.
+    if (settings.isTrackLibraryMigrated())
+        return;
+
+    juce::Array<juce::File> everything;
+    for (int i = 0; i < library.getNumPlaylists(); ++i)
+        if (auto* playlistToScan = library.getPlaylist(i))
+            everything.addArray(library.resolve(*playlistToScan).files);
+
+    // registerTracks dedupes by lowercased path, so a track in three
+    // playlists still lands here once.
+    auto added = trackLibrary.registerTracks(everything);
+    logLine("[App] Seeded the track library with " + juce::String(added)
+             + " track(s) from existing playlists");
+
+    settings.setTrackLibraryMigrated(true);
+    settings.save(); // AppSettings has no autosave - this call is mandatory
+}
+
 void InkwyrdAudioApplication::activatePlaylist(const juce::Uuid& id)
 {
     auto* target = library.findById(id);
@@ -203,10 +235,42 @@ void InkwyrdAudioApplication::activatePlaylist(const juce::Uuid& id)
 
     if (libraryWindow != nullptr)
         libraryWindow->setPlayingPlaylistId(id);
+
+    // Activating a playlist also brings it into view: playing something
+    // you can't see the contents of would be a strange result.
     if (playlistWindow != nullptr)
-        playlistWindow->getTrackList().setPlayingPlaylistName(target->name);
+        playlistWindow->getTrackList().setPlaylist(id);
 
     updateWarningBanner();
+}
+
+void InkwyrdAudioApplication::handlePlaylistSelected(const juce::Uuid& id)
+{
+    // Selection is browsing. It moves what the Playlist window shows and
+    // deliberately does NOT touch playback - that's what activating
+    // (double-click, or Play) is for.
+    if (playlistWindow != nullptr)
+        playlistWindow->getTrackList().setPlaylist(id);
+}
+
+void InkwyrdAudioApplication::playTrackInPlaylist(const juce::Uuid& playlistId, const juce::File& file)
+{
+    if (library.findById(playlistId) == nullptr)
+        return;
+
+    // Same list that's already running: jump within it, which keeps the
+    // crossfade and the existing shuffle order.
+    if (playlistId == activePlaylistId)
+    {
+        playlist.crossfadeToTrackInCurrentList(file);
+        return;
+    }
+
+    // A different list: switch to it, then jump to the track that was
+    // actually double-clicked rather than wherever the list would have
+    // started on its own.
+    activatePlaylist(playlistId);
+    playlist.crossfadeToTrackInCurrentList(file);
 }
 
 void InkwyrdAudioApplication::handlePlaylistEdited(const juce::Uuid& id)
@@ -230,7 +294,7 @@ void InkwyrdAudioApplication::handlePlaylistEdited(const juce::Uuid& id)
         if (libraryWindow != nullptr)
             libraryWindow->setPlayingPlaylistId({});
         if (playlistWindow != nullptr)
-            playlistWindow->getTrackList().setPlayingPlaylistName({});
+            playlistWindow->getTrackList().setPlaylist({});
         if (playerWindow != nullptr)
             playerWindow->getPlayerComponent().refreshToggleStates();
 
@@ -356,12 +420,16 @@ void InkwyrdAudioApplication::showPlayer()
             },
             [this] { showSetup(); });
 
-        playlistWindow = std::make_unique<PlaylistWindow>(settings, playlist);
+        playlistWindow = std::make_unique<PlaylistWindow>(
+            settings, library, playlist,
+            [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
+            [this](const juce::Uuid& id, const juce::File& file) { playTrackInPlaylist(id, file); });
 
         libraryWindow = std::make_unique<LibraryWindow>(
-            settings, library, playlist, trackGains,
+            settings, library, trackLibrary, playlist, trackGains,
             [this](const juce::Uuid& id) { activatePlaylist(id); },
-            [this](const juce::Uuid& id) { handlePlaylistEdited(id); });
+            [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
+            [this](const juce::Uuid& id) { handlePlaylistSelected(id); });
 
         voiceFxWindow = std::make_unique<VoiceFxWindow>(settings, scanner, voiceChain,
                                                           [this] { saveVoicePlugins(); });
@@ -413,8 +481,13 @@ void InkwyrdAudioApplication::showPlayer()
     if (!activePlaylistId.isNull())
     {
         libraryWindow->setPlayingPlaylistId(activePlaylistId);
-        if (auto* active = library.findById(activePlaylistId))
-            playlistWindow->getTrackList().setPlayingPlaylistName(active->name);
+        playlistWindow->getTrackList().setPlaylist(activePlaylistId);
+    }
+    else
+    {
+        // Nothing playing yet, so show whatever the Library window has
+        // selected rather than leaving the Playlist window blank.
+        playlistWindow->getTrackList().setPlaylist(libraryWindow->getPanel().getSelectedPlaylistId());
     }
 
     updateWarningBanner();

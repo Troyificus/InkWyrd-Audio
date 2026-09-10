@@ -53,6 +53,52 @@ namespace
 }
 
 //==============================================================================
+// A ListBox that can be dragged OUT of, onto the Playlist window.
+//
+// This has to be a real OS-level file drag rather than JUCE's own
+// DragAndDropContainer: a container only covers its own component
+// hierarchy, and the Library and Playlist windows are separate desktop
+// windows. Sending the selection as a file drag also means the Playlist
+// window handles a drag from here and a drag from Explorer through
+// exactly the same path, rather than having two ways in that could
+// behave differently.
+class PlaylistPanel::DraggableTrackListBox : public juce::ListBox
+{
+public:
+    std::function<juce::StringArray()> getFilesToDrag;
+
+    void mouseDrag(const juce::MouseEvent& e) override
+    {
+        // The distance check keeps an ordinary click - including a click
+        // on the volume bar - from being swallowed as a drag.
+        if (! dragInProgress && e.getDistanceFromDragStart() > 8 && getFilesToDrag != nullptr)
+        {
+            auto files = getFilesToDrag();
+
+            if (! files.isEmpty())
+            {
+                dragInProgress = true;
+
+                juce::DragAndDropContainer::performExternalDragDropOfFiles(
+                    files, false, this,
+                    [safeThis = juce::Component::SafePointer<DraggableTrackListBox>(this)]
+                    {
+                        if (safeThis != nullptr)
+                            safeThis->dragInProgress = false;
+                    });
+
+                return;
+            }
+        }
+
+        juce::ListBox::mouseDrag(e);
+    }
+
+private:
+    bool dragInProgress = false;
+};
+
+//==============================================================================
 class PlaylistPanel::PlaylistListModel : public juce::ListBoxModel
 {
 public:
@@ -83,32 +129,36 @@ private:
 };
 
 //==============================================================================
-class PlaylistPanel::TrackListModel : public juce::ListBoxModel
+// The master track list: every track the app knows about, independent of
+// which playlists happen to reference it.
+class PlaylistPanel::LibraryTrackListModel : public juce::ListBoxModel
 {
 public:
-    explicit TrackListModel(PlaylistPanel& ownerToUse) : owner(ownerToUse) {}
+    explicit LibraryTrackListModel(PlaylistPanel& ownerToUse) : owner(ownerToUse) {}
 
-    int getNumRows() override { return owner.resolvedTracks.files.size(); }
+    int getNumRows() override { return owner.libraryTracks.size(); }
 
     void paintListBoxItem(int row, juce::Graphics& g, int width, int height, bool selected) override
     {
-        if (!juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()))
+        if (! juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
             return;
 
-        auto file = owner.resolvedTracks.files[row];
+        auto file = owner.libraryTracks[row];
 
         if (selected)
             g.fillAll(juce::Colours::white.withAlpha(0.12f));
 
         auto playing = file == owner.engine.getCurrentTrackFile();
-        g.setColour(playing ? juce::Colours::lightgreen : juce::Colours::white);
+        auto missing = ! file.existsAsFile();
+
+        auto textColour = missing ? juce::Colours::orange
+                                  : (playing ? juce::Colours::lightgreen : juce::Colours::white);
 
         auto bar = trackVolumeBarBounds(width, height);
         auto nameArea = juce::Rectangle<int>(6, 0, bar.getX() - 12, height);
 
-        // A custom fade is worth saying on the row. Otherwise it is
-        // invisible until you open the slider, and "why does this one
-        // hand over so slowly" is a horrible thing to have to hunt for.
+        // A custom fade is worth saying on the row - otherwise it's
+        // invisible until you open the slider.
         auto fadeSeconds = owner.trackGains.getFadeSeconds(file);
         if (fadeSeconds > 0.0)
         {
@@ -118,35 +168,38 @@ public:
             g.drawText(juce::String(fadeSeconds, 1) + "s fade", suffixArea,
                         juce::Justification::centredRight, false);
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
-            g.setColour(playing ? juce::Colours::lightgreen : juce::Colours::white);
         }
 
-        g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   ")) + file.getFileNameWithoutExtension(),
+        g.setColour(textColour);
+        g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   "))
+                        + file.getFileNameWithoutExtension()
+                        + (missing ? juce::String("   (missing)") : juce::String()),
                     nameArea, juce::Justification::centredLeft, true);
-
 
         drawTrackGainBar(g, bar.toFloat(), owner.trackGains.getGainDb(file));
     }
 
     void listBoxItemClicked(int row, const juce::MouseEvent& event) override
     {
-        if (!juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()))
+        if (! juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
             return;
 
-        // Clicking the bar (or right-clicking anywhere on the row) adjusts
-        // the track's level instead of just selecting it. The hit area is
-        // wider than the bar looks - it is only five pixels tall.
+        // Clicking the bar (or right-clicking anywhere on the row)
+        // adjusts the track's level instead of just selecting it.
         auto bar = trackVolumeBarBounds(owner.trackRowWidth(), kRowHeight).expanded(4, 8);
 
         if (event.mods.isPopupMenu() || bar.contains(event.getPosition()))
             owner.showTrackVolumeCallout(row);
     }
 
-    void listBoxItemDoubleClicked(int row, const juce::MouseEvent&) override
+    void selectedRowsChanged(int) override { owner.updateButtonEnablement(); }
+
+    void listBoxItemDoubleClicked(int, const juce::MouseEvent&) override
     {
-        if (juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()))
-            owner.engine.crossfadeToTrackInCurrentList(owner.resolvedTracks.files[row]);
+        owner.addSelectedTracksToPlaylist();
     }
+
+    void deleteKeyPressed(int) override { owner.removeSelectedTracksFromLibrary(); }
 
 private:
     PlaylistPanel& owner;
@@ -154,49 +207,67 @@ private:
 
 //==============================================================================
 PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
+                              TrackLibrary& trackLibraryToUse,
                               PlaylistEngine& engineToUse,
                               TrackSettingsStore& trackGainsToUse,
                               std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
-                              std::function<void(const juce::Uuid&)> onPlaylistEditedToUse)
+                              std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
+                              std::function<void(const juce::Uuid&)> onPlaylistSelectedToUse)
     : library(libraryToUse),
+      trackLibrary(trackLibraryToUse),
       engine(engineToUse),
       trackGains(trackGainsToUse),
       onActivatePlaylist(std::move(onActivatePlaylistToUse)),
-      onPlaylistEdited(std::move(onPlaylistEditedToUse))
+      onPlaylistEdited(std::move(onPlaylistEditedToUse)),
+      onPlaylistSelected(std::move(onPlaylistSelectedToUse))
 {
     playlistModel = std::make_unique<PlaylistListModel>(*this);
-    trackModel = std::make_unique<TrackListModel>(*this);
+    trackModel = std::make_unique<LibraryTrackListModel>(*this);
+    trackListBox = std::make_unique<DraggableTrackListBox>();
 
     addAndMakeVisible(playlistCaption);
     playlistListBox.setModel(playlistModel.get());
     playlistListBox.setRowHeight(kRowHeight);
     addAndMakeVisible(playlistListBox);
 
-    for (auto* button : { &newButton, &playButton, &addFilesButton, &addFolderButton,
-                           &renameButton, &deleteButton, &refreshButton, &openFolderButton })
+    for (auto* button : { &newButton, &playButton, &renameButton, &deleteButton,
+                           &refreshButton, &openFolderButton,
+                           &addFilesButton, &addFolderButton,
+                           &addToPlaylistButton, &removeFromLibraryButton })
         addAndMakeVisible(button);
 
     newButton.onClick = [this] { createNewPlaylist(); };
     playButton.onClick = [this] { activateSelected(); };
-    addFilesButton.onClick = [this] { addFilesToSelected(); };
-    addFolderButton.onClick = [this] { addFolderToSelected(); };
     renameButton.onClick = [this] { renameSelected(); };
     deleteButton.onClick = [this] { deleteSelected(); };
     refreshButton.onClick = [this]
     {
         // Refresh exists to pick up files added to a LINKED folder since
         // the playlist was loaded, so it has to reach the engine too -
-        // otherwise re-scanning updates the track list on screen while
-        // the thing actually playing carries on with the old files.
+        // otherwise re-scanning updates what's on screen while the thing
+        // actually playing carries on with the old files.
         refresh();
         notifyEdited(playingId);
     };
     openFolderButton.onClick = [this] { library.getDirectory().startAsProcess(); };
 
+    addFilesButton.onClick = [this] { addFilesToLibrary(); };
+    addFolderButton.onClick = [this] { addFolderToLibrary(); };
+    addToPlaylistButton.onClick = [this] { addSelectedTracksToPlaylist(); };
+    removeFromLibraryButton.onClick = [this] { removeSelectedTracksFromLibrary(); };
+
     addAndMakeVisible(trackCaption);
-    trackListBox.setModel(trackModel.get());
-    trackListBox.setRowHeight(kRowHeight);
-    addAndMakeVisible(trackListBox);
+    trackListBox->setModel(trackModel.get());
+    trackListBox->setRowHeight(kRowHeight);
+    trackListBox->setMultipleSelectionEnabled(true);
+    trackListBox->getFilesToDrag = [this]
+    {
+        juce::StringArray paths;
+        for (const auto& file : getSelectedLibraryTracks())
+            paths.add(file.getFullPathName());
+        return paths;
+    };
+    addAndMakeVisible(trackListBox.get());
 
     refresh();
 }
@@ -205,7 +276,7 @@ PlaylistPanel::~PlaylistPanel()
 {
     // Models outlive the ListBoxes they're attached to otherwise.
     playlistListBox.setModel(nullptr);
-    trackListBox.setModel(nullptr);
+    trackListBox->setModel(nullptr);
 }
 
 void PlaylistPanel::setPlayingPlaylistId(const juce::Uuid& id)
@@ -227,8 +298,27 @@ void PlaylistPanel::selectPlaylist(int row)
     if (auto* playlist = library.getPlaylist(row))
         selectedId = playlist->id;
 
-    refreshTracks();
     updateButtonEnablement();
+
+    // Browsing only - this tells the Playlist window what to display and
+    // never touches playback.
+    if (onPlaylistSelected)
+        onPlaylistSelected(selectedId);
+}
+
+juce::Array<juce::File> PlaylistPanel::getSelectedLibraryTracks() const
+{
+    juce::Array<juce::File> selected;
+
+    auto rows = trackListBox->getSelectedRows();
+    for (int i = 0; i < rows.size(); ++i)
+    {
+        auto row = rows[i];
+        if (juce::isPositiveAndBelow(row, libraryTracks.size()))
+            selected.add(libraryTracks[row]);
+    }
+
+    return selected;
 }
 
 int PlaylistPanel::trackRowWidth()
@@ -238,16 +328,16 @@ int PlaylistPanel::trackRowWidth()
     // relative to the ROW. Hit-testing against the ListBox width instead
     // would put the clickable area a scrollbar's width to the right of
     // the bar you can actually see.
-    auto& scrollBar = trackListBox.getVerticalScrollBar();
-    return trackListBox.getWidth() - (scrollBar.isVisible() ? scrollBar.getWidth() : 0);
+    auto& scrollBar = trackListBox->getVerticalScrollBar();
+    return trackListBox->getWidth() - (scrollBar.isVisible() ? scrollBar.getWidth() : 0);
 }
 
 void PlaylistPanel::showTrackVolumeCallout(int row)
 {
-    if (!juce::isPositiveAndBelow(row, resolvedTracks.files.size()))
+    if (! juce::isPositiveAndBelow(row, libraryTracks.size()))
         return;
 
-    auto file = resolvedTracks.files[row];
+    auto file = libraryTracks[row];
 
     auto content = std::make_unique<VolumeCallout>(
         file.getFileNameWithoutExtension(),
@@ -264,7 +354,7 @@ void PlaylistPanel::showTrackVolumeCallout(int row)
         // Audible straight away if this track happens to be the one
         // playing, rather than only from its next play.
         engine.refreshTrackGains();
-        trackListBox.repaint();
+        trackListBox->repaint();
     });
 
     content->addFadeControl(trackGains.getFadeSeconds(file),
@@ -278,13 +368,13 @@ void PlaylistPanel::showTrackVolumeCallout(int row)
         // the moment a transition begins, so the next one already uses
         // this. Only the row's readout needs refreshing.
         trackGains.setFadeSeconds(file, seconds);
-        trackListBox.repaint();
+        trackListBox->repaint();
     });
 
     // Anchored to the row itself, so it is obvious which track is being
     // adjusted when several have been turned down.
-    auto rowArea = trackListBox.getRowPosition(row, true)
-                        .translated(trackListBox.getX(), trackListBox.getY());
+    auto rowArea = trackListBox->getRowPosition(row, true)
+                        .translated(trackListBox->getX(), trackListBox->getY());
 
     juce::CallOutBox::launchAsynchronously(std::move(content), rowArea, this);
 }
@@ -299,8 +389,7 @@ void PlaylistPanel::refresh()
     // updateRowAndSelection in juce_ListBox.cpp), so a rename - same row,
     // same selection, different text - left the old name on screen until
     // something else forced a repaint, like clicking a different
-    // playlist. The track list has always called repaint() explicitly for
-    // the same reason.
+    // playlist.
     playlistListBox.repaint();
 
     // Keep the selection if that playlist still exists, otherwise fall
@@ -310,8 +399,17 @@ void PlaylistPanel::refresh()
             selectedId = first->id;
 
     selectRowForSelectedId();
-    refreshTracks();
+    refreshLibraryTracks();
     updateButtonEnablement();
+}
+
+void PlaylistPanel::refreshLibraryTracks()
+{
+    libraryTracks = trackLibrary.getAllTracks();
+    trackCaption.setText("All tracks (" + juce::String(libraryTracks.size()) + ")",
+                          juce::dontSendNotification);
+    trackListBox->updateContent();
+    trackListBox->repaint();
 }
 
 void PlaylistPanel::selectRowForSelectedId()
@@ -323,45 +421,20 @@ void PlaylistPanel::selectRowForSelectedId()
 
 void PlaylistPanel::notifyEdited(const juce::Uuid& id)
 {
-    if (onPlaylistEdited && !id.isNull())
+    if (onPlaylistEdited && ! id.isNull())
         onPlaylistEdited(id);
-}
-
-void PlaylistPanel::finishEdit(const juce::Uuid& id)
-{
-    // No loadAll() here: every library mutator has already written to
-    // disk, and re-reading would throw away the in-memory state for no
-    // gain (and invalidate every Playlist* the caller might still hold).
-    playlistListBox.updateContent();
-    selectRowForSelectedId();
-    refreshTracks();
-    updateButtonEnablement();
-    notifyEdited(id);
-}
-
-void PlaylistPanel::refreshTracks()
-{
-    if (auto* playlist = getSelectedPlaylist())
-    {
-        resolvedTracks = library.resolve(*playlist);
-        trackCaption.setText("Tracks (" + juce::String(resolvedTracks.files.size()) + ")",
-                              juce::dontSendNotification);
-    }
-    else
-    {
-        resolvedTracks = {};
-        trackCaption.setText("Tracks", juce::dontSendNotification);
-    }
-
-    trackListBox.updateContent();
-    trackListBox.repaint();
 }
 
 void PlaylistPanel::updateButtonEnablement()
 {
-    auto hasSelection = getSelectedPlaylist() != nullptr;
-    for (auto* button : { &playButton, &addFilesButton, &addFolderButton, &renameButton, &deleteButton })
-        button->setEnabled(hasSelection);
+    auto hasPlaylist = getSelectedPlaylist() != nullptr;
+    playButton.setEnabled(hasPlaylist);
+    renameButton.setEnabled(hasPlaylist);
+    deleteButton.setEnabled(hasPlaylist);
+
+    auto hasTracks = ! getSelectedLibraryTracks().isEmpty();
+    addToPlaylistButton.setEnabled(hasTracks && hasPlaylist);
+    removeFromLibraryButton.setEnabled(hasTracks);
 }
 
 void PlaylistPanel::activateSelected()
@@ -376,103 +449,126 @@ void PlaylistPanel::createNewPlaylist()
     auto& created = library.createPlaylist("New playlist");
     selectedId = created.id;
     refresh();
+
+    if (onPlaylistSelected)
+        onPlaylistSelected(selectedId);
 }
 
-void PlaylistPanel::addFilesToSelected()
+void PlaylistPanel::addFilesToLibrary()
 {
-    auto* playlist = getSelectedPlaylist();
-    if (playlist == nullptr)
-        return;
+    activeChooser = std::make_unique<juce::FileChooser>(
+        "Add music to your library",
+        juce::File::getSpecialLocation(juce::File::userMusicDirectory));
 
-    auto id = playlist->id;
-    activeChooser = std::make_unique<juce::FileChooser>("Add audio files to " + playlist->name);
     activeChooser->launchAsync(juce::FileBrowserComponent::openMode
                                    | juce::FileBrowserComponent::canSelectFiles
                                    | juce::FileBrowserComponent::canSelectMultipleItems,
-                                [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this), id]
+                                [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this)]
                                 (const juce::FileChooser& chooser)
     {
-        auto results = chooser.getResults();
-        if (results.isEmpty() || safeThis == nullptr)
-            return; // the panel was replaced (Settings) while the chooser was open
+        if (safeThis == nullptr)
+            return;
 
-        library.addFiles(id, results);
-        finishEdit(id);
+        juce::Array<juce::File> playable;
+        for (const auto& file : chooser.getResults())
+            if (library.isPlayableFile(file))
+                playable.add(file);
+
+        if (playable.isEmpty())
+            return;
+
+        trackLibrary.registerTracks(playable);
+        refreshLibraryTracks();
     });
 }
 
-void PlaylistPanel::addFolderToSelected()
+void PlaylistPanel::addFolderToLibrary()
+{
+    activeChooser = std::make_unique<juce::FileChooser>(
+        "Add a folder of music to your library",
+        juce::File::getSpecialLocation(juce::File::userMusicDirectory));
+
+    activeChooser->launchAsync(juce::FileBrowserComponent::openMode
+                                   | juce::FileBrowserComponent::canSelectDirectories,
+                                [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this)]
+                                (const juce::FileChooser& chooser)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        auto folder = chooser.getResult();
+        if (! folder.isDirectory())
+            return;
+
+        // Recursive, and through the library's own scanner so this can
+        // never disagree with the engine about what counts as playable.
+        auto found = library.scanFolder(folder, true);
+
+        if (found.isEmpty())
+        {
+            inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::InfoIcon,
+                                  "Nothing to add",
+                                  "No playable audio files were found in that folder.");
+            return;
+        }
+
+        auto added = trackLibrary.registerTracks(found);
+        refreshLibraryTracks();
+
+        if (added == 0)
+            inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::InfoIcon,
+                                  "Already in your library",
+                                  "Every playable file in that folder was already here.");
+    });
+}
+
+void PlaylistPanel::addSelectedTracksToPlaylist()
 {
     auto* playlist = getSelectedPlaylist();
-    if (playlist == nullptr)
+    auto tracks = getSelectedLibraryTracks();
+
+    if (playlist == nullptr || tracks.isEmpty())
         return;
 
     auto id = playlist->id;
-    activeChooser = std::make_unique<juce::FileChooser>("Add a folder to " + playlist->name);
-    activeChooser->launchAsync(juce::FileBrowserComponent::openMode
-                                   | juce::FileBrowserComponent::canSelectDirectories,
-                                [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this), id]
-                                (const juce::FileChooser& chooser)
-    {
-        auto folder = chooser.getResult();
-        if (folder == juce::File() || !folder.isDirectory() || safeThis == nullptr)
-            return;
+    library.addFiles(id, tracks);
+    notifyEdited(id);
 
-        addFoldersWithPrompt(id, { folder });
-    });
+    // The Playlist window is showing this list, so it needs re-reading.
+    if (onPlaylistSelected)
+        onPlaylistSelected(id);
 }
 
-void PlaylistPanel::addFoldersWithPrompt(const juce::Uuid& id, const juce::Array<juce::File>& folders)
+void PlaylistPanel::removeSelectedTracksFromLibrary()
 {
-    if (folders.isEmpty())
+    auto tracks = getSelectedLibraryTracks();
+    if (tracks.isEmpty())
         return;
 
-    // Ask with the track count in hand, so the choice is informed rather
-    // than abstract. Asked ONCE for the whole batch - dragging in five
-    // folders must not mean five identical dialogs.
-    int count = 0;
-    for (const auto& folder : folders)
-    {
-        Playlist probe;
-        PlaylistEntry entry;
-        entry.kind = PlaylistEntry::Kind::folder;
-        entry.path = folder;
-        entry.live = true;
-        entry.recursive = true;
-        probe.entries.add(entry);
-        count += library.resolve(probe).files.size();
-    }
-
-    auto what = folders.size() == 1 ? folders.getFirst().getFullPathName()
-                                     : juce::String(folders.size()) + " folders";
+    auto message = tracks.size() == 1
+                        ? "Remove \"" + tracks[0].getFileNameWithoutExtension() + "\" from your library?"
+                        : "Remove " + juce::String(tracks.size()) + " tracks from your library?";
 
     auto options = inkwyrd::dialogOptions(this, juce::MessageBoxIconType::QuestionIcon,
-                                           folders.size() == 1 ? "Add folder" : "Add folders",
-                                           what + "\n\n"
-                                            + juce::String(count) + " playable file(s) found.\n\n"
-                                            "Keep the folder linked so files added to it later show up "
-                                            "automatically, or add these tracks once so you can remove "
-                                            "them individually?")
-                        .withButton("Keep folder linked")
-                        .withButton("Add these tracks once")
+                                           "Remove from library",
+                                           message + "\n\n"
+                                           "The files themselves aren't touched, and any playlist already "
+                                           "using them keeps them - this only takes them off this list.")
+                        .withButton("Remove")
                         .withButton("Cancel");
 
     juce::AlertWindow::showAsync(options,
-                                  [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this),
-                                   id, folders](int result)
+                                  [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this), tracks]
+                                  (int result)
     {
-        if ((result != 1 && result != 2) || safeThis == nullptr)
+        if (result != 1 || safeThis == nullptr)
             return;
 
-        for (const auto& folder : folders)
-        {
-            if (result == 1)
-                library.addFolderLink(id, folder, true);
-            else
-                library.addFolderSnapshot(id, folder, true);
-        }
+        for (const auto& file : tracks)
+            trackLibrary.removeTrack(file);
 
-        finishEdit(id);
+        refreshLibraryTracks();
+        updateButtonEnablement();
     });
 }
 
@@ -497,7 +593,7 @@ void PlaylistPanel::renameSelected()
             return;
 
         auto newName = owned->getTextEditorContents("name");
-        if (!library.renamePlaylist(id, newName))
+        if (! library.renamePlaylist(id, newName))
         {
             inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::WarningIcon,
                                   "Couldn't rename",
@@ -506,6 +602,9 @@ void PlaylistPanel::renameSelected()
         }
 
         refresh();
+
+        if (onPlaylistSelected)
+            onPlaylistSelected(selectedId);
     }));
 }
 
@@ -520,7 +619,8 @@ void PlaylistPanel::deleteSelected()
                                            "Delete playlist",
                                            "Delete \"" + playlist->name + "\"?\n\n"
                                             "Only the playlist is removed - none of your audio files are "
-                                            "touched, and the playlist file goes to the Recycle Bin.")
+                                            "touched, they stay in your library, and the playlist file goes "
+                                            "to the Recycle Bin.")
                         .withButton("Delete")
                         .withButton("Cancel");
 
@@ -540,19 +640,14 @@ void PlaylistPanel::deleteSelected()
         // copy of the track list and would happily play a deleted
         // playlist forever.
         notifyEdited(id);
+
+        if (onPlaylistSelected)
+            onPlaylistSelected(selectedId);
     });
 }
 
 //==============================================================================
-// Drag and drop from Windows Explorer.
-//
-// Implemented on the panel rather than on either ListBox: JUCE looks for a
-// FileDragAndDropTarget by hit-testing to the deepest component under the
-// pointer and then walking UP through its parents, so one target here
-// catches drops over the playlist list, the track list and the buttons
-// alike - and a drop that lands between the lists still does something
-// sensible instead of being swallowed.
-
+// Drag and drop from Windows Explorer - straight into the library.
 bool PlaylistPanel::isInterestedInFileDrag(const juce::StringArray& files)
 {
     for (const auto& path : files)
@@ -565,127 +660,49 @@ bool PlaylistPanel::isInterestedInFileDrag(const juce::StringArray& files)
     return false;
 }
 
-void PlaylistPanel::fileDragEnter(const juce::StringArray&, int x, int y)
+void PlaylistPanel::fileDragEnter(const juce::StringArray&, int, int)
 {
     dragActive = true;
-    updateDragTarget(x, y);
-}
-
-void PlaylistPanel::fileDragMove(const juce::StringArray&, int x, int y)
-{
-    updateDragTarget(x, y);
+    repaint();
 }
 
 void PlaylistPanel::fileDragExit(const juce::StringArray&)
 {
-    clearDragTarget();
-}
-
-int PlaylistPanel::playlistRowAt(int x, int y)
-{
-    auto local = playlistListBox.getLocalPoint(this, juce::Point<int>(x, y));
-    if (!playlistListBox.getLocalBounds().contains(local))
-        return -1;
-
-    auto row = playlistListBox.getRowContainingPosition(local.x, local.y);
-    return juce::isPositiveAndBelow(row, library.getNumPlaylists()) ? row : -1;
-}
-
-void PlaylistPanel::updateDragTarget(int x, int y)
-{
-    auto row = playlistRowAt(x, y);
-    if (row == dragTargetRow)
-        return;
-
-    dragTargetRow = row;
-    repaint();
-}
-
-void PlaylistPanel::clearDragTarget()
-{
-    if (!dragActive && dragTargetRow < 0)
-        return;
-
     dragActive = false;
-    dragTargetRow = -1;
     repaint();
+}
+
+void PlaylistPanel::filesDropped(const juce::StringArray& files, int, int)
+{
+    dragActive = false;
+    repaint();
+
+    juce::Array<juce::File> toAdd;
+
+    for (const auto& path : files)
+    {
+        juce::File file(path);
+
+        if (file.isDirectory())
+            toAdd.addArray(library.scanFolder(file, true));
+        else if (library.isPlayableFile(file))
+            toAdd.add(file);
+    }
+
+    if (toAdd.isEmpty())
+        return;
+
+    trackLibrary.registerTracks(toAdd);
+    refreshLibraryTracks();
 }
 
 void PlaylistPanel::paintOverChildren(juce::Graphics& g)
 {
-    if (!dragActive)
+    if (! dragActive)
         return;
 
-    g.setColour(juce::Colours::lightgreen);
-
-    if (dragTargetRow >= 0)
-    {
-        // Hovering a specific playlist - show exactly which row gets it,
-        // so a drop is never a guess about where the files went.
-        auto row = playlistListBox.getRowPosition(dragTargetRow, true)
-                        .translated(playlistListBox.getX(), playlistListBox.getY());
-        g.drawRect(row, 2);
-    }
-    else
-    {
-        g.drawRect(getLocalBounds(), 2);
-    }
-}
-
-void PlaylistPanel::filesDropped(const juce::StringArray& paths, int x, int y)
-{
-    auto targetRow = playlistRowAt(x, y);
-    clearDragTarget();
-
-    juce::Array<juce::File> loose, folders;
-    for (const auto& path : paths)
-    {
-        juce::File file(path);
-        if (file.isDirectory())
-            folders.add(file);
-        else if (library.isPlayableFile(file))
-            loose.add(file);
-    }
-
-    if (loose.isEmpty() && folders.isEmpty())
-    {
-        // Say so rather than silently doing nothing - a drop that appears
-        // to work but adds no tracks is worse than a refusal.
-        inkwyrd::showMessage(this, juce::MessageBoxIconType::WarningIcon,
-                              "Nothing to add",
-                              "None of those files are in a format this app can play. Supported: "
-                              "WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A and WMA.");
-        return;
-    }
-
-    // Dropping onto a row targets THAT playlist even if it isn't the
-    // selected one; anywhere else means the selected one.
-    auto* target = targetRow >= 0 ? library.getPlaylist(targetRow) : getSelectedPlaylist();
-
-    if (target == nullptr)
-    {
-        // No playlists at all yet - name a new one after whatever was
-        // dropped, so a first-time drag isn't a dead end.
-        auto name = !folders.isEmpty()
-                        ? folders.getFirst().getFileName()
-                        : (loose.size() == 1 ? loose.getFirst().getFileNameWithoutExtension()
-                                              : juce::String("New playlist"));
-        target = &library.createPlaylist(name);
-    }
-
-    auto id = target->id;
-    selectedId = id;
-
-    if (!loose.isEmpty())
-        library.addFiles(id, loose);
-
-    // finishEdit() runs now for the loose files so they appear straight
-    // away; addFoldersWithPrompt() calls it again once its (async)
-    // link-vs-snapshot question is answered.
-    finishEdit(id);
-
-    if (!folders.isEmpty())
-        addFoldersWithPrompt(id, folders);
+    g.setColour(juce::Colours::lightgreen.withAlpha(0.6f));
+    g.drawRect(getLocalBounds(), 2);
 }
 
 void PlaylistPanel::resized()
@@ -693,10 +710,9 @@ void PlaylistPanel::resized()
     auto area = getLocalBounds();
 
     playlistCaption.setBounds(area.removeFromTop(kCaptionHeight));
-    playlistListBox.setBounds(area.removeFromTop(150));
+    playlistListBox.setBounds(area.removeFromTop(140));
     area.removeFromTop(6);
 
-    // Two rows of four buttons.
     auto layoutButtonRow = [&](std::initializer_list<juce::TextButton*> row)
     {
         auto bounds = area.removeFromTop(kButtonHeight);
@@ -709,10 +725,27 @@ void PlaylistPanel::resized()
         area.removeFromTop(kButtonGap);
     };
 
-    layoutButtonRow({ &newButton, &playButton, &addFilesButton, &addFolderButton });
-    layoutButtonRow({ &renameButton, &deleteButton, &refreshButton, &openFolderButton });
+    layoutButtonRow({ &newButton, &playButton, &renameButton });
+    layoutButtonRow({ &deleteButton, &refreshButton, &openFolderButton });
 
-    area.removeFromTop(6);
+    area.removeFromTop(8);
     trackCaption.setBounds(area.removeFromTop(kCaptionHeight));
-    trackListBox.setBounds(area);
+
+    // The master list's own buttons sit directly under it, so they read
+    // as belonging to that list rather than to the playlists above.
+    auto bottom = area.removeFromBottom(kButtonHeight * 2 + kButtonGap);
+    trackListBox->setBounds(area);
+
+    auto rowOne = bottom.removeFromTop(kButtonHeight);
+    bottom.removeFromTop(kButtonGap);
+
+    auto halfOne = (rowOne.getWidth() - kButtonGap) / 2;
+    addFilesButton.setBounds(rowOne.removeFromLeft(halfOne));
+    rowOne.removeFromLeft(kButtonGap);
+    addFolderButton.setBounds(rowOne);
+
+    auto halfTwo = (bottom.getWidth() - kButtonGap) / 2;
+    addToPlaylistButton.setBounds(bottom.removeFromLeft(halfTwo));
+    bottom.removeFromLeft(kButtonGap);
+    removeFromLibraryButton.setBounds(bottom);
 }
