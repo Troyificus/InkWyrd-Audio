@@ -1524,6 +1524,76 @@ than Playlist/Library being forced open.
   component** - still deliberately deferred, and now the only thing left
   from the original Winamp-layout plan.
 
+## Auto-muting the user in Discord: the RPC spike (answered - it works)
+
+The problem: in a Discord call there is the user, and there is Inkwyrd as
+a separate bot "person". The moment the user's mic goes live through
+Inkwyrd's voice FX, their voice arrives twice. Manually muting yourself
+in Discord every time is the obvious workaround and a bad one.
+
+**Confirmed working**: Inkwyrd can mute the LOCAL Discord client over
+Discord's RPC socket, authorised by the user themselves, with no
+whitelist application. Since every Inkwyrd user creates their own Discord
+application, every user is the OWNER of the app they're authorising -
+which is the case that turns out to be permitted.
+
+Note this is a completely different mechanism from server-muting via
+`PATCH /guilds/{id}/members/{user}`, which is blocked by role hierarchy
+and impossible for a guild owner. This mutes the user's own client
+locally, needs no server permissions, and works in any guild.
+
+- Transport: named pipe `\\.\pipe\discord-ipc-0`, 4-byte LE opcode +
+  4-byte LE length + JSON body. Opcode 0 = HANDSHAKE, 1 = FRAME.
+- HANDSHAKE with `{"v": 1, "client_id": ...}` returns READY and
+  identifies the logged-in user.
+- Then AUTHORIZE with scopes `["rpc", "rpc.voice.write"]`, which puts a
+  consent dialog in front of the user and returns a short-lived OAuth
+  code.
+- `rpc.voice.write` is what `SET_VOICE_SETTINGS` (the actual mute) needs.
+
+### The payload shape is the whole trick, and its error message lies
+
+**Send AUTHORIZE with NO `redirect_uri` field at all.** Discord defaults
+to the first redirect URI registered on the application. The app does
+need one registered - any real https URI; `https://inkwyrd.com/rpc` is
+what this was proven with - but it must not be SENT.
+
+Sending it, even a byte-exact match of the registered one, is refused
+with `code=5000 'Redirect URI cannot be used in the RPC OAuth2
+Authorization flow'`. Userdoccers' RPC reference explains why:
+`redirect_uri` is "only applicable if using the ws transport", and this
+is the IPC transport, where the field simply doesn't belong.
+
+The trap that cost the most time here: with NO redirect URI registered
+on the application, omitting the field returns `Missing "redirect_uri"
+in request`. That reads as "this field is required" and is not what it
+means - it means "there is no registered URI to fall back on". Acting on
+the plain reading sends you down the path of supplying the field, which
+is refused by a *different* message, and the two together look like a
+whitelisting wall. They aren't one. Registering a URI and then not
+sending it is the combination that works.
+
+Also worth knowing: the desktop client caches the application's OAuth
+metadata at startup, so a redirect URI added while Discord is running is
+invisible until a full **Quit Discord** from the tray (closing the window
+leaves it running). Ruled out as the cause here, but it will waste a
+session if it isn't.
+
+### Not yet built
+
+The spike stops at the OAuth code deliberately - that answers the only
+question that could have killed the approach, and it needs no client
+secret. Still to do: exchange the code for a token (this DOES need the
+application's client secret, which belongs in a local file and must
+never be pasted into a chat or committed), persist/refresh it, then send
+`SET_VOICE_SETTINGS` with `{"mute": true}` when the mic goes live and
+restore the user's previous setting when it stops.
+
+Design constraint already agreed: **do not override the user's mic at
+session start.** Plenty of people will never touch the voice FX feature,
+and an app that mutes you in Discord the moment it launches is hostile.
+The mute follows the mic going live, not the session opening.
+
 ## Mic noise suppression: the RNNoise spike (measured, not assumed)
 
 The ask was noise suppression and echo cancellation "as close to
