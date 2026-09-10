@@ -387,10 +387,58 @@ void DetachableWindow::translateDockedGroup(juce::Point<int> delta)
             window->setBounds(window->getBounds().translated(delta.x, delta.y));
 }
 
+void DetachableWindow::applyOwnershipIfNeeded()
+{
+#if JUCE_WINDOWS
+    if (isMasterWindow())
+        return;
+
+    DetachableWindow* master = nullptr;
+    for (auto* window : activeWindows)
+        if (window->isMasterWindow())
+            master = window;
+
+    if (master == nullptr || master == this)
+        return;
+
+    auto* peer = getPeer();
+    auto* masterPeer = master->getPeer();
+    if (peer == nullptr || masterPeer == nullptr)
+        return;
+
+    auto handle = (HWND) peer->getNativeHandle();
+    auto ownerHandle = (HWND) masterPeer->getNativeHandle();
+    if (handle == nullptr || ownerHandle == nullptr)
+        return;
+
+    // GWLP_HWNDPARENT on a top-level window is its OWNER, not its
+    // parent - a genuinely confusing piece of Win32 naming. Re-checked
+    // every time rather than tracked with a flag, because a peer can be
+    // recreated underneath us and would come back unowned.
+    if ((HWND) GetWindowLongPtr(handle, GWLP_HWNDPARENT) == ownerHandle)
+        return;
+
+    SetWindowLongPtr(handle, GWLP_HWNDPARENT, (LONG_PTR) ownerHandle);
+#endif
+}
+
+void DetachableWindow::applyOwnershipToAll()
+{
+    for (auto* window : activeWindows)
+        window->applyOwnershipIfNeeded();
+}
+
 void DetachableWindow::setHiddenByMasterMinimise(bool shouldBeHidden)
 {
     hiddenByMasterMinimise = shouldBeHidden;
     setVisible(! shouldBeHidden);
+
+    // Owned windows come back where Windows left them in the stack, not
+    // necessarily above whatever the user has been using in the
+    // meantime. Being explicit costs nothing and is the difference
+    // between "they all came back" and "most of them did".
+    if (! shouldBeHidden)
+        toFront(false); // false: don't steal keyboard focus from the master
 }
 
 void DetachableWindow::closeButtonPressed()
@@ -428,7 +476,14 @@ void DetachableWindow::visibilityChanged()
     // earliest the hook can be attached - and it has to be re-checked
     // every time, in case the peer was recreated.
     if (isVisible())
+    {
         installNativeHookIfNeeded();
+
+        // Same reasoning as the hook: the native window only exists once
+        // shown, so a satellite reopened later has to be re-owned here
+        // rather than only at startup.
+        applyOwnershipIfNeeded();
+    }
 
     // Not debounced like moved()/resized() - a show/hide toggle is a
     // single deliberate click, not a continuous stream of events.

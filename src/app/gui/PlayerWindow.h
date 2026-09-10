@@ -46,6 +46,12 @@ public:
     // group freely. See DetachableWindow::carriesDockedWindows().
     bool carriesDockedWindows() const override { return true; }
 
+    // Every other window in the layout is a Win32 OWNED window of this
+    // one, which is what keeps them together in z-order. See
+    // DetachableWindow::applyOwnershipToAll() for the bug that motivated
+    // it.
+    bool isMasterWindow() const override { return true; }
+
 private:
     PlayerComponent* playerComponent = nullptr; // owned via setContentOwned
 

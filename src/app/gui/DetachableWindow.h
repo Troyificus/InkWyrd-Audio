@@ -90,6 +90,34 @@ public:
     // to move everything at once.
     virtual bool carriesDockedWindows() const { return false; }
 
+    // Whether this is the window the others belong to. Only the Player
+    // window is. Separate from carriesDockedWindows() despite currently
+    // agreeing with it - one is about dragging, this one is about
+    // z-order and lifetime, and conflating them would make either
+    // harder to change later.
+    virtual bool isMasterWindow() const { return false; }
+
+    // Makes every satellite a Win32 OWNED window of the master.
+    //
+    // Fixes a reported bug with two faces and one cause: satellites were
+    // independent top-level windows, so they had no z-order relationship
+    // to the Player window OR to each other. Grabbing the Player's title
+    // bar raised only the Player - drag it over another app (Discord,
+    // in the report) and the satellites stayed at their old depth,
+    // BEHIND that app. They looked like they had vanished. The same
+    // thing made restoring from minimise unreliable: setVisible(true)
+    // shows a window without raising it, so any satellite that had been
+    // below another app stayed below it and appeared not to come back.
+    // Intermittent in both cases, because it depended entirely on where
+    // the other app happened to sit in the stack.
+    //
+    // Ownership is what Windows provides for exactly this: an owned
+    // window always sits above its owner, the whole group rises together
+    // when any of them is activated, and Windows hides and restores them
+    // with the owner. That last part is also what the app wants anyway -
+    // it's the behaviour the Winamp-style layout was asking for.
+    static void applyOwnershipToAll();
+
     // Called ONLY from the native window-procedure hook. Public because
     // that hook is a free function rather than a member - not part of
     // this class's real interface. `nativeRect` is a Win32 RECT* in
@@ -122,6 +150,11 @@ private:
     // Native drag/resize interception - see the class comment.
     void installNativeHookIfNeeded();
     void removeNativeHook();
+
+    // Makes this window owned by the master, if it isn't already and
+    // both peers exist yet. Cheap and idempotent, so it can be retried
+    // from anywhere a peer might just have appeared.
+    void applyOwnershipIfNeeded();
 
     // Rectangles of the other live windows, in PHYSICAL screen pixels,
     // excluding any this drag is already carrying (a carried window is

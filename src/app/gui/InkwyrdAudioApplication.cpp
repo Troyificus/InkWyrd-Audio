@@ -515,6 +515,12 @@ void InkwyrdAudioApplication::showPlayer()
             soundboardWindow->setVisible(soundboardWasVisibleBeforeSetup);
     }
 
+    // Once, now that every window in the layout exists and has a native
+    // handle. Each window also re-checks its own ownership when it's
+    // shown, which covers a satellite reopened later; this call is what
+    // covers the ones that were already visible at startup.
+    DetachableWindow::applyOwnershipToAll();
+
     auto& player = playerWindow->getPlayerComponent();
 
     // So it can point out that Monitor being off means silence when
