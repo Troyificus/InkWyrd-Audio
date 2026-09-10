@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "AppSettings.h"
+#include "InkwyrdLookAndFeel.h"
 
 // Shared base for every top-level window in the Winamp-style layout
 // (Player, Playlist, Library, Voice FX, Soundboard).
@@ -27,6 +28,26 @@
 //    HTCAPTION, so Windows performs the drag itself and JUCE never sees
 //    those events.
 //
+// THE THEME DROP DID NOT CHANGE THIS, though it looked like it would.
+// These windows now draw their own title bars (setUsingNativeTitleBar
+// (false)), and the obvious conclusion - "JUCE draws it, so JUCE must
+// drag it" - is WRONG on JUCE 8. Its Windows peer handles WM_NCHITTEST
+// for borderless windows too, asks Component::findControlAtPoint(), and
+// returns HTCAPTION for a DocumentWindow's title bar so that Windows
+// keeps running the move loop (deliberately, so Aero Snap still works -
+// see juce_Windowing_windows.cpp). JUCE still never sees the mouse
+// events.
+//
+// This was rebuilt on a constrainer during the theme work and put back.
+// The rebuild failed in an instructive way worth not repeating: the snap
+// itself computed perfectly - logged in=420 -> out=443, exactly flush
+// against the neighbour - and the window still landed at 420, because
+// setConstrainer() also hands the constrainer to the PEER and
+// HWNDComponentPeer::getConstrainedBounds discards its position for a
+// move. Overriding mouseDrag() instead did nothing at all, because those
+// events never arrive. The hook below is the mechanism that works, with
+// or without a native caption.
+//
 // What works, and what this uses: hooking the window's own WM_MOVING and
 // WM_SIZING. That is the standard Win32 way to do magnetic windows - the
 // OS asks "where should this window go?" before moving it, and the
@@ -40,6 +61,7 @@
 // Windows uses for these messages - so no logical/physical conversion is
 // needed and it behaves the same at any display scaling.
 class DetachableWindow : public juce::DocumentWindow,
+                          public InkwyrdLookAndFeel::TitleBarInfo,
                           private juce::Timer
 {
 public:
@@ -55,7 +77,10 @@ public:
     // what made one vanish with no way back. Only the master Player
     // window gets a minimise button, and minimising it takes the
     // satellites down with it - see PlayerWindow.
+    // subtitle is the second line in the title bar, under "INKWYRD" -
+    // "AUDIO PLAYER", "PLAYLISTS", and so on.
     DetachableWindow(const juce::String& windowName, juce::String windowId,
+                      juce::String subtitle,
                       AppSettings& settingsToUse, juce::Rectangle<int> defaultBounds,
                       bool defaultVisible = true,
                       int titleBarButtons = juce::DocumentWindow::closeButton);
@@ -70,6 +95,8 @@ public:
 
     const juce::String& getWindowId() const { return windowId; }
     bool wasVisibleWhenSaved() const { return restoredVisible; }
+
+    juce::String getTitleBarSubtitle() const override { return titleBarSubtitle; }
 
     // Hide/show this window because the MASTER window minimised, rather
     // than because the user chose to hide it. The saved layout keeps
@@ -162,7 +189,7 @@ private:
     // group where it started).
     juce::Array<juce::Rectangle<int>> physicalObstacles() const;
 
-    juce::String windowId;
+    juce::String windowId, titleBarSubtitle;
     AppSettings& settings;
     bool restoredVisible;
     bool hiddenByMasterMinimise = false;

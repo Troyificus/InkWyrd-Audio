@@ -1,6 +1,7 @@
 #include "PlaylistPanel.h"
 
 #include "Dialogs.h"
+#include "InkwyrdTheme.h"
 #include "VolumeCallout.h"
 
 namespace
@@ -29,20 +30,23 @@ namespace
 
     void drawTrackGainBar(juce::Graphics& g, juce::Rectangle<float> bar, float gainDb)
     {
-        g.setColour(juce::Colours::black.withAlpha(0.45f));
+        g.setColour(inkwyrd::theme::background);
         g.fillRoundedRectangle(bar, 2.0f);
 
+        // Boost stays a warning colour rather than becoming another
+        // green: it's the one state on this bar that can clip, and
+        // making it match everything else would hide that.
         auto untouched = juce::approximatelyEqual(gainDb, 0.0f);
-        g.setColour(gainDb > 0.0f ? juce::Colours::orange.withAlpha(0.85f)
-                                   : juce::Colours::white.withAlpha(untouched ? 0.25f : 0.80f));
+        g.setColour(gainDb > 0.0f ? inkwyrd::theme::warning.withAlpha(0.9f)
+                                   : inkwyrd::theme::accent.withAlpha(untouched ? 0.35f : 0.9f));
         g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * trackGainFraction(gainDb)), 2.0f);
 
         // Unity tick - see the matching comment in the soundboard grid.
         auto tickX = bar.getX() + bar.getWidth() * trackGainFraction(0.0f);
-        g.setColour(juce::Colours::white.withAlpha(0.5f));
+        g.setColour(inkwyrd::theme::text.withAlpha(0.55f));
         g.fillRect(juce::Rectangle<float>(tickX - 0.5f, bar.getY() - 1.0f, 1.0f, bar.getHeight() + 2.0f));
 
-        g.setColour(juce::Colours::white.withAlpha(0.25f));
+        g.setColour(inkwyrd::theme::outline);
         g.drawRoundedRectangle(bar, 2.0f, 1.0f);
     }
 
@@ -112,11 +116,18 @@ public:
         if (playlist == nullptr)
             return;
 
-        if (selected)
-            g.fillAll(juce::Colours::white.withAlpha(0.12f));
-
         auto playing = playlist->id == owner.playingId;
-        g.setColour(playing ? juce::Colours::lightgreen : juce::Colours::white);
+
+        if (selected)
+            g.fillAll(inkwyrd::theme::accentSoft.withAlpha(0.35f));
+
+        if (playing)
+        {
+            g.setColour(inkwyrd::theme::accent);
+            g.fillRect(0, 0, 3, height);
+        }
+
+        g.setColour(playing ? inkwyrd::theme::accent : inkwyrd::theme::text);
         g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   ")) + playlist->name,
                     6, 0, width - 12, height, juce::Justification::centredLeft, true);
     }
@@ -145,14 +156,20 @@ public:
 
         auto file = owner.libraryTracks[row];
 
-        if (selected)
-            g.fillAll(juce::Colours::white.withAlpha(0.12f));
-
         auto playing = file == owner.engine.getCurrentTrackFile();
         auto missing = ! file.existsAsFile();
 
-        auto textColour = missing ? juce::Colours::orange
-                                  : (playing ? juce::Colours::lightgreen : juce::Colours::white);
+        if (selected)
+            g.fillAll(inkwyrd::theme::accentSoft.withAlpha(0.35f));
+
+        if (playing)
+        {
+            g.setColour(inkwyrd::theme::accent);
+            g.fillRect(0, 0, 3, height);
+        }
+
+        auto textColour = missing ? inkwyrd::theme::warning
+                                  : (playing ? inkwyrd::theme::accent : inkwyrd::theme::text);
 
         auto bar = trackVolumeBarBounds(width, height);
         auto nameArea = juce::Rectangle<int>(6, 0, bar.getX() - 12, height);
@@ -163,7 +180,7 @@ public:
         if (fadeSeconds > 0.0)
         {
             auto suffixArea = nameArea.removeFromRight(66);
-            g.setColour(juce::Colours::grey);
+            g.setColour(inkwyrd::theme::textDim);
             g.setFont(juce::Font(juce::FontOptions(11.0f)));
             g.drawText(juce::String(fadeSeconds, 1) + "s fade", suffixArea,
                         juce::Justification::centredRight, false);
@@ -701,7 +718,7 @@ void PlaylistPanel::paintOverChildren(juce::Graphics& g)
     if (! dragActive)
         return;
 
-    g.setColour(juce::Colours::lightgreen.withAlpha(0.6f));
+    g.setColour(inkwyrd::theme::accent.withAlpha(0.7f));
     g.drawRect(getLocalBounds(), 2);
 }
 

@@ -16,7 +16,7 @@ PlaylistWindow::PlaylistWindow(AppSettings& settingsToUse,
                                 PlaylistEngine& playlist,
                                 std::function<void(const juce::Uuid&)> onPlaylistEdited,
                                 std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack)
-    : DetachableWindow("Playlist", "playlist", settingsToUse, defaultPlaylistBounds())
+    : DetachableWindow("Playlist", "playlist", "Playlists", settingsToUse, defaultPlaylistBounds())
 {
     auto* component = new PlaylistTrackListComponent(library, playlist,
                                                       std::move(onPlaylistEdited),

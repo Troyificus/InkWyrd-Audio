@@ -1,5 +1,6 @@
 ﻿#include "DetachableWindow.h"
 
+#include "InkwyrdTheme.h"
 #include "WindowLayoutStore.h"
 #include "WindowSnapping.h"
 
@@ -116,18 +117,25 @@ static LRESULT CALLBACK detachableWindowSubclassProc(HWND hwnd, UINT message,
 #endif
 
 DetachableWindow::DetachableWindow(const juce::String& windowName, juce::String windowIdToUse,
+                                    juce::String subtitle,
                                     AppSettings& settingsToUse, juce::Rectangle<int> defaultBounds,
                                     bool defaultVisible,
                                     int titleBarButtons)
-    : DocumentWindow(windowName,
-                      juce::Desktop::getInstance().getDefaultLookAndFeel()
-                          .findColour(juce::ResizableWindow::backgroundColourId),
-                      titleBarButtons),
+    : DocumentWindow(windowName, inkwyrd::theme::panel, titleBarButtons),
       windowId(std::move(windowIdToUse)),
+      titleBarSubtitle(std::move(subtitle)),
       settings(settingsToUse),
       restoredVisible(defaultVisible)
 {
     activeWindows.add(this);
+
+    // The theme's title bar carries a logo and two lines of text, which
+    // cannot be drawn on a native Windows caption - the OS only exposes
+    // its colour. Turning it off does NOT move dragging into JUCE's
+    // hands; see the header.
+    setUsingNativeTitleBar(false);
+    setTitleBarHeight(inkwyrd::theme::titleBarHeight);
+
     setResizable(true, true);
 
     auto saved = WindowLayoutStore::fromJson(settings.getWindowLayoutJson());

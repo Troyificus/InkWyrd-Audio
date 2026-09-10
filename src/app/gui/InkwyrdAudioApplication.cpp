@@ -45,6 +45,11 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
                      + juce::String(elapsed, 0) + " ms");
     };
 
+    // Before any window is constructed: DetachableWindow reads its
+    // background colour from the LookAndFeel at construction, and every
+    // window's title bar is drawn by it.
+    juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
+
     formatManager.registerBasicFormats(); // WAV/AIFF/FLAC/Ogg Vorbis
     formatManager.registerFormat(new Mp3AudioFormat(), false);
     formatManager.registerFormat(new MediaFoundationAudioFormat(), false); // AAC/M4A + WMA
@@ -340,6 +345,11 @@ void InkwyrdAudioApplication::shutdown()
     voiceFxWindow.reset();
     soundboardWindow.reset();
     mainWindow.reset();
+
+    // After every window is gone, since they draw through it, and before
+    // this object is destroyed - JUCE asserts if a LookAndFeel dies
+    // while it's still the default.
+    juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
 
     ix::uninitNetSystem();
 }

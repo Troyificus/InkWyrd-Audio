@@ -1563,11 +1563,89 @@ session out of its voice channel. So any UI check made while they were
 actually using the app was disruptive, which is a bad reason not to
 test. Same family as `INKWYRD_ALLOW_MULTIPLE_INSTANCES`.
 
+## The black/dark-green theme (beta.15) - skin pass
+
+Built from a design mockup supplied as an image. Staged deliberately:
+this drop is the SKIN (palette, fonts, controls, panels, title bars)
+over today's layout and features. The things the mockup implies but the
+app has no concept of - album art, a spectrum visualiser, a seek bar, a
+library folder tree - are a later drop, agreed up front rather than
+half-started.
+
+- **`InkwyrdTheme.h`** is the palette, in one place, because it is the
+  thing most likely to be adjusted by eye. The mockup arrived as an image
+  in conversation rather than a file, so the values are close readings,
+  not sampled - if something looks wrong against the original, that table
+  is the only place to change it.
+- **`InkwyrdLookAndFeel`** does the rest. A LookAndFeel rather than
+  per-component painting wherever possible: every TextButton, Slider,
+  ListBox, ScrollBar and TextEditor picks it up untouched, which is what
+  makes a skin this size tractable. Components that already paint
+  themselves (soundboard pads, playlist rows, volume bars) read the same
+  palette so they can't drift.
+- The logo is **drawn as vectors and is an approximation**, deliberately
+  replaceable: redrawing someone's artwork from a low-resolution
+  screenshot gets the gesture, not the detail. Given the original SVG or
+  PNG it becomes a Drawable load and `drawLogo()` goes away.
+- Boost on a volume bar deliberately stays a **warning colour** rather
+  than becoming another green. It's the one state on those bars that can
+  clip, and making it match everything else would hide that.
+
+### Custom title bars do NOT change how dragging works, and that cost a detour
+
+The design's title bar carries a logo and two lines of text, which a
+native Windows caption cannot do - the OS only exposes its colour. So
+`setUsingNativeTitleBar(false)`.
+
+The obvious conclusion - "JUCE draws the title bar, so JUCE must perform
+the drag, so the magnetism should move onto a ComponentBoundsConstrainer"
+- is **wrong on JUCE 8**, and it was acted on before being checked. Its
+Windows peer handles `WM_NCHITTEST` for borderless windows too, asks
+`Component::findControlAtPoint()`, and returns **HTCAPTION** for a
+DocumentWindow's title bar so Windows keeps running its own move loop
+(deliberately - the comment in `juce_Windowing_windows.cpp` says it's so
+Aero Snap still works). JUCE never sees the mouse events either way.
+
+Two failed rebuilds, both instructive:
+
+1. **Constrainer.** The snap computed perfectly and was thrown away -
+   logged `in=420 out=443`, exactly flush against the neighbour, window
+   landed at 420. `ResizableWindow::setConstrainer` also hands the
+   constrainer to the PEER, and `HWNDComponentPeer::getConstrainedBounds`
+   keeps only its SIZE for a move, forcing the position back to the
+   requested one. This is the same failure the header already warned
+   about; the warning was assumed not to apply any more.
+2. **Overriding `mouseDrag`.** Did nothing whatsoever, and the log said
+   so plainly: zero calls. See HTCAPTION above.
+
+The WM_MOVING/WM_SIZING subclass hook was restored unchanged and works
+with the custom title bar, because it depends on Windows running the move
+loop - not on `WS_CAPTION`. Verified by real synthetic drags: a window
+dragged near a neighbour snapped flush (gap 0), and the master carried
+its docked group (both moved -104px, still flush).
+
+### Two traps in the drag-test harness itself
+
+Worth knowing, because both produced convincing false failures:
+
+- **Aim to OVERLAP the neighbour, not to stop short of it.** A synthetic
+  drag consistently undershoots (Windows tracks the real cursor, and
+  stepped `SetCursorPos` calls get coalesced), so aiming for a 14px gap
+  landed 31px away - outside the 24px threshold, reading as "no snap"
+  when it was really "never got close enough to test". The harness now
+  says INCONCLUSIVE for that case rather than failing.
+- **Put windows at KNOWN absolute positions first.** Aiming relative to
+  wherever they happen to be made the second run of the same test a 1px
+  drag.
+
+And the standing one, which ate a whole run again: **the first click on
+an inactive window is consumed activating it.** Throw one away.
+
 ### Not yet built
 
-- **The black/dark-green theme and "digital screen" Now Playing
-  component** - still deliberately deferred, and now the only thing left
-  from the original Winamp-layout plan.
+- **The player widgets the mockup shows**: album art, the spectrum
+  visualiser, the seek/progress bar, and the Library window's folder
+  tree. Agreed as the next drop.
 
 ## Auto-muting the user in Discord: the RPC spike (answered - it works)
 

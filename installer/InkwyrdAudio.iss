@@ -1,4 +1,4 @@
-﻿; Inno Setup script for Inkwyrd Audio.
+; Inno Setup script for Inkwyrd Audio.
 ;
 ; Packages the current build of InkwyrdAudioApp (a GUI app - see
 ; README.md and CLAUDE.md for status) plus its runtime DLLs. Does
@@ -18,7 +18,7 @@
 ; used to just say "0.1.0" for every beta, indistinguishable) AND
 ; OutputBaseFilename further down, so there's one place to update per
 ; release rather than two.
-#define MyAppVersion "0.1.0-beta.14.1"
+#define MyAppVersion "0.1.0-beta.15"
 #define MyAppPublisher "Troy"
 ; The CMake target is named InkwyrdAudioApp, but juce_add_gui_app names
 ; the actual output binary after PRODUCT_NAME ("Inkwyrd Audio") - unlike

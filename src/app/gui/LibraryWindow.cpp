@@ -19,7 +19,7 @@ LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
                               std::function<void(const juce::Uuid&)> onActivatePlaylist,
                               std::function<void(const juce::Uuid&)> onPlaylistEdited,
                               std::function<void(const juce::Uuid&)> onPlaylistSelected)
-    : DetachableWindow("Library", "library", settingsToUse, defaultLibraryBounds())
+    : DetachableWindow("Library", "library", "Audio Library", settingsToUse, defaultLibraryBounds())
 {
     auto* panel = new PlaylistPanel(library, trackLibrary, playlist, trackGains,
                                      std::move(onActivatePlaylist),

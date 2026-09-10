@@ -1,6 +1,7 @@
 #include "VoiceFxComponent.h"
 
 #include "Dialogs.h"
+#include "InkwyrdTheme.h"
 
 namespace
 {
@@ -61,7 +62,7 @@ VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
     };
     addAndMakeVisible(noiseSuppressionToggle);
 
-    noiseSuppressionHint.setColour(juce::Label::textColourId, juce::Colours::grey);
+    noiseSuppressionHint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     noiseSuppressionHint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(noiseSuppressionHint);
     updateNoiseSuppressionHint();
@@ -73,7 +74,7 @@ VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
 
     emptyMessage.setText("No plugins added yet. Click \"Add VST3...\" and pick the ones you want "
                           "for your microphone.", juce::dontSendNotification);
-    emptyMessage.setColour(juce::Label::textColourId, juce::Colours::grey);
+    emptyMessage.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     emptyMessage.setJustificationType(juce::Justification::topLeft);
     addAndMakeVisible(emptyMessage);
 
@@ -87,7 +88,7 @@ VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
     // wording promised one.
     chainHint.setText("These run on your microphone, in order. Click a plugin to open its own window.",
                        juce::dontSendNotification);
-    chainHint.setColour(juce::Label::textColourId, juce::Colours::grey);
+    chainHint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     chainHint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(chainHint);
 

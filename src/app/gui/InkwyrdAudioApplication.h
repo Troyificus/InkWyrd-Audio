@@ -11,6 +11,7 @@
 #include "AppSettings.h"
 #include "DiscordConnector.h"
 #include "DiscordRpcClient.h"
+#include "InkwyrdLookAndFeel.h"
 #include "LibraryWindow.h"
 #include "MainWindow.h"
 #include "PlayerWindow.h"
@@ -107,6 +108,12 @@ private:
     // Pushes the saved credentials into discordRpc and switches it on or
     // off. Called at startup and again whenever Settings is saved.
     void applyDiscordRpcSettings();
+
+    // First member, and deliberately so: it must outlive every window
+    // and component that points at it, and members are destroyed in
+    // reverse declaration order. Installed as the default LookAndFeel in
+    // initialise() and cleared again in shutdown().
+    InkwyrdLookAndFeel lookAndFeel;
 
     AppSettings settings;
 

@@ -20,7 +20,7 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
                             std::function<void()> onToggleSoundboard,
                             std::function<void()> onSettingsClicked)
     // The master window is the only one that gets a minimise button.
-    : DetachableWindow("Inkwyrd Audio", "player", settingsToUse, defaultPlayerBounds(), true,
+    : DetachableWindow("Inkwyrd Audio", "player", "Audio Player", settingsToUse, defaultPlayerBounds(), true,
                         juce::DocumentWindow::closeButton | juce::DocumentWindow::minimiseButton)
 {
     auto* component = new PlayerComponent(playlist, masterEngine,

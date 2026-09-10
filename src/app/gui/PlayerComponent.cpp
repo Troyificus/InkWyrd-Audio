@@ -1,5 +1,7 @@
 #include "PlayerComponent.h"
 
+#include "InkwyrdTheme.h"
+
 namespace
 {
     constexpr int kMargin = 16;
@@ -23,14 +25,14 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     addAndMakeVisible(nowPlayingLabel);
 
     discordStatusLabel.setText("Local monitor only - no Discord credentials configured.", juce::dontSendNotification);
-    discordStatusLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    discordStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     addAndMakeVisible(discordStatusLabel);
 
-    warningBannerLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
+    warningBannerLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
     warningBannerLabel.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
     addAndMakeVisible(warningBannerLabel);
 
-    monitorHintLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
+    monitorHintLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
     monitorHintLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
     addAndMakeVisible(monitorHintLabel);
 

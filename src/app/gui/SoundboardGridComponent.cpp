@@ -1,5 +1,7 @@
 #include "SoundboardGridComponent.h"
 
+#include "InkwyrdTheme.h"
+
 #include "Dialogs.h"
 #include "VolumeCallout.h"
 
@@ -22,11 +24,11 @@ namespace
     struct PresetColour { const char* name; juce::uint32 argb; };
 
     const PresetColour kPresetColours[] = {
-        { "Slate",  0xff3a4a5a },
+        { "Slate",  0xff2a3a33 },
         { "Red",    0xff8c2f2f },
         { "Orange", 0xff9c5a1e },
         { "Yellow", 0xff8a7a1e },
-        { "Green",  0xff2f6b3a },
+        { "Green",  0xff2f7f52 },
         { "Teal",   0xff1e6b6b },
         { "Blue",   0xff2f4a8c },
         { "Purple", 0xff5a2f8c },
@@ -49,12 +51,14 @@ namespace
     void drawGainBar(juce::Graphics& g, juce::Rectangle<float> bar, float gainDb,
                       float unityFraction)
     {
-        g.setColour(juce::Colours::black.withAlpha(0.55f));
+        g.setColour(inkwyrd::theme::background.withAlpha(0.75f));
         g.fillRoundedRectangle(bar, 2.0f);
 
+        // Boost keeps the warning colour rather than becoming another
+        // green - it's the one state here that can clip.
         auto untouched = juce::approximatelyEqual(gainDb, 0.0f);
-        g.setColour(gainDb > 0.0f ? juce::Colours::orange.withAlpha(0.85f)
-                                   : juce::Colours::white.withAlpha(untouched ? 0.30f : 0.80f));
+        g.setColour(gainDb > 0.0f ? inkwyrd::theme::warning.withAlpha(0.9f)
+                                   : inkwyrd::theme::accent.withAlpha(untouched ? 0.4f : 0.9f));
         g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * gainFractionFor(gainDb)), 2.0f);
 
         auto tickX = bar.getX() + bar.getWidth() * unityFraction;
@@ -195,7 +199,7 @@ private:
     int index;
     std::function<void(int)> onRightClick, onVolumeClick;
 
-    juce::Colour background { 0xff3a4a5a }, foreground { juce::Colours::white };
+    juce::Colour background { 0xff2a3a33 }, foreground { juce::Colours::white };
     bool showVolume = false;
     float gainDb = 0.0f;
     juce::Image backgroundImage;
@@ -221,7 +225,7 @@ SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToU
     hint.setText("Click an empty button to assign a sound, or drag files in. Click a button's volume "
                   "bar to adjust it. Right-click to rename, recolour, add a picture or clear.",
                   juce::dontSendNotification);
-    hint.setColour(juce::Label::textColourId, juce::Colours::grey);
+    hint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     hint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(hint);
 
@@ -273,7 +277,7 @@ void SoundboardGridComponent::applyAppearance(int index)
 
     if (slot.isEmpty())
     {
-        button->setAppearance("+", juce::Colour(0xff2a2a2a), juce::Colours::grey, false, 0.0f, {});
+        button->setAppearance("+", inkwyrd::theme::panelRaised, inkwyrd::theme::textDim, false, 0.0f, {});
         return;
     }
 
@@ -610,7 +614,7 @@ void SoundboardGridComponent::paintOverChildren(juce::Graphics& g)
     if (!dragActive)
         return;
 
-    g.setColour(juce::Colours::lightgreen);
+    g.setColour(inkwyrd::theme::accent);
 
     if (juce::isPositiveAndBelow(dragTargetSlot, buttons.size()))
     {

@@ -20,6 +20,9 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/MainWindow.h
     gui/DetachableWindow.cpp
     gui/DetachableWindow.h
+    gui/InkwyrdLookAndFeel.cpp
+    gui/InkwyrdLookAndFeel.h
+    gui/InkwyrdTheme.h
     gui/WindowLayoutStore.cpp
     gui/WindowLayoutStore.h
     gui/WindowSnapping.cpp

@@ -1,6 +1,7 @@
 #include "PlaylistTrackListComponent.h"
 
 #include "Dialogs.h"
+#include "InkwyrdTheme.h"
 
 namespace
 {
@@ -21,12 +22,23 @@ public:
         if (! juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()))
             return;
 
-        if (selected)
-            g.fillAll(juce::Colours::white.withAlpha(0.12f));
-
         auto file = owner.resolvedTracks.files[row];
         auto playing = file == owner.engine.getCurrentTrackFile();
-        g.setColour(playing ? juce::Colours::lightgreen : juce::Colours::white);
+
+        if (selected)
+            g.fillAll(inkwyrd::theme::accentSoft.withAlpha(0.35f));
+
+        // The now-playing row gets a bar down its left edge as well as
+        // brighter text - the mockup's own way of marking it, and it
+        // survives being both playing AND selected, where two shades of
+        // green would not.
+        if (playing)
+        {
+            g.setColour(inkwyrd::theme::accent);
+            g.fillRect(0, 0, 3, height);
+        }
+
+        g.setColour(playing ? inkwyrd::theme::accent : inkwyrd::theme::text);
         g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   "))
                         + file.getFileNameWithoutExtension(),
                     juce::Rectangle<int>(6, 0, width - 12, height),
@@ -207,7 +219,7 @@ void PlaylistTrackListComponent::paintOverChildren(juce::Graphics& g)
     if (! dragActive)
         return;
 
-    g.setColour(juce::Colours::lightgreen.withAlpha(0.6f));
+    g.setColour(inkwyrd::theme::accent.withAlpha(0.7f));
     g.drawRect(getLocalBounds(), 2);
 }
 
