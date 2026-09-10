@@ -1700,11 +1700,80 @@ and restoring it verbatim buried the transport off the bottom of a window
 they never chose to make that small. `PlayerWindow` grows it once, on
 construction, keeping their position and width.
 
+## Embedded tags, and the sortable All Tracks table (beta.17)
+
+Both windows showed filenames. They now show real titles, and the
+Library's track list is a `juce::TableListBox` with Title / Artist /
+Album / Genre columns you can click to sort.
+
+### Why the Windows property system rather than tag parsers
+
+This is the decision worth not re-litigating, and it was made by
+measuring rather than guessing. A probe over the REAL library (the same
+one the app is used with) found **70 of 73 tracks are MP3** - and MP3
+here goes through dr_mp3, which decodes audio and knows nothing about
+ID3. JUCE's `metadataValues` only covers formats whose readers bother
+(FLAC, Ogg, some WAV), so "what JUCE gives us" was close to nothing for
+this library.
+
+The choice was: write an ID3v2 parser, then an MP4 atom parser, then a
+WMA one - or ask Windows, which already has a property handler for every
+format the app can play. `SHGetPropertyStoreFromParsingName` returned
+complete tags for all 70 MP3s. Windows-only is not a new constraint;
+WASAPI and Media Foundation already are.
+
+JUCE's reader is still tried FIRST (in-process, no COM, and the only
+path for anything Windows has no handler for); the property store is the
+fallback that does the actual work.
+
+Two details that matter:
+
+- Property keys are looked up **by canonical name**
+  (`PSGetPropertyKeyFromName(L"System.Music.Artist", ...)`), not by
+  hand-written GUID/PID pairs. Typing `{56A3372E-CE9C-11D2-...}` from
+  memory fails by silently returning the wrong property.
+- The scan thread must `CoInitializeEx` **apartment-threaded**. Shell
+  property handlers are overwhelmingly STA.
+
+### The cache is the reason it's usable
+
+`track-metadata.json`, keyed by lowercased path, invalidated by file
+size AND modification time. Startup loads it instantly; anything new or
+changed is scanned on a background thread after the windows are up, so a
+first run on a big library shows filenames briefly and fills in rather
+than blocking on a few thousand COM calls. Unscanned tag cells are drawn
+DIMMED rather than blank, so a library still filling in reads as
+"working" rather than "these files have no tags".
+
+`INKWYRD_TAGTEST=1` checks extraction against the user's real library
+rather than a fixture - a fixture would prove the code runs, not that it
+can get tags out of the formats real libraries are made of. It fails
+only if it can read nothing, since genuinely untagged files are a
+legitimate result. (Three FLACs in that library are exactly that -
+confirmed untagged, not a bug: Windows reports nothing for them either.)
+
+### Table details worth keeping
+
+- The now-playing marker is a bar on the **row background**, not a glyph
+  in the Title cell. Sorting moves columns around, and a marker living in
+  one would vanish the moment you sorted by something else.
+- Sorting **remembers the selection, not the row numbers** - re-sorting
+  moves every row, so restoring indices would leave a different set of
+  tracks selected than the one the user picked.
+- Sorting by album tie-breaks on **track number**. Alphabetical-by-title
+  scrambles a record.
+- Sort state lives on the panel, not read back off the header, so the
+  order survives the list being rebuilt when the background scan
+  finishes and changes what half the rows say.
+- The Vol column is deliberately **not sortable** - it's a control, not a
+  value.
+
 ### Not yet built
 
-- **The Library window's folder tree**, and the same fully-drawn
-  treatment for the other four windows - their content is still stock
-  widgets wearing the palette.
+- **The Library's folder-tree view.** The table is one view; a tree over
+  the source folders is the other, and the view switcher goes in with it.
+- The same fully-drawn treatment for the other four windows - their
+  content is still stock widgets wearing the palette.
 
 ## Auto-muting the user in Discord: the RPC spike (answered - it works)
 

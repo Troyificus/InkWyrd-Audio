@@ -8,6 +8,7 @@
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
 #include "TrackLibrary.h"
+#include "TrackMetadataStore.h"
 #include "TrackSettingsStore.h"
 
 // Hosts PlaylistPanel: the created playlists on top, the master list of
@@ -25,6 +26,7 @@ public:
                    TrackLibrary& trackLibrary,
                    PlaylistEngine& playlist,
                    TrackSettingsStore& trackGains,
+                   TrackMetadataStore& trackMetadata,
                    std::function<void(const juce::Uuid&)> onActivatePlaylist,
                    std::function<void(const juce::Uuid&)> onPlaylistEdited,
                    std::function<void(const juce::Uuid&)> onPlaylistSelected);
@@ -34,6 +36,10 @@ public:
     void setPlayingPlaylistId(const juce::Uuid& id);
 
     PlaylistPanel& getPanel() { return *playlistPanel; }
+
+    // The background tag scan finished a batch - refresh what's shown
+    // without re-reading the library from disk.
+    void repaintTrackList();
 
 private:
     PlaylistPanel* playlistPanel = nullptr; // owned via setContentOwned

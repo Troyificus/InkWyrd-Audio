@@ -5,6 +5,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "PlaylistEngine.h"
+#include "TrackMetadataStore.h"
 #include "PlaylistLibrary.h"
 
 // The Playlist window's whole content: the tracks of whichever playlist
@@ -26,6 +27,7 @@ class PlaylistTrackListComponent : public juce::Component,
 {
 public:
     PlaylistTrackListComponent(PlaylistLibrary& libraryToUse,
+                                TrackMetadataStore& trackMetadataToUse,
                                 PlaylistEngine& engineToUse,
                                 // Files dropped in, or a track removed:
                                 // the app re-resolves and pushes to the
@@ -66,6 +68,7 @@ private:
     void updateButtons();
 
     PlaylistLibrary& library;
+    TrackMetadataStore& trackMetadata;
     PlaylistEngine& engine;
     std::function<void(const juce::Uuid&)> onPlaylistEdited;
     std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack;

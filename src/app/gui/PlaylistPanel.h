@@ -7,6 +7,7 @@
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
 #include "TrackLibrary.h"
+#include "TrackMetadataStore.h"
 #include "TrackSettingsStore.h"
 
 // The Library window: created playlists on top, and underneath the MASTER
@@ -34,6 +35,7 @@ public:
                    TrackLibrary& trackLibraryToUse,
                    PlaylistEngine& engineToUse,
                    TrackSettingsStore& trackGainsToUse,
+                   TrackMetadataStore& trackMetadataToUse,
                    std::function<void(const juce::Uuid&)> onActivatePlaylist,
                    // Fired with the id of a playlist whose CONTENTS changed,
                    // so the app can push the edit into the engine if it
@@ -66,15 +68,20 @@ public:
     // Re-read the playlists and the master track list from disk.
     void refresh();
 
+    // Repaint the track list without re-reading anything - for when the
+    // background tag scan fills in rows that are already on screen.
+    void repaintTrackList();
+
 private:
     class PlaylistListModel;
-    class LibraryTrackListModel;
-    class DraggableTrackListBox;
+    class LibraryTrackTableModel;
+    class DraggableTrackTable;
 
     Playlist* getSelectedPlaylist();
     void selectPlaylist(int row);
     void activateSelected();
     void refreshLibraryTracks();
+    void sortLibraryTracks();
     void updateButtonEnablement();
     void selectRowForSelectedId();
     void notifyEdited(const juce::Uuid& id);
@@ -100,12 +107,20 @@ private:
     TrackLibrary& trackLibrary;
     PlaylistEngine& engine;
     TrackSettingsStore& trackGains;
+    TrackMetadataStore& trackMetadata;
     std::function<void(const juce::Uuid&)> onActivatePlaylist;
     std::function<void(const juce::Uuid&)> onPlaylistEdited;
     std::function<void(const juce::Uuid&)> onPlaylistSelected;
 
     juce::Uuid selectedId;
     juce::Uuid playingId;
+
+    // Which column the master list is ordered by, and which way. Held
+    // here rather than read back off the header so the order survives the
+    // list being rebuilt - a track added, or the background tag scan
+    // finishing and changing what half the rows say.
+    int sortColumnId = 1;
+    bool sortForwards = true;
 
     // The master list, cached so painting a row doesn't re-sort the whole
     // library on every repaint.
@@ -120,11 +135,10 @@ private:
     juce::TextButton renameButton { "Rename" };
     juce::TextButton deleteButton { "Delete" };
     juce::TextButton refreshButton { "Refresh" };
-    juce::TextButton openFolderButton { "Open folder" };
 
-    juce::Label trackCaption { {}, "All tracks" };
-    std::unique_ptr<DraggableTrackListBox> trackListBox;
-    std::unique_ptr<LibraryTrackListModel> trackModel;
+    juce::Label trackCaption { {}, "All Tracks" };
+    std::unique_ptr<DraggableTrackTable> trackTable;
+    std::unique_ptr<LibraryTrackTableModel> trackModel;
 
     juce::TextButton addFilesButton { "Add files..." };
     juce::TextButton addFolderButton { "Add folder..." };

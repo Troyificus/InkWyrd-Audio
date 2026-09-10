@@ -39,8 +39,9 @@ public:
         }
 
         g.setColour(playing ? inkwyrd::theme::accent : inkwyrd::theme::text);
+        auto shownName = owner.trackMetadata.get(file).displayTitle(file);
         g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   "))
-                        + file.getFileNameWithoutExtension(),
+                        + shownName,
                     juce::Rectangle<int>(6, 0, width - 12, height),
                     juce::Justification::centredLeft, true);
     }
@@ -60,10 +61,12 @@ private:
 };
 
 PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryToUse,
+                                                        TrackMetadataStore& trackMetadataToUse,
                                                         PlaylistEngine& engineToUse,
                                                         std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
                                                         std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrackToUse)
     : library(libraryToUse),
+      trackMetadata(trackMetadataToUse),
       engine(engineToUse),
       onPlaylistEdited(std::move(onPlaylistEditedToUse)),
       onPlayTrack(std::move(onPlayTrackToUse))

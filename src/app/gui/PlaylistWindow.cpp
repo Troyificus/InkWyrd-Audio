@@ -12,13 +12,14 @@ namespace
 }
 
 PlaylistWindow::PlaylistWindow(AppSettings& settingsToUse,
+                                TrackMetadataStore& trackMetadata,
                                 PlaylistLibrary& library,
                                 PlaylistEngine& playlist,
                                 std::function<void(const juce::Uuid&)> onPlaylistEdited,
                                 std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack)
     : DetachableWindow("Playlist", "playlist", "Playlists", settingsToUse, defaultPlaylistBounds())
 {
-    auto* component = new PlaylistTrackListComponent(library, playlist,
+    auto* component = new PlaylistTrackListComponent(library, trackMetadata, playlist,
                                                       std::move(onPlaylistEdited),
                                                       std::move(onPlayTrack));
     component->setSize(320, 480);

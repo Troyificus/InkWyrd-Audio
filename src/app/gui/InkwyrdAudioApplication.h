@@ -9,6 +9,7 @@
 #include <map>
 
 #include "AppSettings.h"
+#include "TrackMetadataStore.h"
 #include "DiscordConnector.h"
 #include "DiscordRpcClient.h"
 #include "InkwyrdLookAndFeel.h"
@@ -130,6 +131,11 @@ private:
     SoundboardLayout soundboardLayout { formatManager };
     TrackSettingsStore trackGains;
     TrackLibrary trackLibrary;
+
+    // Embedded tags for everything in the library, scanned in the
+    // background and cached to disk. Read by the Library and Playlist
+    // windows to show real titles instead of filenames.
+    TrackMetadataStore trackMetadata;
 
     juce::String audioDeviceError; // non-empty if initialiseWithDefaultDevices() failed - see initialise()
 

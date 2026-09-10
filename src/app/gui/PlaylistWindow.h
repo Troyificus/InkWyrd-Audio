@@ -7,6 +7,7 @@
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistTrackListComponent.h"
+#include "TrackMetadataStore.h"
 
 // Hosts PlaylistTrackListComponent - the tracks of whichever playlist is
 // selected in the Library window, and the place songs get dragged INTO.
@@ -18,6 +19,7 @@ class PlaylistWindow : public DetachableWindow
 {
 public:
     PlaylistWindow(AppSettings& settingsToUse,
+                    TrackMetadataStore& trackMetadata,
                     PlaylistLibrary& library,
                     PlaylistEngine& playlist,
                     std::function<void(const juce::Uuid&)> onPlaylistEdited,

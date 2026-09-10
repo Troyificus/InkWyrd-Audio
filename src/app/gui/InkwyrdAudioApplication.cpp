@@ -91,6 +91,13 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     trackLibrary.setFile(TrackLibrary::getDefaultFile());
     trackLibrary.load();
     migrateTrackLibraryIfNeeded();
+
+    // Cached tags. Loading is instant; anything new or changed is picked
+    // up by the background scan started once the windows exist, so a
+    // first run with a big library shows filenames briefly and fills in
+    // rather than blocking startup on a few thousand COM calls.
+    trackMetadata.setFile(TrackMetadataStore::getDefaultFile());
+    trackMetadata.load();
     logLine("[App] " + juce::String(trackLibrary.getNumTracks()) + " track(s) in your library.");
     logPhase("loading the track library");
 
@@ -491,12 +498,12 @@ void InkwyrdAudioApplication::showPlayer()
             [this] { showSetup(); });
 
         playlistWindow = std::make_unique<PlaylistWindow>(
-            settings, library, playlist,
+            settings, trackMetadata, library, playlist,
             [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
             [this](const juce::Uuid& id, const juce::File& file) { playTrackInPlaylist(id, file); });
 
         libraryWindow = std::make_unique<LibraryWindow>(
-            settings, library, trackLibrary, playlist, trackGains,
+            settings, library, trackLibrary, playlist, trackGains, trackMetadata,
             [this](const juce::Uuid& id) { activatePlaylist(id); },
             [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
             [this](const juce::Uuid& id) { handlePlaylistSelected(id); });
@@ -530,6 +537,13 @@ void InkwyrdAudioApplication::showPlayer()
     // shown, which covers a satellite reopened later; this call is what
     // covers the ones that were already visible at startup.
     DetachableWindow::applyOwnershipToAll();
+
+    // Fill in any tags that aren't cached yet. Started here rather than
+    // during initialise() so the windows are already up and can repaint
+    // as results arrive.
+    trackMetadata.scanAsync(trackLibrary.getAllTracks(),
+                             [this] { if (libraryWindow != nullptr) libraryWindow->repaintTrackList(); },
+                             [this] { if (libraryWindow != nullptr) libraryWindow->repaintTrackList(); });
 
     auto& player = playerWindow->getPlayerComponent();
 

@@ -66,7 +66,7 @@ namespace
 // window handles a drag from here and a drag from Explorer through
 // exactly the same path, rather than having two ways in that could
 // behave differently.
-class PlaylistPanel::DraggableTrackListBox : public juce::ListBox
+class PlaylistPanel::DraggableTrackTable : public juce::TableListBox
 {
 public:
     std::function<juce::StringArray()> getFilesToDrag;
@@ -85,7 +85,7 @@ public:
 
                 juce::DragAndDropContainer::performExternalDragDropOfFiles(
                     files, false, this,
-                    [safeThis = juce::Component::SafePointer<DraggableTrackListBox>(this)]
+                    [safeThis = juce::Component::SafePointer<DraggableTrackTable>(this)]
                     {
                         if (safeThis != nullptr)
                             safeThis->dragInProgress = false;
@@ -95,7 +95,7 @@ public:
             }
         }
 
-        juce::ListBox::mouseDrag(e);
+        juce::TableListBox::mouseDrag(e);
     }
 
 private:
@@ -142,81 +142,122 @@ private:
 //==============================================================================
 // The master track list: every track the app knows about, independent of
 // which playlists happen to reference it.
-class PlaylistPanel::LibraryTrackListModel : public juce::ListBoxModel
+class PlaylistPanel::LibraryTrackTableModel : public juce::TableListBoxModel
 {
 public:
-    explicit LibraryTrackListModel(PlaylistPanel& ownerToUse) : owner(ownerToUse) {}
+    // Column ids. Stable numbers, not indices - juce::TableHeaderComponent
+    // identifies columns by these, and they end up in the sort state.
+    enum ColumnId { title = 1, artist, album, genre, volume };
+
+    explicit LibraryTrackTableModel(PlaylistPanel& ownerToUse) : owner(ownerToUse) {}
 
     int getNumRows() override { return owner.libraryTracks.size(); }
 
-    void paintListBoxItem(int row, juce::Graphics& g, int width, int height, bool selected) override
+    void paintRowBackground(juce::Graphics& g, int row, int, int height, bool selected) override
+    {
+        if (! juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
+            return;
+
+        if (selected)
+            g.fillAll(inkwyrd::theme::accentSoft.withAlpha(0.35f));
+
+        // The now-playing marker is a bar on the row background rather
+        // than a glyph in the Title cell: sorting moves columns around,
+        // and a marker that lives in one of them would vanish the moment
+        // you sorted by something else.
+        if (owner.libraryTracks[row] == owner.engine.getCurrentTrackFile())
+        {
+            g.setColour(inkwyrd::theme::accent);
+            g.fillRect(0, 0, 3, height);
+        }
+    }
+
+    void paintCell(juce::Graphics& g, int row, int columnId, int width, int height, bool) override
     {
         if (! juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
             return;
 
         auto file = owner.libraryTracks[row];
 
+        if (columnId == volume)
+        {
+            drawTrackGainBar(g, trackVolumeBarBounds(width, height).toFloat(),
+                              owner.trackGains.getGainDb(file));
+            return;
+        }
+
+        auto metadata = owner.trackMetadata.get(file);
         auto playing = file == owner.engine.getCurrentTrackFile();
         auto missing = ! file.existsAsFile();
 
-        if (selected)
-            g.fillAll(inkwyrd::theme::accentSoft.withAlpha(0.35f));
-
-        if (playing)
+        juce::String text;
+        switch (columnId)
         {
-            g.setColour(inkwyrd::theme::accent);
-            g.fillRect(0, 0, 3, height);
+            case title:  text = metadata.displayTitle(file); break;
+            case artist: text = metadata.artist; break;
+            case album:  text = metadata.album; break;
+            case genre:  text = metadata.genre; break;
+            default: break;
         }
 
-        auto textColour = missing ? inkwyrd::theme::warning
-                                  : (playing ? inkwyrd::theme::accent : inkwyrd::theme::text);
+        auto area = juce::Rectangle<int>(6, 0, width - 12, height);
 
-        auto bar = trackVolumeBarBounds(width, height);
-        auto nameArea = juce::Rectangle<int>(6, 0, bar.getX() - 12, height);
-
-        // A custom fade is worth saying on the row - otherwise it's
-        // invisible until you open the slider.
-        auto fadeSeconds = owner.trackGains.getFadeSeconds(file);
-        if (fadeSeconds > 0.0)
+        if (columnId == title)
         {
-            auto suffixArea = nameArea.removeFromRight(66);
-            g.setColour(inkwyrd::theme::textDim);
-            g.setFont(juce::Font(juce::FontOptions(11.0f)));
-            g.drawText(juce::String(fadeSeconds, 1) + "s fade", suffixArea,
-                        juce::Justification::centredRight, false);
-            g.setFont(juce::Font(juce::FontOptions(14.0f)));
+            if (missing)
+                text += "   (missing)";
+
+            // A custom fade only matters next to the track's name, and
+            // only the Title column is guaranteed wide enough to say it.
+            auto fadeSeconds = owner.trackGains.getFadeSeconds(file);
+            if (fadeSeconds > 0.0)
+            {
+                auto suffixArea = area.removeFromRight(62);
+                g.setColour(inkwyrd::theme::textDim);
+                g.setFont(juce::Font(juce::FontOptions(11.0f)));
+                g.drawText(juce::String(fadeSeconds, 1) + "s fade", suffixArea,
+                            juce::Justification::centredRight, false);
+            }
         }
 
-        g.setColour(textColour);
-        g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   "))
-                        + file.getFileNameWithoutExtension()
-                        + (missing ? juce::String("   (missing)") : juce::String()),
-                    nameArea, juce::Justification::centredLeft, true);
+        // Tags that haven't been scanned yet are dimmed rather than left
+        // blank, so a library still filling in reads as "working" rather
+        // than "these files have no tags".
+        auto unscanned = ! metadata.scanned && columnId != title;
 
-        drawTrackGainBar(g, bar.toFloat(), owner.trackGains.getGainDb(file));
+        g.setColour(missing ? inkwyrd::theme::warning
+                            : (playing ? inkwyrd::theme::accent
+                                       : (unscanned ? inkwyrd::theme::textDim : inkwyrd::theme::text)));
+        g.setFont(juce::Font(juce::FontOptions(14.0f)));
+        g.drawText(text, area, juce::Justification::centredLeft, true);
     }
 
-    void listBoxItemClicked(int row, const juce::MouseEvent& event) override
+    void cellClicked(int row, int columnId, const juce::MouseEvent& event) override
     {
         if (! juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
             return;
 
-        // Clicking the bar (or right-clicking anywhere on the row)
-        // adjusts the track's level instead of just selecting it.
-        auto bar = trackVolumeBarBounds(owner.trackRowWidth(), kRowHeight).expanded(4, 8);
-
-        if (event.mods.isPopupMenu() || bar.contains(event.getPosition()))
+        // The volume column IS the control - clicking anywhere in it
+        // opens the slider. Much easier to hit than the bar was when it
+        // floated at the right-hand end of a full-width row.
+        if (columnId == volume || event.mods.isPopupMenu())
             owner.showTrackVolumeCallout(row);
     }
 
-    void selectedRowsChanged(int) override { owner.updateButtonEnablement(); }
-
-    void listBoxItemDoubleClicked(int, const juce::MouseEvent&) override
+    void cellDoubleClicked(int, int, const juce::MouseEvent&) override
     {
         owner.addSelectedTracksToPlaylist();
     }
 
+    void selectedRowsChanged(int) override { owner.updateButtonEnablement(); }
     void deleteKeyPressed(int) override { owner.removeSelectedTracksFromLibrary(); }
+
+    void sortOrderChanged(int newSortColumnId, bool isForwards) override
+    {
+        owner.sortColumnId = newSortColumnId;
+        owner.sortForwards = isForwards;
+        owner.sortLibraryTracks();
+    }
 
 private:
     PlaylistPanel& owner;
@@ -227,6 +268,7 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
                               TrackLibrary& trackLibraryToUse,
                               PlaylistEngine& engineToUse,
                               TrackSettingsStore& trackGainsToUse,
+                              TrackMetadataStore& trackMetadataToUse,
                               std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
                               std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
                               std::function<void(const juce::Uuid&)> onPlaylistSelectedToUse)
@@ -234,13 +276,14 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
       trackLibrary(trackLibraryToUse),
       engine(engineToUse),
       trackGains(trackGainsToUse),
+      trackMetadata(trackMetadataToUse),
       onActivatePlaylist(std::move(onActivatePlaylistToUse)),
       onPlaylistEdited(std::move(onPlaylistEditedToUse)),
       onPlaylistSelected(std::move(onPlaylistSelectedToUse))
 {
     playlistModel = std::make_unique<PlaylistListModel>(*this);
-    trackModel = std::make_unique<LibraryTrackListModel>(*this);
-    trackListBox = std::make_unique<DraggableTrackListBox>();
+    trackModel = std::make_unique<LibraryTrackTableModel>(*this);
+    trackTable = std::make_unique<DraggableTrackTable>();
 
     addAndMakeVisible(playlistCaption);
     playlistListBox.setModel(playlistModel.get());
@@ -248,7 +291,7 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     addAndMakeVisible(playlistListBox);
 
     for (auto* button : { &newButton, &playButton, &renameButton, &deleteButton,
-                           &refreshButton, &openFolderButton,
+                           &refreshButton,
                            &addFilesButton, &addFolderButton,
                            &addToPlaylistButton, &removeFromLibraryButton })
         addAndMakeVisible(button);
@@ -266,7 +309,6 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
         refresh();
         notifyEdited(playingId);
     };
-    openFolderButton.onClick = [this] { library.getDirectory().startAsProcess(); };
 
     addFilesButton.onClick = [this] { addFilesToLibrary(); };
     addFolderButton.onClick = [this] { addFolderToLibrary(); };
@@ -274,17 +316,41 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     removeFromLibraryButton.onClick = [this] { removeSelectedTracksFromLibrary(); };
 
     addAndMakeVisible(trackCaption);
-    trackListBox->setModel(trackModel.get());
-    trackListBox->setRowHeight(kRowHeight);
-    trackListBox->setMultipleSelectionEnabled(true);
-    trackListBox->getFilesToDrag = [this]
+    trackTable->setModel(trackModel.get());
+    trackTable->setRowHeight(kRowHeight);
+    trackTable->setMultipleSelectionEnabled(true);
+
+    auto& header = trackTable->getHeader();
+    using Column = LibraryTrackTableModel::ColumnId;
+
+    // Proportional widths: the last argument to addColumn is a minimum,
+    // and setStretchToFitActiveColumns below shares the real width out
+    // in proportion to these.
+    header.addColumn("Title",  Column::title,  260, 120);
+    header.addColumn("Artist", Column::artist, 150, 70);
+    header.addColumn("Album",  Column::album,  150, 70);
+    header.addColumn("Genre",  Column::genre,  110, 60);
+
+    // Not sortable, and deliberately: it's a control, not a value, and
+    // clicking its header to sort by loudness is not a thing anyone
+    // wants. notResizable keeps it exactly as wide as the bar needs.
+    header.addColumn("Vol", Column::volume,
+                      kTrackVolumeBarWidth + kTrackVolumeRightInset * 2,
+                      kTrackVolumeBarWidth + kTrackVolumeRightInset * 2,
+                      kTrackVolumeBarWidth + kTrackVolumeRightInset * 2,
+                      juce::TableHeaderComponent::visible);
+
+    header.setStretchToFitActive(true);
+    header.setSortColumnId(sortColumnId, sortForwards);
+
+    trackTable->getFilesToDrag = [this]
     {
         juce::StringArray paths;
         for (const auto& file : getSelectedLibraryTracks())
             paths.add(file.getFullPathName());
         return paths;
     };
-    addAndMakeVisible(trackListBox.get());
+    addAndMakeVisible(trackTable.get());
 
     refresh();
 }
@@ -293,7 +359,7 @@ PlaylistPanel::~PlaylistPanel()
 {
     // Models outlive the ListBoxes they're attached to otherwise.
     playlistListBox.setModel(nullptr);
-    trackListBox->setModel(nullptr);
+    trackTable->setModel(nullptr);
 }
 
 void PlaylistPanel::setPlayingPlaylistId(const juce::Uuid& id)
@@ -327,7 +393,7 @@ juce::Array<juce::File> PlaylistPanel::getSelectedLibraryTracks() const
 {
     juce::Array<juce::File> selected;
 
-    auto rows = trackListBox->getSelectedRows();
+    auto rows = trackTable->getSelectedRows();
     for (int i = 0; i < rows.size(); ++i)
     {
         auto row = rows[i];
@@ -345,8 +411,8 @@ int PlaylistPanel::trackRowWidth()
     // relative to the ROW. Hit-testing against the ListBox width instead
     // would put the clickable area a scrollbar's width to the right of
     // the bar you can actually see.
-    auto& scrollBar = trackListBox->getVerticalScrollBar();
-    return trackListBox->getWidth() - (scrollBar.isVisible() ? scrollBar.getWidth() : 0);
+    auto& scrollBar = trackTable->getVerticalScrollBar();
+    return trackTable->getWidth() - (scrollBar.isVisible() ? scrollBar.getWidth() : 0);
 }
 
 void PlaylistPanel::showTrackVolumeCallout(int row)
@@ -371,7 +437,7 @@ void PlaylistPanel::showTrackVolumeCallout(int row)
         // Audible straight away if this track happens to be the one
         // playing, rather than only from its next play.
         engine.refreshTrackGains();
-        trackListBox->repaint();
+        trackTable->repaint();
     });
 
     content->addFadeControl(trackGains.getFadeSeconds(file),
@@ -385,13 +451,13 @@ void PlaylistPanel::showTrackVolumeCallout(int row)
         // the moment a transition begins, so the next one already uses
         // this. Only the row's readout needs refreshing.
         trackGains.setFadeSeconds(file, seconds);
-        trackListBox->repaint();
+        trackTable->repaint();
     });
 
     // Anchored to the row itself, so it is obvious which track is being
     // adjusted when several have been turned down.
-    auto rowArea = trackListBox->getRowPosition(row, true)
-                        .translated(trackListBox->getX(), trackListBox->getY());
+    auto rowArea = trackTable->getRowPosition(row, true)
+                        .translated(trackTable->getX(), trackTable->getY());
 
     juce::CallOutBox::launchAsynchronously(std::move(content), rowArea, this);
 }
@@ -423,10 +489,72 @@ void PlaylistPanel::refresh()
 void PlaylistPanel::refreshLibraryTracks()
 {
     libraryTracks = trackLibrary.getAllTracks();
-    trackCaption.setText("All tracks (" + juce::String(libraryTracks.size()) + ")",
+    trackCaption.setText("All Tracks (" + juce::String(libraryTracks.size()) + ")",
                           juce::dontSendNotification);
-    trackListBox->updateContent();
-    trackListBox->repaint();
+    sortLibraryTracks();
+}
+
+void PlaylistPanel::sortLibraryTracks()
+{
+    using Column = LibraryTrackTableModel::ColumnId;
+
+    // Remember the SELECTION rather than the row numbers - re-sorting
+    // moves every row, so restoring indices would leave a different set
+    // of tracks selected than the one the user picked.
+    auto selected = getSelectedLibraryTracks();
+
+    auto keyFor = [this](const juce::File& file)
+    {
+        auto metadata = trackMetadata.get(file);
+
+        switch (sortColumnId)
+        {
+            case Column::artist: return metadata.sortKeyFor(metadata.artist);
+            case Column::album:  return metadata.sortKeyFor(metadata.album);
+            case Column::genre:  return metadata.sortKeyFor(metadata.genre);
+            default:             return metadata.displayTitle(file).toLowerCase();
+        }
+    };
+
+    // Within an album, track number order is the only sensible
+    // tie-break - alphabetical by title scrambles a record.
+    auto secondaryFor = [this](const juce::File& file)
+    {
+        auto metadata = trackMetadata.get(file);
+        return sortColumnId == Column::album ? metadata.trackNumber : 0;
+    };
+
+    std::stable_sort(libraryTracks.begin(), libraryTracks.end(),
+                      [&](const juce::File& a, const juce::File& b)
+    {
+        auto keyA = keyFor(a), keyB = keyFor(b);
+
+        if (keyA != keyB)
+            return sortForwards ? keyA < keyB : keyB < keyA;
+
+        auto secondA = secondaryFor(a), secondB = secondaryFor(b);
+        if (secondA != secondB)
+            return secondA < secondB;
+
+        // A total order, so equal keys don't shuffle between re-sorts.
+        return a.getFullPathName().toLowerCase() < b.getFullPathName().toLowerCase();
+    });
+
+    trackTable->updateContent();
+
+    trackTable->deselectAllRows();
+    for (int row = 0; row < libraryTracks.size(); ++row)
+        if (selected.contains(libraryTracks[row]))
+            trackTable->selectRow(row, true, false);
+
+    trackTable->repaint();
+}
+
+void PlaylistPanel::repaintTrackList()
+{
+    // Tags arriving can change what the list is ordered BY, not just what
+    // the rows say - so this re-sorts rather than only repainting.
+    sortLibraryTracks();
 }
 
 void PlaylistPanel::selectRowForSelectedId()
@@ -743,7 +871,7 @@ void PlaylistPanel::resized()
     };
 
     layoutButtonRow({ &newButton, &playButton, &renameButton });
-    layoutButtonRow({ &deleteButton, &refreshButton, &openFolderButton });
+    layoutButtonRow({ &deleteButton, &refreshButton });
 
     area.removeFromTop(8);
     trackCaption.setBounds(area.removeFromTop(kCaptionHeight));
@@ -751,7 +879,7 @@ void PlaylistPanel::resized()
     // The master list's own buttons sit directly under it, so they read
     // as belonging to that list rather than to the playlists above.
     auto bottom = area.removeFromBottom(kButtonHeight * 2 + kButtonGap);
-    trackListBox->setBounds(area);
+    trackTable->setBounds(area);
 
     auto rowOne = bottom.removeFromTop(kButtonHeight);
     bottom.removeFromTop(kButtonGap);

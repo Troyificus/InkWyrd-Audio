@@ -16,12 +16,13 @@ LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
                               TrackLibrary& trackLibrary,
                               PlaylistEngine& playlist,
                               TrackSettingsStore& trackGains,
+                              TrackMetadataStore& trackMetadata,
                               std::function<void(const juce::Uuid&)> onActivatePlaylist,
                               std::function<void(const juce::Uuid&)> onPlaylistEdited,
                               std::function<void(const juce::Uuid&)> onPlaylistSelected)
     : DetachableWindow("Library", "library", "Audio Library", settingsToUse, defaultLibraryBounds())
 {
-    auto* panel = new PlaylistPanel(library, trackLibrary, playlist, trackGains,
+    auto* panel = new PlaylistPanel(library, trackLibrary, playlist, trackGains, trackMetadata,
                                      std::move(onActivatePlaylist),
                                      std::move(onPlaylistEdited),
                                      std::move(onPlaylistSelected));
@@ -33,6 +34,12 @@ LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
     // setSize() above.
     setContentOwned(panel, false);
     setVisible(true);
+}
+
+void LibraryWindow::repaintTrackList()
+{
+    if (playlistPanel != nullptr)
+        playlistPanel->repaintTrackList();
 }
 
 void LibraryWindow::setPlayingPlaylistId(const juce::Uuid& id)

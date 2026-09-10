@@ -14,6 +14,10 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#if JUCE_WINDOWS
+ #include <objbase.h> // CoInitializeEx, for the tag probe's property-store reads
+#endif
+
 #include "DiscordRpcClient.h"
 #include "NoiseSuppressor.h"
 #include "PlaylistEngine.h"
@@ -21,6 +25,9 @@
 #include "PlaylistPanel.h"
 #include "PlaylistTrackListComponent.h"
 #include "TrackLibrary.h"
+#include "TrackMetadataStore.h"
+#include "Mp3AudioFormat.h"
+#include "MediaFoundationAudioFormat.h"
 #include "SoundboardLayout.h"
 #include "TrackSettingsStore.h"
 #include "SoundboardGridComponent.h"
@@ -300,7 +307,12 @@ namespace
             dropTracks.setFile(scratch.getChildFile("drop-track-library.json"));
             dropTracks.load();
 
-            PlaylistPanel panel(dropLibrary, dropTracks, dropEngine, dropGains,
+            // Left unloaded: these checks are about drag-and-drop, and an
+            // empty metadata store makes every row fall back to its
+            // filename, which is exactly what they assert on.
+            TrackMetadataStore dropMetadata;
+
+            PlaylistPanel panel(dropLibrary, dropTracks, dropEngine, dropGains, dropMetadata,
                                  [](const juce::Uuid&) {},
                                  [](const juce::Uuid&) {},
                                  [](const juce::Uuid&) {});
@@ -362,7 +374,8 @@ namespace
             juce::Uuid editedId;
             int editCount = 0;
 
-            PlaylistTrackListComponent list(dropLibrary, dropEngine,
+            TrackMetadataStore listMetadata;
+            PlaylistTrackListComponent list(dropLibrary, listMetadata, dropEngine,
                                              [&](const juce::Uuid& id) { editedId = id; ++editCount; },
                                              [](const juce::Uuid&, const juce::File&) {});
             list.setSize(320, 480);
@@ -1223,6 +1236,90 @@ namespace
         return failures == 0 ? 0 : 1;
     }
 
+    // INKWYRD_TAGTEST=1: embedded-tag reading, against whatever is
+    // actually in the user's track library rather than a synthetic
+    // fixture.
+    //
+    // A fixture would prove the parser runs; it would not prove the
+    // thing that was actually in doubt, which is whether the app can get
+    // tags out of the formats real libraries are made of. This one
+    // reports coverage per format and fails only if it can read NOTHING
+    // - a library of genuinely untagged files is a legitimate result.
+    int runTagTest()
+    {
+        TrackLibrary library;
+        library.setFile(TrackLibrary::getDefaultFile());
+        library.load();
+
+        auto tracks = library.getAllTracks();
+        std::cout << "  library holds " << tracks.size() << " track(s)" << std::endl;
+
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+        formats.registerFormat(new Mp3AudioFormat(), false);
+        formats.registerFormat(new MediaFoundationAudioFormat(), false);
+
+#if JUCE_WINDOWS
+        // The property-store fallback needs COM on the calling thread; the
+        // app does this on its scan thread, so a probe calling
+        // readFromFile() directly has to do it here.
+        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+#endif
+
+        std::map<juce::String, std::pair<int, int>> byExtension; // ext -> {tagged, total}
+        int examined = 0;
+
+        for (const auto& file : tracks)
+        {
+            if (! file.existsAsFile())
+                continue;
+
+            auto metadata = TrackMetadataStore::readFromFile(file, formats);
+            auto extension = file.getFileExtension().toLowerCase();
+
+            auto& counts = byExtension[extension];
+            counts.second++;
+            if (metadata.title.isNotEmpty() || metadata.artist.isNotEmpty())
+                counts.first++;
+
+            if (examined < 3)
+            {
+                std::cout << "    " << file.getFileName() << std::endl
+                           << "      title=\"" << metadata.title << "\""
+                           << " artist=\"" << metadata.artist << "\""
+                           << " album=\"" << metadata.album << "\""
+                           << " genre=\"" << metadata.genre << "\""
+                           << " year=" << metadata.year
+                           << " track=" << metadata.trackNumber << std::endl;
+            }
+
+            ++examined;
+        }
+
+        int totalTagged = 0;
+        for (const auto& pair : byExtension)
+        {
+            std::cout << "  " << pair.first << ": " << pair.second.first
+                       << "/" << pair.second.second << " tagged" << std::endl;
+            totalTagged += pair.second.first;
+        }
+
+        check(examined > 0, "found readable files in the track library to examine");
+        check(totalTagged > 0, "read embedded tags from at least one real file");
+
+        // The specific thing this exists to catch: MP3 goes through
+        // dr_mp3, which knows nothing about ID3, so if the property-store
+        // fallback ever stops working this is where it shows up.
+        auto mp3 = byExtension.find(".mp3");
+        if (mp3 != byExtension.end() && mp3->second.second > 0)
+            check(mp3->second.first > 0,
+                   "read tags from MP3s, which JUCE's reader cannot do on its own");
+
+        std::cout << (failures == 0 ? "TAG-TEST PASSED" : "TAG-TEST FAILED")
+                   << " (" << failures << " failure(s))" << std::endl;
+        return failures == 0 ? 0 : 1;
+    }
+
     // INKWYRD_RPCTEST=1: the one piece of the Discord auto-mute path that
     // can be checked without Discord running.
     //
@@ -1626,6 +1723,11 @@ int main(int argc, char* argv[])
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RPCTEST", "").isNotEmpty())
         return runRpcTest();
 
+    // Reads the user's REAL library, so it needs no fixture folder and
+    // goes above the PLAYLIST_FOLDER guard like the others.
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_TAGTEST", "").isNotEmpty())
+        return runTagTest();
+
     auto playlistFolder = juce::SystemStats::getEnvironmentVariable("PLAYLIST_FOLDER", "");
     auto soundboardFolder = juce::SystemStats::getEnvironmentVariable("SOUNDBOARD_FOLDER", "");
 
@@ -1713,7 +1815,8 @@ int main(int argc, char* argv[])
             renderTracks.setFile(scratch.getChildFile("render-track-library.json"));
             renderTracks.registerTracks(library.scanFolder(musicFolder, true));
 
-            PlaylistPanel panel(library, renderTracks, engine, gains,
+            TrackMetadataStore renderMetadata;
+            PlaylistPanel panel(library, renderTracks, engine, gains, renderMetadata,
                                  [](const juce::Uuid&) {}, [](const juce::Uuid&) {},
                                  [](const juce::Uuid&) {});
             panel.setSize(440, 400);

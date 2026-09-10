@@ -5,6 +5,7 @@ add_library(AudioEngine STATIC
     SoundboardLayout.cpp
     TrackSettingsStore.cpp
     TrackLibrary.cpp
+    TrackMetadataStore.cpp
     NoiseSuppressor.cpp
     SpectrumTap.cpp
     Mp3AudioFormat.cpp
@@ -15,6 +16,7 @@ add_library(AudioEngine STATIC
     SoundboardLayout.h
     TrackSettingsStore.h
     TrackLibrary.h
+    TrackMetadataStore.h
     NoiseSuppressor.h
     SpectrumTap.h
     Mp3AudioFormat.h
@@ -46,6 +48,8 @@ target_link_libraries(AudioEngine PUBLIC
     mfplat
     mfreadwrite
     mfuuid
+    # For TrackMetadataStore's IPropertyStore tag reading.
+    propsys
     ole32
 )
 

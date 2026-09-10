@@ -1,5 +1,7 @@
 #include "SetupComponent.h"
 
+#include "PlaylistLibrary.h"
+
 SetupComponent::SetupComponent(AppSettings& settingsToUse,
                                 bool isFirstRun,
                                 std::function<void(Result)> onSaveAndLaunchToUse,
@@ -99,6 +101,15 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     else
         updateAutoMuteStatus("Not authorised yet. Paste the client secret, then click Authorise.", false);
 
+    addAndMakeVisible(playlistFilesCaption);
+    openPlaylistFolderButton.onClick = [this]
+    {
+        // The library owns the real location; asking AppSettings for the
+        // music folder would open the wrong thing entirely.
+        PlaylistLibrary::getDefaultDirectory().startAsProcess();
+    };
+    addAndMakeVisible(openPlaylistFolderButton);
+
     addAndMakeVisible(saveAndLaunchButton);
     saveAndLaunchButton.onClick = [this]
     {
@@ -121,7 +132,7 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     // component's own size, so an explicit size here IS the window size.
     // Taller than it was: the auto-mute section adds three rows, and
     // leaving the height alone would have pushed Save off the bottom.
-    setSize(640, 620);
+    setSize(640, 670);
 }
 
 void SetupComponent::browseForFolder(juce::Label& targetLabel, juce::File& targetValue, const juce::String& chooserTitle)
@@ -218,6 +229,11 @@ void SetupComponent::resized()
 
     autoMuteStatusLabel.setBounds(area.removeFromTop(20));
     area.removeFromTop(20);
+
+    auto playlistFilesRow = area.removeFromTop(28);
+    playlistFilesCaption.setBounds(playlistFilesRow.removeFromLeft(140));
+    openPlaylistFolderButton.setBounds(playlistFilesRow.removeFromLeft(190));
+    area.removeFromTop(16);
 
     saveAndLaunchButton.setBounds(area.removeFromTop(36).removeFromRight(160));
 }

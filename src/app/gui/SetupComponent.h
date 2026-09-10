@@ -87,6 +87,13 @@ private:
     juce::TextButton authoriseButton { "Authorise..." };
     juce::Label autoMuteStatusLabel;
 
+    // Moved here from under the playlist list in the Library window. It
+    // opens the folder the playlist JSON files live in - useful once in
+    // a while, and not something worth a permanent button next to the
+    // ones used every session.
+    juce::Label playlistFilesCaption { {}, "Playlist files" };
+    juce::TextButton openPlaylistFolderButton { "Open playlists folder" };
+
     juce::TextButton saveAndLaunchButton;
 
     std::function<void(juce::String, AuthoriseCallback)> onAuthoriseRpc;
