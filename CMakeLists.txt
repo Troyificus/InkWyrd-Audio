@@ -60,10 +60,13 @@ function(inkwyrd_copy_dave_dll target)
     )
 endfunction()
 
+add_subdirectory(third_party/rnnoise)
+
 add_subdirectory(src/discord-voice)
 add_subdirectory(src/discord-spike)
 add_subdirectory(src/audio-engine)
 add_subdirectory(src/audio-engine-test)
 add_subdirectory(src/vst-hosting)
 add_subdirectory(src/vst-hosting-test)
+add_subdirectory(src/mic-spike)
 add_subdirectory(src/app)

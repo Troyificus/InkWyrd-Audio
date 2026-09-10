@@ -1523,6 +1523,103 @@ than Playlist/Library being forced open.
 - **The black/dark-green theme and "digital screen" Now Playing
   component** - still deliberately deferred, and now the only thing left
   from the original Winamp-layout plan.
+
+## Mic noise suppression: the RNNoise spike (measured, not assumed)
+
+The ask was noise suppression and echo cancellation "as close to
+Discord's own as possible", built in. This spike answers the noise
+suppression half. `src/mic-spike/` is a standalone, JUCE-free executable
+that measures the library rather than the plumbing around it: it takes a
+CLEAN speech recording, mixes in synthetic mic noise (broadband hiss plus
+50Hz hum) at a stated SNR, runs it through RNNoise, and compares clean vs
+noisy vs denoised sample by sample.
+
+**Results, 16s of speech, portable (non-AVX2) build:**
+
+| input SNR | background in the PAUSES | SNR during SPEECH | cost |
+|---|---|---|---|
+| 5 dB  | -48.4 dB | +5.1 dB | 2.4% of one core |
+| 10 dB | -48.8 dB | +0.5 dB | 2.5% of one core |
+| 20 dB | -39.1 dB | -9.2 dB | 2.5% of one core |
+
+RNNoise's own VAD came out at 0.90 on speech frames and 0.011 on silent
+ones, so it is genuinely classifying rather than applying a blanket gain.
+
+Two things worth taking from that table. The pauses go essentially
+silent in every case - that is the effect people actually notice on a
+call. But during speech it only helps on a genuinely noisy mic; on a
+clean one (20dB SNR) it measurably *damages* the voice. Some of that
+-9.2 dB is benign spectral shaping that a waveform-domain SNR punishes
+harshly, but the direction is real. **So this ships as a user toggle,
+not always-on**, and the default should probably be off for anyone whose
+mic is already quiet.
+
+**Echo cancellation is NOT covered by this.** RNNoise is a suppressor,
+not an AEC - it has no reference signal and cannot know which part of
+the mic input is the user's own speakers playing Discord back at them.
+That needs a separate component (WebRTC's APM or speexdsp's echo
+canceller). Inkwyrd's case is unusually favourable there and worth
+remembering when it's built: the bot's own output is a signal we
+generate, so we already hold a perfect reference for at least that half
+of the echo path.
+
+### Two real traps, both of which fail silently
+
+1. **vcpkg's `rnnoise` port is unusable AND its model is wrong.** It
+   declares `"supports": "!windows & !arm"` (it's an autotools wrapper,
+   so it can't configure with MSVC), which is why
+   `third_party/rnnoise/CMakeLists.txt` builds the C sources directly
+   instead. Fine. The trap is the model URL: copying the port's
+   `vcpkg_download_distfile` line pairs the v0.2 SOURCE with a model
+   generated for upstream's `main` branch, after the network gained skip
+   connections feeding its output layer. That model declares `dense_out`
+   with **1536** inputs; v0.2's `rnn.c` feeds `dense_out` from
+   `gru3_state`, a **384**-float buffer. Nothing errors - `linear_init`
+   succeeds, `rnnoise_create` returns non-NULL - and the net reads 1152
+   floats of adjacent struct memory as activations. Symptoms, measured:
+   VAD a coin flip (55% "speech" on speech frames, 47% on silent ones),
+   band gains stuck near 0.5, and a flat -3.3 dB applied to noise and
+   -3.9 dB to voice alike. The right model version is in the source
+   tarball's own `model_version` file (`0b50c45` for v0.2), which
+   upstream's `download_model.sh` reads. The CMakeLists now reads that
+   file and hard-fails on a mismatch, because there is no runtime
+   symptom that says "wrong model" rather than "RNNoise isn't very
+   good".
+2. **RNNoise works in int16 RANGE as floats** (-32768..32767), not
+   -1..1. Feed it normalised audio and it does almost nothing, because
+   everything looks like silence. Upstream's own `rnnoise_demo.c`
+   confirms this - it reads `short` and assigns straight to `float`.
+
+Also: v0.2's tarball is missing `os_support.h`, which its own scalar
+`vec.h` path includes. That path is evidently never compiled upstream
+(everything real hits SSE/NEON), so `third_party/rnnoise/shim/` supplies
+the one macro it needs. Worth knowing that the scalar path is the
+least-travelled code in the library - though it was cross-checked here
+against an AVX2 build and produced bit-comparable results.
+
+### How the wrong model was actually found
+
+Not by reading the code. Reading it found nothing - the arithmetic is
+correct, and a scalar build and an AVX2 build agreed to the decimal,
+which ruled out MSVC miscompilation. What found it was refusing to
+accept a suspicious measurement: a uniform -3.2 dB applied to noise and
+voice alike is the signature of a network outputting zero, so the
+question became "why is the net output zero" rather than "is RNNoise
+weak". Printing a VAD histogram instead of a mean was the step that
+turned "mean 0.5" (which could mean 'never commits') into "bimodal 0 or
+1, and uncorrelated with speech" (which can only mean the input to the
+net is wrong). From there, comparing `init_rnnoise`'s declared layer
+sizes against what `rnn.c` actually passes made the mismatch obvious in
+about a minute.
+
+The first version of the spike synthesised a "voice" from stacked
+harmonics rather than using a recording, and it reported the same flat
+-3.2 dB - which at the time looked like an explainable result ("it's a
+trained model, a synthetic voice is out of distribution"). It wasn't;
+it was the bug, wearing a plausible excuse. Using real speech (Windows'
+own SAPI can write a 48kHz mono WAV, which is how the fixture here was
+made) removed that excuse and made the number impossible to rationalise.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future
