@@ -34,3 +34,7 @@ out/
 
 # Installer build output (compiled setup .exe) - see installer/README/CLAUDE.md
 /installer/Output/
+
+# Local secrets - never committed. Discord client secret for the RPC
+# auto-mute spike lives here; see CLAUDE.md.
+/.secrets/

@@ -1579,15 +1579,51 @@ invisible until a full **Quit Discord** from the tray (closing the window
 leaves it running). Ruled out as the cause here, but it will waste a
 session if it isn't.
 
-### Not yet built
+### Proven end to end (`scratchpad/rpc_mute_spike.py`)
 
-The spike stops at the OAuth code deliberately - that answers the only
-question that could have killed the approach, and it needs no client
-secret. Still to do: exchange the code for a token (this DOES need the
-application's client secret, which belongs in a local file and must
-never be pasted into a chat or committed), persist/refresh it, then send
-`SET_VOICE_SETTINGS` with `{"mute": true}` when the mic goes live and
-restore the user's previous setting when it stops.
+The full chain runs: HANDSHAKE -> AUTHORIZE -> token exchange ->
+AUTHENTICATE -> GET_VOICE_SETTINGS -> SET_VOICE_SETTINGS -> restore. It
+really does mute and unmute the local client.
+
+Measured details worth keeping:
+
+- The access token comes back with `scope='rpc.voice.write rpc'`,
+  `expires_in=604800` (7 days), and a refresh token. So this needs
+  ordinary refresh handling, not a re-consent every session.
+- `AUTHENTICATE` with that token is required before `SET_VOICE_SETTINGS`
+  will be accepted; the handshake alone is not enough.
+- `GET_VOICE_SETTINGS` returns the current `mute`/`deaf` state. **Read
+  it before muting and put it back afterwards.** Someone who was already
+  muted must not be silently unmuted when Inkwyrd's mic stops.
+- The OAuth code is single-use and expires in about a minute, so the
+  exchange has to happen immediately in the same flow.
+
+### Two more traps, both of which look like auth failures and aren't
+
+- **`redirect_uri` is required for the TOKEN EXCHANGE but must be absent
+  from AUTHORIZE.** Opposite rules for the two calls. The token endpoint
+  is ordinary HTTP OAuth, where the URI must match the one the
+  authorisation was issued against - so send the application's first
+  registered URI, the one AUTHORIZE silently defaulted to.
+- **Send a real `User-Agent` on the token request.** Python's urllib
+  defaults to `Python-urllib/3.x`, and **Cloudflare** - not Discord -
+  rejects that with `HTTP 403: error code: 1010`. It reads exactly like
+  a bad client secret or a refused scope. It is neither. Discord's API
+  docs require a descriptive agent; any real one works.
+
+### Still to build into the app
+
+Persist and refresh the token, and hang the mute off the mic going live
+rather than off the session starting. Design constraint already agreed:
+**do not override the user's mic at session start.** Plenty of people
+will never touch the voice FX feature, and an app that mutes you in
+Discord the moment it launches is hostile.
+
+Also a product consequence, not just an implementation one: the client
+secret is per-application, and every Inkwyrd user registers their own
+Discord application. So the auto-mute needs its own setup step in the
+app's settings, alongside the bot token - it can't ship as something
+that just works out of the box.
 
 Design constraint already agreed: **do not override the user's mic at
 session start.** Plenty of people will never touch the voice FX feature,
