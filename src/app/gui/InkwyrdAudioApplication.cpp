@@ -706,6 +706,21 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
 
 void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
 {
+    // INKWYRD_NO_DISCORD=1: run the whole app locally without touching
+    // Discord. Added because launch-testing the UI otherwise meant
+    // connecting the bot, and a second instance identifying with the
+    // same token knocks the user's live session out of its voice
+    // channel - so any UI check made while they were actually using the
+    // app was disruptive. Same family as
+    // INKWYRD_ALLOW_MULTIPLE_INSTANCES: a test affordance, never set in
+    // normal use.
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_NO_DISCORD", "").isNotEmpty())
+    {
+        if (playerWindow != nullptr)
+            playerWindow->getPlayerComponent().setDiscordStatus("Local monitor only - INKWYRD_NO_DISCORD is set.");
+        return;
+    }
+
     if (!settings.hasDiscordCredentials())
     {
         if (playerWindow != nullptr)

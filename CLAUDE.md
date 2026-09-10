@@ -1518,6 +1518,51 @@ since only the latter two had buttons. All four satellites now also
 remember their own visibility across a trip through Settings rather
 than Playlist/Library being forced open.
 
+### Satellites are Win32 OWNED windows (beta.14.1)
+
+Reported as two bugs and it was one: windows vanishing while the app was
+dragged over Discord, and not all of them coming back after a minimise.
+Both intermittent.
+
+The cause: the satellites were independent top-level windows with no
+z-order relationship to the Player window. Grabbing the Player's title
+bar raises only the Player, so dragging it over another app left the
+satellites at their old depth - BEHIND that app. They hadn't gone
+anywhere, they were covered. Restoring from minimise has the same shape:
+`setVisible(true)` shows a window without RAISING it, so any satellite
+that had been below another app stayed below it. Intermittent in both
+cases because it depended entirely on where the other app happened to
+sit in the stack.
+
+Fixed by setting each satellite's Win32 owner
+(`SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, playerHwnd)` - on a top-level
+window that field is the OWNER, not the parent, which is a genuinely
+confusing bit of Win32 naming). An owned window always sits above its
+owner, the group rises together when any of them is activated, and
+Windows hides and restores them with the owner. That last part is the
+behaviour the Winamp-style layout wanted anyway.
+
+**Reproduced before it was fixed, which is what made this quick.** The
+symptom arrived as a phone video, and three plausible theories died
+against real data first: not per-monitor DPI (all three displays are
+96 DPI), not a second GPU or DisplayLink (one RTX 4060 Ti drives all
+three), and not a UI-thread hang (the watchdog runs on its own thread
+and logs after a stall ENDS, and the log's mtime predated the video). A
+`GetWindowLongPtr(GWLP_HWNDPARENT)` dump then showed `(none)` on all
+four windows, and raising Discord and clicking the Player put Discord
+between the Player and its satellites **every time**. Setting the owner
+externally, on the still-running app, fixed both halves in the same
+session - so the mechanism was proven before a line of app code changed.
+
+### INKWYRD_NO_DISCORD=1
+
+Runs the whole app without connecting to Discord. Added while fixing the
+above: launch-testing the UI otherwise meant connecting the bot, and a
+second instance identifying with the same token knocks the user's live
+session out of its voice channel. So any UI check made while they were
+actually using the app was disruptive, which is a bad reason not to
+test. Same family as `INKWYRD_ALLOW_MULTIPLE_INSTANCES`.
+
 ### Not yet built
 
 - **The black/dark-green theme and "digital screen" Now Playing
