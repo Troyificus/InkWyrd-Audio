@@ -7,8 +7,14 @@
 ; to already be present - see streamdeck-plugin/README.md.
 ;
 ; Build with: iscc installer\InkwyrdAudio.iss
-; (requires a Release build already done - see the CMake command in
-; README.md's "Building the installer" section)
+;
+; Requires a Release build already done:
+;   cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+;   cmake --build build --config Release --target InkwyrdAudioApp
+;
+; Spelled out here rather than pointing at README.md, which is written
+; for people installing the app rather than building it and has no build
+; section for this to reference.
 
 #define MyAppName "Inkwyrd Audio"
 ; The full beta-qualified version string - bump this at the top of
