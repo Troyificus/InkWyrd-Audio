@@ -7,13 +7,15 @@ namespace
     juce::Rectangle<int> defaultPlayerBounds()
     {
         auto area = WindowLayoutStore::primaryDisplayArea();
-        return juce::Rectangle<int>(640, 320).withPosition(area.getX() + 40, area.getY() + 40);
+        return juce::Rectangle<int>(640, 356).withPosition(area.getX() + 40, area.getY() + 40);
     }
 }
 
 PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
                             PlaylistEngine& playlist,
                             MasterEngine& masterEngine,
+                            std::function<void()> onTogglePlaylist,
+                            std::function<void()> onToggleLibrary,
                             std::function<void()> onToggleVoiceFx,
                             std::function<void()> onToggleSoundboard,
                             std::function<void()> onSettingsClicked)
@@ -22,6 +24,8 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
                         juce::DocumentWindow::closeButton | juce::DocumentWindow::minimiseButton)
 {
     auto* component = new PlayerComponent(playlist, masterEngine,
+                                           std::move(onTogglePlaylist),
+                                           std::move(onToggleLibrary),
                                            std::move(onToggleVoiceFx),
                                            std::move(onToggleSoundboard),
                                            std::move(onSettingsClicked));

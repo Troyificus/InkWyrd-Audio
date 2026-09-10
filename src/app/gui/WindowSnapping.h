@@ -33,6 +33,20 @@ namespace inkwyrd
     // and get dragged around together.
     bool areRectanglesDocked(juce::Rectangle<int> a, juce::Rectangle<int> b, int tolerance);
 
+    // Like snapRectangle, but for a RESIZE: only the edges actually
+    // being dragged move, so the window is reshaped rather than slid.
+    // An edge snaps to any obstacle or screen edge within `threshold`,
+    // which is what lets a window stretched towards its neighbour land
+    // exactly flush with it instead of a few pixels short.
+    juce::Rectangle<int> snapResizedEdges(juce::Rectangle<int> candidate,
+                                           const juce::Array<juce::Rectangle<int>>& obstacles,
+                                           juce::Rectangle<int> screenArea,
+                                           int threshold,
+                                           bool stretchingLeft,
+                                           bool stretchingRight,
+                                           bool stretchingTop,
+                                           bool stretchingBottom);
+
     // Indices of every rectangle transitively docked to rectangles[startIndex],
     // excluding startIndex itself. Transitive on purpose: dragging one window
     // should carry a whole flush-attached chain (A-B-C moves as one when you

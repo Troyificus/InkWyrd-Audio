@@ -60,6 +60,71 @@ namespace inkwyrd
         return candidate.withPosition(candidate.getX() + deltaX, candidate.getY() + deltaY);
     }
 
+    juce::Rectangle<int> snapResizedEdges(juce::Rectangle<int> candidate,
+                                           const juce::Array<juce::Rectangle<int>>& obstacles,
+                                           juce::Rectangle<int> screenArea,
+                                           int threshold,
+                                           bool stretchingLeft,
+                                           bool stretchingRight,
+                                           bool stretchingTop,
+                                           bool stretchingBottom)
+    {
+        juce::Array<int> xTargets;
+        juce::Array<int> yTargets;
+
+        xTargets.add(screenArea.getX());
+        xTargets.add(screenArea.getRight());
+        yTargets.add(screenArea.getY());
+        yTargets.add(screenArea.getBottom());
+
+        for (auto& obstacle : obstacles)
+        {
+            xTargets.add(obstacle.getX());
+            xTargets.add(obstacle.getRight());
+            yTargets.add(obstacle.getY());
+            yTargets.add(obstacle.getBottom());
+        }
+
+        // Nearest target to one edge, or that edge unchanged if nothing
+        // is close enough. Unlike a move, each edge is decided on its
+        // own - the opposite edge must stay exactly where it is or the
+        // window would slide instead of resize.
+        auto snapEdge = [threshold](int edge, const juce::Array<int>& targets)
+        {
+            auto best = edge;
+            auto bestDistance = threshold + 1;
+
+            for (auto target : targets)
+            {
+                auto distance = std::abs(target - edge);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = target;
+                }
+            }
+
+            return bestDistance <= threshold ? best : edge;
+        };
+
+        auto left = candidate.getX();
+        auto right = candidate.getRight();
+        auto top = candidate.getY();
+        auto bottom = candidate.getBottom();
+
+        if (stretchingLeft)   left = snapEdge(left, xTargets);
+        if (stretchingRight)  right = snapEdge(right, xTargets);
+        if (stretchingTop)    top = snapEdge(top, yTargets);
+        if (stretchingBottom) bottom = snapEdge(bottom, yTargets);
+
+        // A snap that would turn the window inside out is worse than no
+        // snap - drop back to the original edges in that case.
+        if (right <= left || bottom <= top)
+            return candidate;
+
+        return juce::Rectangle<int>::leftTopRightBottom(left, top, right, bottom);
+    }
+
     bool areRectanglesDocked(juce::Rectangle<int> a, juce::Rectangle<int> b, int tolerance)
     {
         // Strictly positive overlap, not >= 0: two windows that only just

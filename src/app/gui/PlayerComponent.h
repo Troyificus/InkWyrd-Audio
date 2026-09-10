@@ -26,6 +26,8 @@ class PlayerComponent : public juce::Component,
 public:
     PlayerComponent(PlaylistEngine& playlistToUse,
                      MasterEngine& masterEngineToUse,
+                     std::function<void()> onTogglePlaylistToUse,
+                     std::function<void()> onToggleLibraryToUse,
                      std::function<void()> onToggleVoiceFxToUse,
                      std::function<void()> onToggleSoundboardToUse,
                      std::function<void()> onSettingsClickedToUse);
@@ -107,10 +109,18 @@ private:
     juce::Slider masterVolumeSlider;
     std::function<void(float)> onMasterVolumeChanged;
 
-    juce::TextButton voiceFxButton { "Voice FX..." };
-    juce::TextButton soundboardButton { "Soundboard..." };
+    // Every satellite window can be shown or hidden from here. All four
+    // are needed, not just the two that started out hideable: closing a
+    // window with its X used to strand it, because only Voice FX and
+    // Soundboard had a way back.
+    juce::TextButton playlistButton { "Playlist" };
+    juce::TextButton libraryButton { "Library" };
+    juce::TextButton voiceFxButton { "Voice FX" };
+    juce::TextButton soundboardButton { "Soundboard" };
     juce::TextButton settingsButton { "Settings" };
 
+    std::function<void()> onTogglePlaylist;
+    std::function<void()> onToggleLibrary;
     std::function<void()> onToggleVoiceFx;
     std::function<void()> onToggleSoundboard;
 };

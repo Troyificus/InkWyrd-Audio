@@ -343,10 +343,20 @@ void InkwyrdAudioApplication::showSetup()
     // all that's needed, nothing is destroyed and nothing dangles.
     if (playerWindow != nullptr)
         playerWindow->setVisible(false);
+
+    // Every satellite is user-hideable now, so each one's state has to be
+    // remembered rather than assumed - coming back from Settings must
+    // not reopen a window the user had deliberately closed.
     if (playlistWindow != nullptr)
+    {
+        playlistWasVisibleBeforeSetup = playlistWindow->isVisible();
         playlistWindow->setVisible(false);
+    }
     if (libraryWindow != nullptr)
+    {
+        libraryWasVisibleBeforeSetup = libraryWindow->isVisible();
         libraryWindow->setVisible(false);
+    }
     if (voiceFxWindow != nullptr)
     {
         voiceFxWasVisibleBeforeSetup = voiceFxWindow->isVisible();
@@ -410,6 +420,16 @@ void InkwyrdAudioApplication::showPlayer()
             settings, playlist, masterEngine,
             [this]
             {
+                if (playlistWindow != nullptr)
+                    playlistWindow->setVisible(!playlistWindow->isVisible());
+            },
+            [this]
+            {
+                if (libraryWindow != nullptr)
+                    libraryWindow->setVisible(!libraryWindow->isVisible());
+            },
+            [this]
+            {
                 if (voiceFxWindow != nullptr)
                     voiceFxWindow->setVisible(!voiceFxWindow->isVisible());
             },
@@ -439,13 +459,15 @@ void InkwyrdAudioApplication::showPlayer()
     }
     else
     {
-        // Returning from Settings. Player/Playlist/Library are core, so
-        // they always come back; Voice FX/Soundboard restore to exactly
-        // what they were right before Settings hid them, rather than
-        // being forced open.
+        // Returning from Settings. The Player window always comes back -
+        // it's the master, and there'd be no way to reach anything
+        // without it. Every satellite restores to exactly what it was
+        // right before Settings hid it, rather than being forced open.
         playerWindow->setVisible(true);
-        playlistWindow->setVisible(true);
-        libraryWindow->setVisible(true);
+        if (playlistWindow != nullptr)
+            playlistWindow->setVisible(playlistWasVisibleBeforeSetup);
+        if (libraryWindow != nullptr)
+            libraryWindow->setVisible(libraryWasVisibleBeforeSetup);
         if (voiceFxWindow != nullptr)
             voiceFxWindow->setVisible(voiceFxWasVisibleBeforeSetup);
         if (soundboardWindow != nullptr)

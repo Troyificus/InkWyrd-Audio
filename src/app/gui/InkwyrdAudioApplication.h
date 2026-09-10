@@ -163,6 +163,8 @@ private:
     // transition (their own activator buttons/close boxes). Remembered
     // here so going into Settings and back restores exactly how the user
     // had them, rather than forcing them open or leaving them hidden.
+    bool playlistWasVisibleBeforeSetup = true;
+    bool libraryWasVisibleBeforeSetup = true;
     bool voiceFxWasVisibleBeforeSetup = false;
     bool soundboardWasVisibleBeforeSetup = false;
 

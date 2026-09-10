@@ -1463,17 +1463,66 @@ is an OS-level modal drag loop that synthetic mouse input can't drive
 (attempted, didn't register; this project has been bitten by synthetic
 input before), so it stays a by-hand check.
 
+### Phase 2b - live magnetism, resize snapping, and a way back to every window (shipped)
+
+Three follow-ups after beta.12, and the first of them replaced the whole
+snapping mechanism.
+
+**The snap is now live, mid-drag.** beta.12 applied it 150ms after the
+drag settled, because neither of the mechanisms tried at the time could
+change a position during a native drag. The one that CAN is hooking the
+window's own `WM_MOVING` (and `WM_SIZING`) via `SetWindowSubclass` -
+the standard Win32 way to build magnetic windows. Windows asks "where
+should this go?" before moving anything, and the answer can be
+adjusted. That also made resize snapping possible, which nothing before
+it could do. Threshold raised 12px -> 24px, so windows visibly pull
+themselves into place.
+
+Everything in the hook works in PHYSICAL screen pixels - the units these
+messages use - so no logical/physical conversion is involved and it
+behaves the same at any display scaling.
+
+**Two real bugs found doing it, both by instrumenting rather than
+reading:**
+
+1. **Don't pass WM_MOVING/WM_SIZING on to JUCE after adjusting them.**
+   JUCE's own handler re-runs a physical<->logical border round-trip on
+   the rectangle, and the small error that introduces accumulates over
+   the hundreds of messages a single drag produces. Measured: a window
+   dragged 142px LEFT ended up 377px to the RIGHT and pinned to the top
+   of the screen. Both messages only mean "you may adjust this"; the
+   move that actually happens still reaches JUCE as
+   `WM_WINDOWPOSCHANGED`, so answering them outright is correct. The
+   cost is that JUCE's constrainer no longer enforces a minimum size,
+   hence `kMinimumWindowWidth/Height` in the hook.
+
+2. **Snap the position rebuilt from the CURSOR, not the one Windows
+   proposes.** Windows derives each proposal from where the window
+   currently is plus the mouse movement since the last message. Snapping
+   that feeds the snap back into its own input: every proposal is a few
+   pixels from the snapped position, still inside the threshold, and
+   gets pulled straight back. **A window that touched something could
+   never be dragged off it again** - measured, one glued to a
+   neighbour's top edge ignored a 200px drag entirely, and it only
+   looked like it worked horizontally because nothing happened to be
+   near it on that axis. The cursor moves independently of anything done
+   to the window, so rebuilding the true position from
+   `dragStart + (cursorNow - cursorAtStart)` and snapping THAT gives a
+   magnet you can always pull away from. The same applies per-edge to
+   resizing.
+
+**Every window has a way back.** The Player window now has four
+activator buttons - Playlist, Library, Voice FX, Soundboard - rather
+than two. Closing Playlist or Library with its X used to strand it,
+since only the latter two had buttons. All four satellites now also
+remember their own visibility across a trip through Settings rather
+than Playlist/Library being forced open.
+
 ### Not yet built
 
 - **The black/dark-green theme and "digital screen" Now Playing
   component** - still deliberately deferred, and now the only thing left
   from the original Winamp-layout plan.
-- **Reopening a closed Playlist or Library window.** Both hide on close
-  like the other satellites, but only Voice FX and Soundboard have
-  activator buttons on the Player window, so those two are the only ones
-  that can be brought back without restarting. Worth an answer before
-  anyone closes one by accident.
-
 ## Beta release process
 
 Established during real beta testing, follow this for every future

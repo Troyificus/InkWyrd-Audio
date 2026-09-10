@@ -1274,6 +1274,55 @@ namespace
             check(result.getX() == candidate.getX(), "horizontal position untouched - no x-axis target was close");
         }
 
+        // ---- resizing: only the dragged edge moves ----
+        {
+            Rectangle<int> screen(0, 0, 4000, 4000);
+            Rectangle<int> neighbour(500, 100, 300, 200); // left edge 500
+
+            // Dragging the RIGHT edge towards the neighbour's left edge.
+            Rectangle<int> candidate(100, 100, 394, 200); // right = 494, 6px short
+            auto result = inkwyrd::snapResizedEdges(candidate, { neighbour }, screen, threshold,
+                                                     false, true, false, false);
+            check(result.getRight() == neighbour.getX(), "a dragged right edge snaps flush to a neighbour");
+            check(result.getX() == candidate.getX(),
+                   "and the opposite edge does NOT move - it resized, it didn't slide");
+            check(result.getY() == candidate.getY() && result.getBottom() == candidate.getBottom(),
+                   "the untouched axis is left alone entirely");
+        }
+
+        {
+            // An edge that ISN'T being dragged must never snap, even
+            // when it happens to sit right next to something.
+            Rectangle<int> screen(0, 0, 4000, 4000);
+            Rectangle<int> neighbour(500, 100, 300, 200);
+            Rectangle<int> candidate(494, 100, 300, 200); // LEFT edge 6px from neighbour
+            auto result = inkwyrd::snapResizedEdges(candidate, { neighbour }, screen, threshold,
+                                                     false, true, false, false); // dragging RIGHT only
+            check(result.getX() == candidate.getX(), "an edge that isn't being dragged is never snapped");
+        }
+
+        {
+            // A corner drag snaps both of its edges.
+            Rectangle<int> screen(0, 0, 4000, 4000);
+            Rectangle<int> neighbour(500, 500, 300, 200);
+            Rectangle<int> candidate(100, 100, 394, 394); // right 494, bottom 494
+            auto result = inkwyrd::snapResizedEdges(candidate, { neighbour }, screen, threshold,
+                                                     false, true, false, true);
+            check(result.getRight() == neighbour.getX() && result.getBottom() == neighbour.getY(),
+                   "dragging a corner snaps both of its edges");
+        }
+
+        {
+            // A snap that would invert the window is refused outright.
+            Rectangle<int> screen(0, 0, 4000, 4000);
+            Rectangle<int> neighbour(0, 0, 10, 10);
+            Rectangle<int> candidate(5, 100, 12, 200); // right edge 17, near neighbour's 10
+            auto result = inkwyrd::snapResizedEdges(candidate, { neighbour }, screen, threshold,
+                                                     false, true, false, false);
+            check(result.getWidth() > 0 && result.getHeight() > 0,
+                   "a snap that would turn the window inside out is refused, not applied");
+        }
+
         // ---- docking, i.e. what a drag should carry along with it ----
         constexpr int dockTolerance = 4;
 

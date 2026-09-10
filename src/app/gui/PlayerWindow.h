@@ -23,6 +23,8 @@ public:
     PlayerWindow(AppSettings& settingsToUse,
                  PlaylistEngine& playlist,
                  MasterEngine& masterEngine,
+                 std::function<void()> onTogglePlaylist,
+                 std::function<void()> onToggleLibrary,
                  std::function<void()> onToggleVoiceFx,
                  std::function<void()> onToggleSoundboard,
                  std::function<void()> onSettingsClicked);

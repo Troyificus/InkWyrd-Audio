@@ -1,29 +1,119 @@
-#include "DetachableWindow.h"
+﻿#include "DetachableWindow.h"
 
 #include "WindowLayoutStore.h"
 #include "WindowSnapping.h"
+
+#if JUCE_WINDOWS
+ #include <windows.h>
+ #include <commctrl.h>
+#endif
 
 juce::Array<DetachableWindow*> DetachableWindow::activeWindows;
 bool DetachableWindow::groupMoveInProgress = false;
 
 namespace
 {
-    // How long after the last moved() to treat a movement burst as over.
-    // Short enough to feel immediate on release, long enough not to fire
-    // in the middle of a drag that's still tracking the mouse.
-    constexpr int kSettleMs = 150;
+    // How long after the last move/resize before the layout is written
+    // to disk. A drag fires moved() many times a second; this coalesces
+    // a whole gesture into one write shortly after it settles.
+    constexpr int kSaveDebounceMs = 400;
 
-    // How close an edge has to get before it snaps. 12px is enough to
-    // feel magnetic without fighting someone deliberately placing a
-    // window a few pixels off another.
-    constexpr int kSnapThreshold = 12;
+    // How close an edge has to get before it snaps. Deliberately
+    // generous: the snap now happens live, mid-drag, so this is the
+    // distance at which a window visibly pulls itself into place -
+    // "strong magnet" territory rather than a quiet correction.
+    constexpr int kSnapThreshold = 24;
 
-    // Deliberately looser than kSnapThreshold when deciding what counts
-    // as "already docked, come along with me". A snapped window is
-    // exactly 0px away, but one placed by hand can be a pixel or two out
-    // and should still travel with the group.
+    // Looser than a snapped-flush 0px when deciding what counts as
+    // "already docked, come along with me", since a window placed by
+    // hand can be a pixel or two out.
     constexpr int kDockTolerance = 4;
+
+    // Small enough never to get in the way of a deliberate resize, big
+    // enough that a window always has a title bar left to grab.
+    constexpr int kMinimumWindowWidth = 220;
+    constexpr int kMinimumWindowHeight = 120;
+
+#if JUCE_WINDOWS
+    constexpr UINT_PTR kSubclassId = 1;
+
+    juce::Rectangle<int> toRectangle(const RECT& r)
+    {
+        return juce::Rectangle<int>::leftTopRightBottom(r.left, r.top, r.right, r.bottom);
+    }
+
+    void writeInto(RECT& r, juce::Rectangle<int> bounds)
+    {
+        r.left = bounds.getX();
+        r.top = bounds.getY();
+        r.right = bounds.getRight();
+        r.bottom = bounds.getBottom();
+    }
+
+    // The work area (screen minus taskbar) of whichever monitor the
+    // proposed rectangle is mostly on, in physical pixels.
+    juce::Rectangle<int> workAreaFor(const RECT& proposed)
+    {
+        auto* monitor = MonitorFromRect(&proposed, MONITOR_DEFAULTTONEAREST);
+
+        MONITORINFO info {};
+        info.cbSize = sizeof(info);
+
+        if (monitor != nullptr && GetMonitorInfo(monitor, &info))
+            return toRectangle(info.rcWork);
+
+        return WindowLayoutStore::primaryDisplayArea();
+    }
+#endif
 }
+
+#if JUCE_WINDOWS
+// Handles the messages Windows sends WHILE a window is being dragged or
+// resized, which is the only point at which the position can still be
+// changed - see the header. The adjusted rectangle is passed on to
+// JUCE's own handler rather than swallowed, so JUCE's size limits and
+// bookkeeping still run on top of it.
+static LRESULT CALLBACK detachableWindowSubclassProc(HWND hwnd, UINT message,
+                                                      WPARAM wParam, LPARAM lParam,
+                                                      UINT_PTR, DWORD_PTR refData)
+{
+    if (auto* window = reinterpret_cast<DetachableWindow*>(refData))
+    {
+        switch (message)
+        {
+            case WM_ENTERSIZEMOVE:
+                window->beginNativeDragFromHook();
+                break;
+
+            case WM_EXITSIZEMOVE:
+                window->endNativeDragFromHook();
+                break;
+
+            // These two are ANSWERED here, not passed on. Letting JUCE
+            // also process them re-runs its own physical<->logical border
+            // round-trip on the rectangle this hook just adjusted, and
+            // the small error that introduces accumulates across the
+            // hundreds of messages one drag produces - measured: a window
+            // dragged 142px left ended up 377px to the RIGHT and pinned
+            // to the top of the screen. Both messages only ever mean "you
+            // may adjust this before it happens"; the move that actually
+            // results still reaches JUCE as WM_WINDOWPOSCHANGED.
+            case WM_MOVING:
+                window->applyMoveSnapFromHook(reinterpret_cast<RECT*>(lParam));
+                return TRUE;
+
+            case WM_SIZING:
+                window->applyResizeSnapFromHook(reinterpret_cast<RECT*>(lParam), (int) wParam);
+                return TRUE;
+
+            default:
+                break;
+        }
+    }
+
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+#endif
 
 DetachableWindow::DetachableWindow(const juce::String& windowName, juce::String windowIdToUse,
                                     AppSettings& settingsToUse, juce::Rectangle<int> defaultBounds,
@@ -50,9 +140,6 @@ DetachableWindow::DetachableWindow(const juce::String& windowName, juce::String 
         restoredVisible = it->second.visible;
     }
 
-    // This runs before the subclass makes the window visible, and moved()
-    // ignores movement while invisible - so restoring a saved arrangement
-    // never snaps it or drags other windows around.
     setBounds(bounds);
     lastMovedPosition = bounds.getPosition();
 }
@@ -60,7 +147,191 @@ DetachableWindow::DetachableWindow(const juce::String& windowName, juce::String 
 DetachableWindow::~DetachableWindow()
 {
     stopTimer();
+    removeNativeHook();
     activeWindows.removeFirstMatchingValue(this);
+}
+
+void DetachableWindow::installNativeHookIfNeeded()
+{
+#if JUCE_WINDOWS
+    auto* handle = getWindowHandle();
+
+    if (handle == nullptr || handle == hookedWindowHandle)
+        return;
+
+    // The peer can be recreated (JUCE does this for some style changes),
+    // which leaves the old subclass attached to a dead HWND.
+    removeNativeHook();
+
+    if (SetWindowSubclass((HWND) handle, detachableWindowSubclassProc, kSubclassId,
+                           reinterpret_cast<DWORD_PTR>(this)))
+        hookedWindowHandle = handle;
+#endif
+}
+
+void DetachableWindow::removeNativeHook()
+{
+#if JUCE_WINDOWS
+    if (hookedWindowHandle != nullptr)
+    {
+        RemoveWindowSubclass((HWND) hookedWindowHandle, detachableWindowSubclassProc, kSubclassId);
+        hookedWindowHandle = nullptr;
+    }
+#endif
+}
+
+juce::Array<juce::Rectangle<int>> DetachableWindow::physicalObstacles() const
+{
+    juce::Array<juce::Rectangle<int>> obstacles;
+
+#if JUCE_WINDOWS
+    for (auto* other : otherLiveWindows())
+    {
+        if (isCarrying(other))
+            continue;
+
+        if (auto* handle = other->getWindowHandle())
+        {
+            RECT r {};
+            if (GetWindowRect((HWND) handle, &r))
+                obstacles.add(toRectangle(r));
+        }
+    }
+#endif
+
+    return obstacles;
+}
+
+void DetachableWindow::beginNativeDragFromHook()
+{
+    nativeDragActive = true;
+    lastMovedPosition = getBounds().getPosition();
+
+#if JUCE_WINDOWS
+    // Where the window and the cursor both were when this gesture
+    // started. Everything during the drag is derived from these rather
+    // than from the window's current position - see applyMoveSnapFromHook
+    // for why that distinction is the difference between a magnet and a
+    // trap.
+    POINT cursor {};
+    RECT startRect {};
+
+    dragStartValid = GetCursorPos(&cursor)
+                      && getWindowHandle() != nullptr
+                      && GetWindowRect((HWND) getWindowHandle(), &startRect);
+
+    if (dragStartValid)
+    {
+        dragStartCursorX = cursor.x;
+        dragStartCursorY = cursor.y;
+        dragStartBounds = toRectangle(startRect);
+    }
+#endif
+
+    // Captured here, before anything has moved, so the current bounds
+    // ARE the pre-drag bounds - no need to reconstruct them afterwards.
+    if (carriesDockedWindows())
+        captureDockedGroup(getBounds());
+    else
+        dockedGroup.clear();
+}
+
+void DetachableWindow::endNativeDragFromHook()
+{
+    nativeDragActive = false;
+    dockedGroup.clear();
+    persistNow();
+}
+
+void DetachableWindow::applyMoveSnapFromHook(void* rectPointer)
+{
+#if JUCE_WINDOWS
+    auto* proposed = static_cast<RECT*>(rectPointer);
+    if (proposed == nullptr)
+        return;
+
+    // The proposed rectangle is NOT used for the position. Windows works
+    // out each proposal from where the window currently IS plus the
+    // mouse movement since the last message, so snapping the proposal
+    // feeds the snap back into its own input: every message proposes a
+    // few pixels away from the snapped position, that's still inside the
+    // threshold, and it gets pulled straight back. The window sticks to
+    // whatever it first touched and cannot be dragged off it at all -
+    // measured, a window glued to a neighbour's top edge ignored drags
+    // of 200px.
+    //
+    // So the true position is rebuilt from the CURSOR instead, which
+    // moves independently of anything we do to the window. Snapping that
+    // is a magnet you can always pull away from.
+    auto candidate = toRectangle(*proposed);
+
+    if (dragStartValid)
+    {
+        POINT cursor {};
+        if (GetCursorPos(&cursor))
+            candidate = dragStartBounds.translated(cursor.x - dragStartCursorX,
+                                                    cursor.y - dragStartCursorY);
+    }
+
+    auto snapped = inkwyrd::snapRectangle(candidate, physicalObstacles(),
+                                           workAreaFor(*proposed), kSnapThreshold);
+
+    writeInto(*proposed, snapped);
+#else
+    juce::ignoreUnused(rectPointer);
+#endif
+}
+
+void DetachableWindow::applyResizeSnapFromHook(void* rectPointer, int edge)
+{
+#if JUCE_WINDOWS
+    auto* proposed = static_cast<RECT*>(rectPointer);
+    if (proposed == nullptr)
+        return;
+
+    const auto stretchingLeft = edge == WMSZ_LEFT || edge == WMSZ_TOPLEFT || edge == WMSZ_BOTTOMLEFT;
+    const auto stretchingRight = edge == WMSZ_RIGHT || edge == WMSZ_TOPRIGHT || edge == WMSZ_BOTTOMRIGHT;
+    const auto stretchingTop = edge == WMSZ_TOP || edge == WMSZ_TOPLEFT || edge == WMSZ_TOPRIGHT;
+    const auto stretchingBottom = edge == WMSZ_BOTTOM || edge == WMSZ_BOTTOMLEFT || edge == WMSZ_BOTTOMRIGHT;
+
+    // Same reasoning as the move: rebuild the dragged edges from the
+    // cursor so a snapped edge can still be pulled away from, rather
+    // than re-snapping our own previous output forever.
+    auto candidate = toRectangle(*proposed);
+
+    if (dragStartValid)
+    {
+        POINT cursor {};
+        if (GetCursorPos(&cursor))
+        {
+            auto deltaX = cursor.x - dragStartCursorX;
+            auto deltaY = cursor.y - dragStartCursorY;
+
+            auto left = stretchingLeft ? dragStartBounds.getX() + deltaX : candidate.getX();
+            auto right = stretchingRight ? dragStartBounds.getRight() + deltaX : candidate.getRight();
+            auto top = stretchingTop ? dragStartBounds.getY() + deltaY : candidate.getY();
+            auto bottom = stretchingBottom ? dragStartBounds.getBottom() + deltaY : candidate.getBottom();
+
+            if (right > left && bottom > top)
+                candidate = juce::Rectangle<int>::leftTopRightBottom(left, top, right, bottom);
+        }
+    }
+
+    auto snapped = inkwyrd::snapResizedEdges(candidate, physicalObstacles(),
+                                              workAreaFor(*proposed), kSnapThreshold,
+                                              stretchingLeft, stretchingRight,
+                                              stretchingTop, stretchingBottom);
+
+    // This hook answers WM_SIZING itself, so JUCE's own constrainer no
+    // longer gets to enforce a floor - without this a window could be
+    // dragged down to nothing and become impossible to grab again.
+    if (snapped.getWidth() < kMinimumWindowWidth || snapped.getHeight() < kMinimumWindowHeight)
+        return;
+
+    writeInto(*proposed, snapped);
+#else
+    juce::ignoreUnused(rectPointer, edge);
+#endif
 }
 
 juce::Array<DetachableWindow*> DetachableWindow::otherLiveWindows() const
@@ -105,61 +376,15 @@ void DetachableWindow::translateDockedGroup(juce::Point<int> delta)
 
     // THE re-entrancy guard, and it is not optional. Moving a companion
     // fires that companion's own moved(), which without this treats
-    // ITSELF as a drag leader, captures the window that just moved it as
-    // its companion, and moves that one back - a feedback loop where
-    // every round adds the delta again. It runs a docked pair off the
-    // screen within a few frames and recurses until the stack gives out
-    // (a real STATUS_FATAL_USER_CALLBACK_EXCEPTION, 0xc000041d, reported
-    // from beta.11).
-    //
-    // It only bites on SLOW drags, which is why it survived testing: at
-    // ~5px per move the leader has already travelled past kDockTolerance
-    // by the time the companion looks, so the companion finds nothing to
-    // carry and the loop breaks by luck. At 1-2px per move - a careful
-    // drag towards another window, exactly what a user does - it doesn't.
+    // ITSELF as a drag leader and moves the window that just moved it
+    // straight back - a feedback loop that runs a docked pair off the
+    // screen and recurses until the stack gives out (a real
+    // STATUS_FATAL_USER_CALLBACK_EXCEPTION, reported from beta.11).
     const juce::ScopedValueSetter<bool> scope(groupMoveInProgress, true);
 
     for (auto& member : dockedGroup)
         if (auto* window = member.getComponent())
             window->setBounds(window->getBounds().translated(delta.x, delta.y));
-}
-
-void DetachableWindow::applySnap()
-{
-    if (! isVisible() || isMinimised())
-        return;
-
-    juce::Array<juce::Rectangle<int>> obstacles;
-    for (auto* other : otherLiveWindows())
-    {
-        // A window being carried along is flush by definition, so letting
-        // it act as a magnet would just pin the group where it started.
-        if (isCarrying(other))
-            continue;
-
-        obstacles.add(other->getBounds());
-    }
-
-    auto current = getBounds();
-
-    auto& displays = juce::Desktop::getInstance().getDisplays();
-    auto* display = displays.getDisplayForRect(current);
-    auto screenArea = display != nullptr ? display->userArea
-                                          : WindowLayoutStore::primaryDisplayArea();
-
-    auto snapped = inkwyrd::snapRectangle(current, obstacles, screenArea, kSnapThreshold);
-    if (snapped == current)
-        return;
-
-    // applyingSnap stops the resulting moved() from being mistaken for
-    // the start of a fresh drag (which would re-capture a group and snap
-    // again, indefinitely).
-    const juce::ScopedValueSetter<bool> scope(applyingSnap, true);
-    setBounds(snapped);
-
-    // The group has to travel with the correction too, or landing flush
-    // would tear a docked pair apart by up to kSnapThreshold pixels.
-    translateDockedGroup(snapped.getPosition() - current.getPosition());
 }
 
 void DetachableWindow::setHiddenByMasterMinimise(bool shouldBeHidden)
@@ -179,68 +404,40 @@ void DetachableWindow::moved()
 
     auto position = getBounds().getPosition();
 
-    // Skipped while invisible (startup restore), while applying our own
-    // correction, and while some other window is carrying this one along
-    // - none of those is this window being dragged, and treating them as
-    // such is what caused the runaway described in translateDockedGroup.
-    if (isVisible() && ! applyingSnap && ! groupMoveInProgress)
-    {
-        // movementInProgress gates the settle-snap, so EVERY window sets
-        // it - satellites still snap flush, they just don't drag the
-        // neighbourhood along while doing it.
-        if (! movementInProgress)
-        {
-            movementInProgress = true;
-
-            // Deliberately the PRE-MOVE rectangle, not the current one:
-            // by the time this first callback arrives the window has
-            // already travelled several pixels, which is enough to stop
-            // registering as flush against the neighbour it was docked
-            // to a moment ago. lastMovedPosition still holds where it
-            // was sitting before this burst started.
-            if (carriesDockedWindows())
-                captureDockedGroup(getBounds().withPosition(lastMovedPosition));
-        }
-
-        // Applied on the first callback too, so the group catches up on
-        // the few pixels the leader had already covered by then. A no-op
-        // for satellites, whose group is never captured.
+    // The snap itself happens in the native hook, before the window
+    // moves. All that's left here is carrying the docked group along by
+    // however far this window actually travelled.
+    if (nativeDragActive && ! groupMoveInProgress)
         translateDockedGroup(position - lastMovedPosition);
-    }
 
     lastMovedPosition = position;
-
-    // Restarted on every move, so it only fires once the window has
-    // actually stopped - see kSettleMs.
-    startTimer(kSettleMs);
+    startTimer(kSaveDebounceMs);
 }
 
 void DetachableWindow::resized()
 {
     DocumentWindow::resized();
-    startTimer(kSettleMs);
+    startTimer(kSaveDebounceMs);
 }
 
 void DetachableWindow::visibilityChanged()
 {
     DocumentWindow::visibilityChanged();
+
+    // The native window only exists once this is shown, so this is the
+    // earliest the hook can be attached - and it has to be re-checked
+    // every time, in case the peer was recreated.
+    if (isVisible())
+        installNativeHookIfNeeded();
+
     // Not debounced like moved()/resized() - a show/hide toggle is a
-    // single deliberate click, not a continuous stream of events, so
-    // there's no flood to coalesce and no reason to delay it.
+    // single deliberate click, not a continuous stream of events.
     persistNow();
 }
 
 void DetachableWindow::timerCallback()
 {
     stopTimer();
-
-    if (movementInProgress)
-    {
-        movementInProgress = false;
-        applySnap();
-        dockedGroup.clear();
-    }
-
     persistNow();
 }
 
@@ -257,3 +454,4 @@ void DetachableWindow::persistNow()
     settings.setWindowLayoutJson(WindowLayoutStore::toJson(states));
     settings.save();
 }
+

@@ -7,11 +7,15 @@ namespace
 
 PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
                                   MasterEngine& masterEngineToUse,
+                                  std::function<void()> onTogglePlaylistToUse,
+                                  std::function<void()> onToggleLibraryToUse,
                                   std::function<void()> onToggleVoiceFxToUse,
                                   std::function<void()> onToggleSoundboardToUse,
                                   std::function<void()> onSettingsClickedToUse)
     : playlist(playlistToUse),
       masterEngine(masterEngineToUse),
+      onTogglePlaylist(std::move(onTogglePlaylistToUse)),
+      onToggleLibrary(std::move(onToggleLibraryToUse)),
       onToggleVoiceFx(std::move(onToggleVoiceFxToUse)),
       onToggleSoundboard(std::move(onToggleSoundboardToUse))
 {
@@ -168,6 +172,12 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     };
     addAndMakeVisible(masterVolumeSlider);
 
+    addAndMakeVisible(playlistButton);
+    playlistButton.onClick = [this] { if (onTogglePlaylist) onTogglePlaylist(); };
+
+    addAndMakeVisible(libraryButton);
+    libraryButton.onClick = [this] { if (onToggleLibrary) onToggleLibrary(); };
+
     addAndMakeVisible(voiceFxButton);
     voiceFxButton.onClick = [this] { if (onToggleVoiceFx) onToggleVoiceFx(); };
 
@@ -183,7 +193,7 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     // component's own size, so an explicit size here IS the window size.
     // Tall enough for every row PLUS the warning banner and monitor hint
     // both showing at once - the worst case, not just the common one.
-    setSize(640, 320);
+    setSize(640, 356);
 }
 
 void PlayerComponent::setDiscordStatus(const juce::String& text)
@@ -387,13 +397,25 @@ void PlayerComponent::resized()
     fadeOutSlider.setBounds(loopRow.removeFromLeft(140));
     area.removeFromTop(8);
 
-    // Row three: the two satellite-window activators and master volume.
-    auto activatorRow = area.removeFromTop(28);
-    voiceFxButton.setBounds(activatorRow.removeFromLeft(110));
-    activatorRow.removeFromLeft(8);
-    soundboardButton.setBounds(activatorRow.removeFromLeft(110));
+    // Row three: master volume on the right.
+    auto volumeRow = area.removeFromTop(28);
+    masterVolumeSlider.setBounds(volumeRow.removeFromRight(180));
+    volumeRow.removeFromRight(12);
+    masterVolumeCaption.setBounds(volumeRow.removeFromRight(56));
+    area.removeFromTop(8);
 
-    masterVolumeSlider.setBounds(activatorRow.removeFromRight(180));
-    activatorRow.removeFromRight(12);
-    masterVolumeCaption.setBounds(activatorRow.removeFromRight(56));
+    // Row four: one activator per satellite window. Every window gets a
+    // way back - closing one with its X used to strand it.
+    auto activatorRow = area.removeFromTop(28);
+    juce::TextButton* activators[] = { &playlistButton, &libraryButton,
+                                        &voiceFxButton, &soundboardButton };
+
+    constexpr int gap = 8;
+    auto buttonWidth = (activatorRow.getWidth() - gap * 3) / 4;
+
+    for (auto* button : activators)
+    {
+        button->setBounds(activatorRow.removeFromLeft(buttonWidth));
+        activatorRow.removeFromLeft(gap);
+    }
 }
