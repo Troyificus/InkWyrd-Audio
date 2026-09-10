@@ -22,7 +22,8 @@ public:
     MainWindow(const juce::String& name, AppSettings& settingsToUse);
 
     void showSetupView(AppSettings& settings, bool isFirstRun,
-                        std::function<void(SetupComponent::Result)> onSaveAndLaunch);
+                        std::function<void(SetupComponent::Result)> onSaveAndLaunch,
+                        std::function<void(juce::String, SetupComponent::AuthoriseCallback)> onAuthoriseRpc);
 
     void closeButtonPressed() override;
 };

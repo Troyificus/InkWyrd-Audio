@@ -41,11 +41,31 @@ namespace
 
 VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
                                     PluginChain& voiceChainToUse,
-                                    std::function<void()> onPluginListChangedToUse)
+                                    NoiseSuppressor& noiseSuppressorToUse,
+                                    bool noiseSuppressionEnabled,
+                                    std::function<void()> onPluginListChangedToUse,
+                                    std::function<void(bool)> onNoiseSuppressionChangedToUse)
     : scanner(scannerToUse),
       voiceChain(voiceChainToUse),
-      onPluginListChanged(std::move(onPluginListChangedToUse))
+      noiseSuppressor(noiseSuppressorToUse),
+      onPluginListChanged(std::move(onPluginListChangedToUse)),
+      onNoiseSuppressionChanged(std::move(onNoiseSuppressionChangedToUse))
 {
+    noiseSuppressionToggle.setToggleState(noiseSuppressionEnabled, juce::dontSendNotification);
+    noiseSuppressionToggle.onClick = [this]
+    {
+        auto on = noiseSuppressionToggle.getToggleState();
+        noiseSuppressor.setEnabled(on);
+        if (onNoiseSuppressionChanged) onNoiseSuppressionChanged(on);
+        updateNoiseSuppressionHint();
+    };
+    addAndMakeVisible(noiseSuppressionToggle);
+
+    noiseSuppressionHint.setColour(juce::Label::textColourId, juce::Colours::grey);
+    noiseSuppressionHint.setFont(juce::Font(juce::FontOptions(12.0f)));
+    addAndMakeVisible(noiseSuppressionHint);
+    updateNoiseSuppressionHint();
+
     addAndMakeVisible(pluginListCaption);
 
     addPluginButton.onClick = [this] { browseForPlugin(); };
@@ -150,6 +170,28 @@ void VoiceFxComponent::rebuildChainListUI()
     // resized() ran afterwards) and never on the add that first filled
     // the chain.
     resized();
+}
+
+void VoiceFxComponent::updateNoiseSuppressionHint()
+{
+    // Both states say something useful. "Off" is a legitimate, often
+    // correct choice here, so it gets a reason rather than an empty
+    // line, and "on" names the cost rather than only the benefit -
+    // added delay on your own voice is the thing people notice and
+    // then blame on something else.
+    if (noiseSuppressionToggle.getToggleState())
+    {
+        auto ms = juce::String(juce::roundToInt(noiseSuppressor.getLatencyMs()));
+        noiseSuppressionHint.setText("Removes steady background noise between words. Adds about "
+                                      + ms + "ms of delay to your voice.",
+                                      juce::dontSendNotification);
+    }
+    else
+    {
+        noiseSuppressionHint.setText("Off. Leave it off if your mic is already quiet - on a clean "
+                                      "signal it takes more from the voice than from the noise.",
+                                      juce::dontSendNotification);
+    }
 }
 
 void VoiceFxComponent::browseForPlugin()
@@ -263,6 +305,14 @@ void VoiceFxComponent::closeAllEditors()
 void VoiceFxComponent::resized()
 {
     auto area = getLocalBounds().reduced(16);
+
+    // Full width, above both columns: it applies to the whole mic path
+    // and runs before the chain, so it doesn't belong inside either
+    // column's list.
+    noiseSuppressionToggle.setBounds(area.removeFromTop(24));
+    noiseSuppressionHint.setBounds(area.removeFromTop(18));
+    area.removeFromTop(12);
+
     auto columnWidth = (area.getWidth() - 12) / 2;
 
     auto pluginColumn = area.removeFromLeft(columnWidth);

@@ -16,9 +16,13 @@ target_sources(AudioEngineTest PRIVATE
     # Pure geometry, no Component/peer needed - covers the magnetic-snap
     # math headlessly rather than only by manual dragging.
     ../app/gui/WindowSnapping.cpp
+    # For deriveApplicationId(), which is a pure function over a string
+    # and the one part of the Discord auto-mute path that can be checked
+    # without a running Discord client.
+    ../app/DiscordRpcClient.cpp
 )
 
-target_include_directories(AudioEngineTest PRIVATE ../app/gui)
+target_include_directories(AudioEngineTest PRIVATE ../app/gui ../app)
 
 target_compile_definitions(AudioEngineTest PRIVATE
     JUCE_STANDALONE_APPLICATION=1

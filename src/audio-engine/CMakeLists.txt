@@ -5,6 +5,7 @@
     SoundboardLayout.cpp
     TrackSettingsStore.cpp
     TrackLibrary.cpp
+    NoiseSuppressor.cpp
     Mp3AudioFormat.cpp
     MediaFoundationAudioFormat.cpp
     PlaylistEngine.h
@@ -13,6 +14,7 @@
     SoundboardLayout.h
     TrackSettingsStore.h
     TrackLibrary.h
+    NoiseSuppressor.h
     Mp3AudioFormat.h
     MediaFoundationAudioFormat.h
 )
@@ -43,3 +45,8 @@ target_link_libraries(AudioEngine PUBLIC
     mfuuid
     ole32
 )
+
+# PRIVATE: NoiseSuppressor.h deliberately forward-declares DenoiseState
+# rather than including rnnoise.h, so nothing downstream needs the
+# library's headers on its include path.
+target_link_libraries(AudioEngine PRIVATE rnnoise)

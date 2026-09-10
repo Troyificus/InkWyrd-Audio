@@ -1,10 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_audio_devices/juce_audio_devices.h>
 
 #include "DiscordAudioSender.h"
+#include "NoiseSuppressor.h"
 #include "PlaylistEngine.h"
 #include "SoundboardEngine.h"
 #include "PluginChain.h"
@@ -29,8 +31,16 @@ public:
     // local monitoring and whatever's sent to Discord. Safe to call
     // from any thread (Stream Deck control commands land on the
     // message thread; this is read on the audio thread).
-    void setMicMuted(bool muted) { micMuted.store(muted); }
+    void setMicMuted(bool muted);
     bool isMicMuted() const { return micMuted.load(); }
+
+    // Fires only when the mic mute state actually CHANGES, on whatever
+    // thread changed it - the Player window's button and the Stream Deck
+    // control socket are both real callers, so a listener hung off one
+    // of those UIs would miss the other. Assign once during startup,
+    // before anything can toggle the mic; it is deliberately not
+    // guarded for concurrent reassignment.
+    std::function<void(bool micMutedNow)> onMicMuteChanged;
 
     // Whether the master mix is also played out of the host's own
     // speakers. Off while streaming to Discord: the host is in the call
@@ -49,6 +59,12 @@ public:
     void setMasterGain(float gain) { masterGain.store(juce::jlimit(0.0f, 1.0f, gain)); }
     float getMasterGain() const { return masterGain.load(); }
 
+    // RNNoise on the mic, ahead of the VST chain. Off by default and
+    // owned here rather than by the caller so the audio thread always
+    // has a valid object whatever the UI is doing. See NoiseSuppressor.h
+    // for why this is a toggle and not always-on.
+    NoiseSuppressor& getNoiseSuppressor() { return noiseSuppressor; }
+
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
                                            int numInputChannels,
                                            float* const* outputChannelData,
@@ -64,6 +80,7 @@ private:
     PluginChain& voiceChain;
 
     juce::MixerAudioSource musicMixer; // playlist + soundboard
+    NoiseSuppressor noiseSuppressor;
 
     std::atomic<DiscordAudioSender*> discordSender { nullptr };
     std::atomic<bool> micMuted { false };

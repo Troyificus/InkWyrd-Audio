@@ -14,6 +14,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "DiscordRpcClient.h"
+#include "NoiseSuppressor.h"
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
@@ -1221,6 +1223,186 @@ namespace
         return failures == 0 ? 0 : 1;
     }
 
+    // INKWYRD_RPCTEST=1: the one piece of the Discord auto-mute path that
+    // can be checked without Discord running.
+    //
+    // Deriving the application id from the bot token is the step where a
+    // silent wrong answer is most costly: a plausible-looking but
+    // incorrect id produces a handshake that Discord simply refuses,
+    // which reads as "authorisation failed" and sends you looking at
+    // scopes and secrets instead. Everything else in DiscordRpcClient
+    // needs a live client and a human clicking a consent dialog, and is
+    // covered by scratchpad/rpc_mute_spike.py instead.
+    //
+    // No real token appears here or is read from anywhere - these are
+    // constructed from a known id.
+    int runRpcTest()
+    {
+        auto tokenFor = [](const juce::String& applicationId)
+        {
+            juce::MemoryOutputStream encoded;
+            juce::Base64::convertToBase64(encoded, applicationId.toRawUTF8(),
+                                           (size_t) applicationId.getNumBytesAsUTF8());
+
+            // Discord uses base64url and drops the padding.
+            auto segment = encoded.toString().replaceCharacter('+', '-')
+                                              .replaceCharacter('/', '_')
+                                              .removeCharacters("=");
+            return segment + ".Gabcde.abcdefghijklmnopqrstuvwxyz12";
+        };
+
+        check(DiscordRpcClient::deriveApplicationId(tokenFor("1543399962723745792"))
+                  == "1543399962723745792",
+               "application id round-trips out of a bot token");
+
+        check(DiscordRpcClient::deriveApplicationId(tokenFor("123456789012345678"))
+                  == "123456789012345678",
+               "a different application id derives correctly too");
+
+        // Everything below must fail rather than return something
+        // plausible - a wrong id fails later, further from the cause.
+        check(DiscordRpcClient::deriveApplicationId("").isEmpty(),
+               "an empty token derives nothing");
+        check(DiscordRpcClient::deriveApplicationId("not-a-token").isEmpty(),
+               "a token-shaped-but-not string derives nothing");
+        check(DiscordRpcClient::deriveApplicationId("aGVsbG8.x.y").isEmpty(),
+               "a token whose first segment decodes to non-digits derives nothing");
+        check(DiscordRpcClient::deriveApplicationId("MTIz.x.y").isEmpty(),
+               "a decoded value too short to be a snowflake derives nothing");
+
+        // Whitespace round a pasted token is extremely common and must
+        // not change the answer.
+        check(DiscordRpcClient::deriveApplicationId("  " + tokenFor("1543399962723745792") + "  ")
+                  == "1543399962723745792",
+               "leading/trailing whitespace on a pasted token is tolerated");
+
+        std::cout << (failures == 0 ? "RPC-TEST PASSED" : "RPC-TEST FAILED")
+                   << " (" << failures << " failure(s))" << std::endl;
+        return failures == 0 ? 0 : 1;
+    }
+
+    // INKWYRD_NOISETEST=1: the mic noise suppressor, exercised without an
+    // audio device. Needs no files and no PLAYLIST_FOLDER - it
+    // synthesises its own signal, so it runs anywhere.
+    //
+    // What this is really guarding is the PLUMBING, not RNNoise: the
+    // library's own behaviour was measured separately in src/mic-spike.
+    // What can break here is the bridging - 480-sample frames against
+    // arbitrary device blocks, and 48k against a device that isn't at
+    // 48k. Both are easy to get subtly wrong in ways that still produce
+    // plausible-sounding audio, so they get real assertions: exact
+    // sample counts out, no underruns in steady state, and actual
+    // attenuation of a noise-only signal.
+    int runNoiseSuppressorTest()
+    {
+        // A noise-only signal is the cleanest thing to assert on: with no
+        // voice present, a working suppressor should drive it towards
+        // silence, and any figure near 0dB means it isn't running.
+        auto fillWithNoise = [](juce::AudioBuffer<float>& buffer, juce::Random& rng)
+        {
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    buffer.setSample(ch, i, 0.05f * (rng.nextFloat() * 2.0f - 1.0f));
+        };
+
+        auto runAtRate = [&](double sampleRate, int blockSize, const juce::String& label)
+        {
+            NoiseSuppressor suppressor;
+            suppressor.prepare(sampleRate, blockSize);
+            suppressor.setEnabled(true);
+
+            juce::Random rng(1234);
+            juce::AudioBuffer<float> block(2, blockSize);
+
+            double inputEnergy = 0.0, outputEnergy = 0.0;
+            int measuredSamples = 0;
+
+            // 3 seconds. The first second is discarded: the pipeline
+            // primes with silence by design, and counting that as
+            // "attenuation" would be measuring the wrong thing entirely.
+            auto totalBlocks = (int) (3.0 * sampleRate / blockSize);
+            auto skipBlocks = (int) (1.0 * sampleRate / blockSize);
+
+            for (int b = 0; b < totalBlocks; ++b)
+            {
+                fillWithNoise(block, rng);
+
+                double blockInput = 0.0;
+                for (int i = 0; i < blockSize; ++i)
+                    blockInput += (double) block.getSample(0, i) * block.getSample(0, i);
+
+                suppressor.process(block, blockSize);
+
+                if (b < skipBlocks)
+                    continue;
+
+                double blockOutput = 0.0;
+                for (int i = 0; i < blockSize; ++i)
+                    blockOutput += (double) block.getSample(0, i) * block.getSample(0, i);
+
+                inputEnergy += blockInput;
+                outputEnergy += blockOutput;
+                measuredSamples += blockSize;
+
+                // Both channels must carry the same suppressed signal -
+                // see NoiseSuppressor.h on why this is mono by design.
+                check(block.getSample(0, blockSize / 2) == block.getSample(1, blockSize / 2),
+                       label + ": both channels carry the same suppressed signal");
+            }
+
+            auto reductionDb = 10.0 * std::log10((outputEnergy + 1e-20) / (inputEnergy + 1e-20));
+            std::cout << "  " << label << ": noise-only change " << juce::String(reductionDb, 1)
+                       << " dB, " << suppressor.getUnderrunCount() << " underrun(s)" << std::endl;
+
+            check(reductionDb < -20.0,
+                   label + ": noise-only signal is attenuated by more than 20dB");
+            check(suppressor.getUnderrunCount() == 0,
+                   label + ": no output underruns in steady state");
+            check(measuredSamples > 0, label + ": actually measured something");
+        };
+
+        // The common case, and the one where no resampling happens at all.
+        runAtRate(48000.0, 480, "48k / 480-sample blocks");
+
+        // A block size unrelated to RNNoise's 480 - the frame FIFO has to
+        // carry a partial frame across block boundaries.
+        runAtRate(48000.0, 512, "48k / 512-sample blocks");
+
+        // The case that needs resampling in both directions. 44.1k is
+        // common enough on Windows that treating it as exotic would be a
+        // mistake, and the interpolators are where drift would show up.
+        runAtRate(44100.0, 441, "44.1k / 441-sample blocks");
+        runAtRate(44100.0, 1024, "44.1k / 1024-sample blocks");
+
+        // Disabled must be a true no-op, not a quiet passthrough with
+        // latency: someone who never turns this on must not pay for it.
+        {
+            NoiseSuppressor suppressor;
+            suppressor.prepare(48000.0, 480);
+            suppressor.setEnabled(false);
+
+            juce::AudioBuffer<float> block(2, 480);
+            juce::Random rng(99);
+            fillWithNoise(block, rng);
+
+            juce::AudioBuffer<float> before(block);
+            suppressor.process(block, 480);
+
+            bool identical = true;
+            for (int i = 0; i < 480 && identical; ++i)
+                identical = block.getSample(0, i) == before.getSample(0, i);
+
+            check(identical, "disabled: the buffer is left completely untouched");
+            check(suppressor.getLatencySamples() == 0, "disabled: reports no added latency");
+            check(suppressor.getLatencyMs() > 0.0,
+                   "disabled: still reports what enabling it would cost");
+        }
+
+        std::cout << (failures == 0 ? "NOISE-TEST PASSED" : "NOISE-TEST FAILED")
+                   << " (" << failures << " failure(s))" << std::endl;
+        return failures == 0 ? 0 : 1;
+    }
+
     // INKWYRD_SNAPTEST=1: the magnetic-snap geometry behind the
     // Winamp-style multi-window layout, exercised without launching the
     // app or dragging anything - snapRectangle() takes no Component/peer,
@@ -1434,6 +1616,15 @@ int main(int argc, char* argv[])
     // before the PLAYLIST_FOLDER requirement below applies to it.
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_SNAPTEST", "").isNotEmpty())
         return runSnapTest();
+
+    // Also self-contained - synthesises its own audio, needs no device
+    // and no music folder, so it goes above the PLAYLIST_FOLDER guard
+    // for the same reason the snap test does.
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_NOISETEST", "").isNotEmpty())
+        return runNoiseSuppressorTest();
+
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RPCTEST", "").isNotEmpty())
+        return runRpcTest();
 
     auto playlistFolder = juce::SystemStats::getEnvironmentVariable("PLAYLIST_FOLDER", "");
     auto soundboardFolder = juce::SystemStats::getEnvironmentVariable("SOUNDBOARD_FOLDER", "");

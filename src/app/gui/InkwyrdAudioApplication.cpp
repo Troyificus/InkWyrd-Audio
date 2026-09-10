@@ -115,6 +115,19 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     mainWindow = std::make_unique<MainWindow>(getApplicationName(), settings);
     logPhase("creating the window");
 
+    // Mirror the mic into the user's own Discord client. Hung off the
+    // engine rather than off the Player window's button so the Stream
+    // Deck control socket - the other thing that toggles the mic -
+    // behaves identically. Assigned before anything can toggle it.
+    masterEngine.onMicMuteChanged = [this](bool micMutedNow)
+    {
+        // Inverted deliberately: a LIVE mic here (not muted) is what
+        // should mute the user in Discord.
+        discordRpc.setSelfMuted(! micMutedNow);
+    };
+
+    applyDiscordRpcSettings();
+
     if (!library.isEmpty() || settings.isPlaylistFolderSet())
     {
         applyDefaultLocalMonitoring();
@@ -369,7 +382,34 @@ void InkwyrdAudioApplication::showSetup()
     }
 
     mainWindow->showSetupView(settings, isFirstRun,
-                               [this](SetupComponent::Result result) { completeSetupAndLaunch(result); });
+                               [this](SetupComponent::Result result) { completeSetupAndLaunch(result); },
+                               [this](juce::String secret, SetupComponent::AuthoriseCallback callback)
+                               {
+                                   // Uses what's typed in right now rather than
+                                   // what's saved, so someone can paste a secret
+                                   // and authorise in one pass. The refresh token
+                                   // is persisted here, on success, because it is
+                                   // the thing that makes the grant durable - a
+                                   // user who authorised and then closed Settings
+                                   // without saving would otherwise have to do it
+                                   // all again.
+                                   discordRpc.configure(DiscordRpcClient::deriveApplicationId(settings.getBotToken()),
+                                                         secret,
+                                                         settings.getDiscordRpcRefreshToken());
+
+                                   discordRpc.authorise([this, callback](bool success, juce::String message,
+                                                                          juce::String refreshToken)
+                                   {
+                                       if (success && refreshToken.isNotEmpty())
+                                       {
+                                           settings.setDiscordRpcRefreshToken(refreshToken);
+                                           settings.save();
+                                       }
+
+                                       if (callback)
+                                           callback(success, message);
+                                   });
+                               });
     mainWindow->setVisible(true);
     mainWindow->toFront(true);
 }
@@ -452,6 +492,7 @@ void InkwyrdAudioApplication::showPlayer()
             [this](const juce::Uuid& id) { handlePlaylistSelected(id); });
 
         voiceFxWindow = std::make_unique<VoiceFxWindow>(settings, scanner, voiceChain,
+                                                          masterEngine.getNoiseSuppressor(),
                                                           [this] { saveVoicePlugins(); });
 
         soundboardWindow = std::make_unique<SoundboardWindow>(settings, soundboard, soundboardLayout,
@@ -546,6 +587,35 @@ void InkwyrdAudioApplication::updateWarningBanner()
     player->setWarningBanner(warnings.joinIntoString("  |  "));
 }
 
+void InkwyrdAudioApplication::applyDiscordRpcSettings()
+{
+    // No separate client-id field: the bot token is issued by the same
+    // Discord application, and its first segment IS that application's
+    // id. Asking the user to find and paste it a second time would be
+    // one more chance to paste the wrong thing.
+    auto applicationId = DiscordRpcClient::deriveApplicationId(settings.getBotToken());
+
+    discordRpc.configure(applicationId,
+                          settings.getDiscordClientSecret(),
+                          settings.getDiscordRpcRefreshToken());
+
+    // Every part has to be present. Enabling it with no grant would just
+    // sit there failing to connect, which looks like a bug rather than
+    // an unfinished setup.
+    auto usable = settings.isDiscordAutoMuteEnabled()
+                   && applicationId.isNotEmpty()
+                   && settings.getDiscordClientSecret().isNotEmpty()
+                   && settings.getDiscordRpcRefreshToken().isNotEmpty();
+
+    discordRpc.setEnabled(usable);
+
+    // Match whatever the mic is doing right now. Turning auto-mute on
+    // mid-session with the mic already live should take effect
+    // immediately, not on the next toggle.
+    if (usable)
+        discordRpc.setSelfMuted(! masterEngine.isMicMuted());
+}
+
 void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result result)
 {
     settings.setPlaylistFolder(result.playlistFolder);
@@ -553,7 +623,11 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
     settings.setBotToken(result.botToken);
     settings.setGuildId(result.guildId);
     settings.setChannelId(result.channelId);
+    settings.setDiscordClientSecret(result.discordClientSecret);
+    settings.setDiscordAutoMuteEnabled(result.discordAutoMuteEnabled);
     settings.save();
+
+    applyDiscordRpcSettings();
 
     // The Setup screen's music folder now seeds a playlist rather than
     // being the one and only source. Idempotent: re-saving Settings

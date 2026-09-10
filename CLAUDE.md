@@ -1611,19 +1611,54 @@ Measured details worth keeping:
   a bad client secret or a refused scope. It is neither. Discord's API
   docs require a descriptive agent; any real one works.
 
-### Still to build into the app
+### Wired into the app (`src/app/DiscordRpcClient.{h,cpp}`)
 
-Persist and refresh the token, and hang the mute off the mic going live
-rather than off the session starting. Design constraint already agreed:
-**do not override the user's mic at session start.** Plenty of people
-will never touch the voice FX feature, and an app that mutes you in
-Discord the moment it launches is hostile.
+Everything runs on one background thread: the pipe reads block, the
+token exchange is network I/O, and AUTHORIZE waits on a human clicking a
+consent dialog. None of that belongs on the message thread.
 
-Also a product consequence, not just an implementation one: the client
-secret is per-application, and every Inkwyrd user registers their own
-Discord application. So the auto-mute needs its own setup step in the
-app's settings, alongside the bot token - it can't ship as something
-that just works out of the box.
+Three decisions worth not re-deriving:
+
+- **No client-id setting.** Bot tokens are
+  `base64url(application id).timestamp.hmac`, so the id the RPC flow
+  needs is already inside the bot token the user configured -
+  `deriveApplicationId()` pulls it out. One less field, and one less
+  chance to paste the wrong value. Confirmed against a real launch: the
+  log's `bot user id 1543399962723745792` matches the application id
+  exactly. Unit-tested under `INKWYRD_RPCTEST=1`, including that a
+  malformed token derives NOTHING rather than something plausible - a
+  wrong id fails at the handshake, a long way from its cause.
+- **The mute hangs off `MasterEngine::onMicMuteChanged`, not off the
+  Player window's button.** The Stream Deck control socket toggles the
+  same mic, and a listener attached to the button would have missed it
+  entirely. Fires on real transitions only.
+- **`GET_VOICE_SETTINGS` before muting, always.** That captured value is
+  what gets restored - reading it afterwards would only ever read our
+  own mute back, and someone who was already muted before Inkwyrd
+  touched anything must not find themselves unmuted later. The worker
+  also restores it on shutdown, which needs
+  `ignoreExitSignalForRead`: without it, the exit signal that triggers
+  the unmute aborts the very read that confirms it.
+
+Not started automatically: `applyDiscordRpcSettings()` requires the
+toggle, a derived application id, a client secret AND a refresh token
+before it enables anything. Enabling with a missing piece would sit
+there failing to connect, which reads as a bug rather than an
+unfinished setup.
+
+### Verified, and the one step that can't be automated
+
+Launch-tested for real: Settings renders the new section, the app
+connects as before. The final Authorise click happens in **Discord's own
+consent dialog**, which is a grant of access to the user's account - not
+something to automate on their behalf. The protocol underneath it is
+already proven end to end by `scratchpad/rpc_mute_spike.py`, which sends
+the identical payloads.
+
+Also worth knowing for any future launch test: JUCE's `TextEditor` does
+**not** expose UI Automation's `ValuePattern`, so a password-style field
+can't be filled that way. Focus-plus-clipboard-paste didn't land either.
+Typing into these fields is a manual step.
 
 Design constraint already agreed: **do not override the user's mic at
 session start.** Plenty of people will never touch the voice FX feature,
@@ -1695,6 +1730,42 @@ of the echo path.
    -1..1. Feed it normalised audio and it does almost nothing, because
    everything looks like silence. Upstream's own `rnnoise_demo.c`
    confirms this - it reads `short` and assigns straight to `float`.
+
+### Wired into the app (`src/audio-engine/NoiseSuppressor.{h,cpp}`)
+
+Runs on the mic buffer in `MasterEngine`, **before** the VST chain - the
+plugins are there to shape the voice, and shaping a signal that still
+has the room in it means the FX process the room too. Toggled from the
+Voice FX window, off by default, persisted as `noiseSuppressionEnabled`.
+
+Three mismatches it absorbs, none of them optional:
+
+- **48kHz only.** No other rate exists for RNNoise. WASAPI is usually
+  already there, but 44.1k is common enough that silently doing nothing
+  would be a bad answer, so it resamples in and out.
+- **Fixed 480-sample frames** against whatever block size the driver
+  chose.
+- **Mono.** Channel 0 is analysed and the result written to both, rather
+  than running two independent suppressors that could gate differently
+  and smear the image. Channel 0 rather than an average, because
+  averaging a genuine stereo pair can partially cancel if the capsules
+  are out of phase.
+
+**Not `juce::AbstractFifo`, and this is the subtle one.**
+`juce::LagrangeInterpolator::process()` decides for itself how many
+INPUT samples it needs to produce a requested number of outputs, and
+reports that back. A FIFO can't un-read the surplus, so anything
+read-but-unused has to be discarded - a few samples per block, every
+block, which is a slow drift and a click each time it accumulates past a
+sample. Plain compacting buffers consume exactly what the interpolator
+reports using. The memmove is over a few hundred floats and allocates
+nothing.
+
+Covered by `INKWYRD_NOISETEST=1`, which is really testing the PLUMBING
+rather than RNNoise (the library itself was measured in
+`src/mic-spike`): 48k/480, 48k/512, 44.1k/441 and 44.1k/1024 all
+attenuate a noise-only signal by 72-75dB with zero underruns, and
+disabled is asserted to be a true no-op rather than a quiet passthrough.
 
 Also: v0.2's tarball is missing `os_support.h`, which its own scalar
 `vec.h` path includes. That path is evidently never compiled upstream

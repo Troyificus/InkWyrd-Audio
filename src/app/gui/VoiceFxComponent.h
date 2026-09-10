@@ -5,6 +5,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "NoiseSuppressor.h"
 #include "PluginChain.h"
 #include "PluginEditorWindow.h"
 #include "PluginScanner.h"
@@ -30,7 +31,10 @@ class VoiceFxComponent : public juce::Component
 public:
     VoiceFxComponent(PluginScanner& scannerToUse,
                       PluginChain& voiceChainToUse,
-                      std::function<void()> onPluginListChangedToUse);
+                      NoiseSuppressor& noiseSuppressorToUse,
+                      bool noiseSuppressionEnabled,
+                      std::function<void()> onPluginListChangedToUse,
+                      std::function<void(bool)> onNoiseSuppressionChangedToUse);
 
     // Editor windows are closed here, before anything they point into can
     // go away.
@@ -41,6 +45,7 @@ public:
 private:
     void rebuildPluginListUI();
     void rebuildChainListUI();
+    void updateNoiseSuppressionHint();
 
     void browseForPlugin();
     void addToChain(const juce::PluginDescription& description);
@@ -52,7 +57,16 @@ private:
 
     PluginScanner& scanner;
     PluginChain& voiceChain;
+    NoiseSuppressor& noiseSuppressor;
     std::function<void()> onPluginListChanged;
+    std::function<void(bool)> onNoiseSuppressionChanged;
+
+    // Above the two plugin columns, because it applies to the whole mic
+    // path rather than being one more item in the chain - and because it
+    // runs BEFORE the chain does, so listing it among the plugins would
+    // misrepresent the signal order.
+    juce::ToggleButton noiseSuppressionToggle { "Noise suppression (RNNoise)" };
+    juce::Label noiseSuppressionHint;
 
     juce::Label pluginListCaption { {}, "Your VST3 plugins" };
     juce::TextButton addPluginButton { "Add VST3..." };

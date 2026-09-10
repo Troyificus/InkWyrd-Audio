@@ -10,6 +10,7 @@
 
 #include "AppSettings.h"
 #include "DiscordConnector.h"
+#include "DiscordRpcClient.h"
 #include "LibraryWindow.h"
 #include "MainWindow.h"
 #include "PlayerWindow.h"
@@ -103,6 +104,10 @@ private:
 
     void updateWarningBanner();
 
+    // Pushes the saved credentials into discordRpc and switches it on or
+    // off. Called at startup and again whenever Settings is saved.
+    void applyDiscordRpcSettings();
+
     AppSettings settings;
 
     juce::AudioFormatManager formatManager;
@@ -131,6 +136,11 @@ private:
 
     DiscordConnector discordConnector;
     std::unique_ptr<DiscordAudioSender> sender;
+
+    // Mutes the user's own Discord client while their mic is live here.
+    // Entirely separate from discordConnector, which is the BOT's
+    // connection - this one talks to the desktop client on this machine.
+    DiscordRpcClient discordRpc;
 
     // Whether a Discord connection has actually been STARTED this run -
     // not merely "startup got as far as trying". Launching with no

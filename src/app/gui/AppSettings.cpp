@@ -18,6 +18,10 @@ namespace
     constexpr const char* kLoopGapSecondsKey = "loopGapSeconds";
     constexpr const char* kWindowLayoutKey = "windowLayout";
     constexpr const char* kTrackLibraryMigratedKey = "trackLibraryMigrated";
+    constexpr const char* kNoiseSuppressionKey = "noiseSuppressionEnabled";
+    constexpr const char* kDiscordAutoMuteKey = "discordAutoMuteEnabled";
+    constexpr const char* kDiscordClientSecretKey = "discordClientSecret";
+    constexpr const char* kDiscordRpcRefreshTokenKey = "discordRpcRefreshToken";
 }
 
 AppSettings::AppSettings()
@@ -194,6 +198,46 @@ bool AppSettings::isTrackLibraryMigrated() const
 void AppSettings::setTrackLibraryMigrated(bool migrated)
 {
     settings()->setValue(kTrackLibraryMigratedKey, migrated);
+}
+
+bool AppSettings::isNoiseSuppressionEnabled() const
+{
+    return settings()->getBoolValue(kNoiseSuppressionKey, false);
+}
+
+void AppSettings::setNoiseSuppressionEnabled(bool enabled)
+{
+    settings()->setValue(kNoiseSuppressionKey, enabled);
+}
+
+bool AppSettings::isDiscordAutoMuteEnabled() const
+{
+    return settings()->getBoolValue(kDiscordAutoMuteKey, false);
+}
+
+void AppSettings::setDiscordAutoMuteEnabled(bool enabled)
+{
+    settings()->setValue(kDiscordAutoMuteKey, enabled);
+}
+
+juce::String AppSettings::getDiscordClientSecret() const
+{
+    return settings()->getValue(kDiscordClientSecretKey);
+}
+
+void AppSettings::setDiscordClientSecret(const juce::String& secret)
+{
+    settings()->setValue(kDiscordClientSecretKey, secret);
+}
+
+juce::String AppSettings::getDiscordRpcRefreshToken() const
+{
+    return settings()->getValue(kDiscordRpcRefreshTokenKey);
+}
+
+void AppSettings::setDiscordRpcRefreshToken(const juce::String& token)
+{
+    settings()->setValue(kDiscordRpcRefreshTokenKey, token);
 }
 
 bool AppSettings::isPlaylistFolderSet() const

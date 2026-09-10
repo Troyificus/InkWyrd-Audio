@@ -89,6 +89,36 @@ public:
     bool isTrackLibraryMigrated() const;
     void setTrackLibraryMigrated(bool migrated);
 
+    // RNNoise on the mic. Defaults to OFF, and that default is a
+    // measured decision rather than caution: on an already-quiet mic
+    // (20dB SNR) suppression costs about 9dB of speech-band SNR, so
+    // switching it on for everyone would make most people sound worse.
+    // See CLAUDE.md's RNNoise section for the numbers.
+    bool isNoiseSuppressionEnabled() const;
+    void setNoiseSuppressionEnabled(bool enabled);
+
+    // Auto-muting the user's own Discord client while their mic is live
+    // in Inkwyrd. Off by default and deliberately so: plenty of people
+    // will never use the voice FX at all, and an app that mutes you in
+    // Discord unasked is hostile.
+    //
+    // No client ID is stored - it's derived from the bot token, which is
+    // issued by the same Discord application (see
+    // DiscordRpcClient::deriveApplicationId).
+    //
+    // The client secret and refresh token sit in the same plaintext XML
+    // as the bot token. Same accepted tradeoff, same beta-grade posture -
+    // noted rather than hidden. Both are scoped to the user's own
+    // application and grant no server access.
+    bool isDiscordAutoMuteEnabled() const;
+    void setDiscordAutoMuteEnabled(bool enabled);
+
+    juce::String getDiscordClientSecret() const;
+    void setDiscordClientSecret(const juce::String& secret);
+
+    juce::String getDiscordRpcRefreshToken() const;
+    void setDiscordRpcRefreshToken(const juce::String& token);
+
     bool isPlaylistFolderSet() const;
     bool hasDiscordCredentials() const;
 

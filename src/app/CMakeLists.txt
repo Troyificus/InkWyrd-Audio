@@ -6,11 +6,13 @@ target_sources(InkwyrdAudioApp PRIVATE
     Main.cpp
     MasterEngine.cpp
     DiscordAudioSender.cpp
+    DiscordRpcClient.cpp
     ControlServer.cpp
     MessageThreadWatchdog.cpp
     MessageThreadWatchdog.h
     MasterEngine.h
     DiscordAudioSender.h
+    DiscordRpcClient.h
     ControlServer.h
     gui/InkwyrdAudioApplication.cpp
     gui/InkwyrdAudioApplication.h

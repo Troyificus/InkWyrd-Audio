@@ -4,6 +4,7 @@
 
 #include "AppSettings.h"
 #include "DetachableWindow.h"
+#include "NoiseSuppressor.h"
 #include "PluginChain.h"
 #include "PluginScanner.h"
 #include "VoiceFxComponent.h"
@@ -21,5 +22,6 @@ class VoiceFxWindow : public DetachableWindow
 {
 public:
     VoiceFxWindow(AppSettings& settingsToUse, PluginScanner& scanner, PluginChain& voiceChain,
+                   NoiseSuppressor& noiseSuppressor,
                    std::function<void()> onPluginListChanged);
 };

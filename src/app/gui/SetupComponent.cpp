@@ -2,8 +2,11 @@
 
 SetupComponent::SetupComponent(AppSettings& settingsToUse,
                                 bool isFirstRun,
-                                std::function<void(Result)> onSaveAndLaunchToUse)
-    : settings(settingsToUse), onSaveAndLaunch(std::move(onSaveAndLaunchToUse))
+                                std::function<void(Result)> onSaveAndLaunchToUse,
+                                std::function<void(juce::String, AuthoriseCallback)> onAuthoriseRpcToUse)
+    : settings(settingsToUse),
+      onSaveAndLaunch(std::move(onSaveAndLaunchToUse)),
+      onAuthoriseRpc(std::move(onAuthoriseRpcToUse))
 {
     saveAndLaunchButton.setButtonText(isFirstRun ? "Save & Launch" : "Save & Apply");
     titleLabel.setText("Inkwyrd Audio - Setup", juce::dontSendNotification);
@@ -53,6 +56,49 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     channelIdEditor.addListener(this);
     addAndMakeVisible(channelIdEditor);
 
+    addAndMakeVisible(autoMuteSectionCaption);
+
+    autoMuteToggle.setToggleState(settings.isDiscordAutoMuteEnabled(), juce::dontSendNotification);
+    addAndMakeVisible(autoMuteToggle);
+
+    addAndMakeVisible(clientSecretCaption);
+    clientSecretEditor.setText(settings.getDiscordClientSecret(), juce::dontSendNotification);
+    clientSecretEditor.setPasswordCharacter('*');
+    clientSecretEditor.addListener(this);
+    addAndMakeVisible(clientSecretEditor);
+
+    authoriseButton.onClick = [this]
+    {
+        if (! onAuthoriseRpc)
+            return;
+
+        authoriseButton.setEnabled(false);
+        updateAutoMuteStatus("Waiting for you to click Authorise in Discord...", false);
+
+        onAuthoriseRpc(clientSecretEditor.getText().trim(),
+                        [safeThis = juce::Component::SafePointer<SetupComponent>(this)]
+                        (bool success, juce::String message)
+                        {
+                            // The consent flow can outlive this screen -
+                            // it waits on a human - so nothing here may
+                            // assume the component still exists.
+                            if (auto* self = safeThis.getComponent())
+                            {
+                                self->authoriseButton.setEnabled(true);
+                                self->updateAutoMuteStatus(message, ! success);
+                            }
+                        });
+    };
+    addAndMakeVisible(authoriseButton);
+
+    autoMuteStatusLabel.setFont(juce::Font(juce::FontOptions(12.0f)));
+    addAndMakeVisible(autoMuteStatusLabel);
+
+    if (settings.getDiscordRpcRefreshToken().isNotEmpty())
+        updateAutoMuteStatus("Authorised. Inkwyrd can mute you in Discord.", false);
+    else
+        updateAutoMuteStatus("Not authorised yet. Paste the client secret, then click Authorise.", false);
+
     addAndMakeVisible(saveAndLaunchButton);
     saveAndLaunchButton.onClick = [this]
     {
@@ -62,6 +108,8 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
         result.botToken = botTokenEditor.getText().trim();
         result.guildId = guildIdEditor.getText().trim();
         result.channelId = channelIdEditor.getText().trim();
+        result.discordClientSecret = clientSecretEditor.getText().trim();
+        result.discordAutoMuteEnabled = autoMuteToggle.getToggleState();
 
         if (onSaveAndLaunch)
             onSaveAndLaunch(result);
@@ -71,7 +119,9 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
 
     // setContentOwned(..., true) resizes the window to fit this
     // component's own size, so an explicit size here IS the window size.
-    setSize(640, 480);
+    // Taller than it was: the auto-mute section adds three rows, and
+    // leaving the height alone would have pushed Save off the bottom.
+    setSize(640, 620);
 }
 
 void SetupComponent::browseForFolder(juce::Label& targetLabel, juce::File& targetValue, const juce::String& chooserTitle)
@@ -89,6 +139,13 @@ void SetupComponent::browseForFolder(juce::Label& targetLabel, juce::File& targe
             updateSaveButtonEnablement();
         }
     });
+}
+
+void SetupComponent::updateAutoMuteStatus(const juce::String& message, bool isError)
+{
+    autoMuteStatusLabel.setText(message, juce::dontSendNotification);
+    autoMuteStatusLabel.setColour(juce::Label::textColourId,
+                                   isError ? juce::Colours::orangered : juce::Colours::grey);
 }
 
 void SetupComponent::updateSaveButtonEnablement()
@@ -145,7 +202,22 @@ void SetupComponent::resized()
     auto channelRow = area.removeFromTop(28);
     channelIdCaption.setBounds(channelRow.removeFromLeft(140));
     channelIdEditor.setBounds(channelRow);
-    area.removeFromTop(28);
+    area.removeFromTop(24);
+
+    auto autoMuteCaptionRow = area.removeFromTop(24);
+    autoMuteToggle.setBounds(autoMuteCaptionRow.removeFromRight(90));
+    autoMuteSectionCaption.setBounds(autoMuteCaptionRow);
+    area.removeFromTop(6);
+
+    auto secretRow = area.removeFromTop(28);
+    clientSecretCaption.setBounds(secretRow.removeFromLeft(140));
+    authoriseButton.setBounds(secretRow.removeFromRight(110));
+    secretRow.removeFromRight(8);
+    clientSecretEditor.setBounds(secretRow);
+    area.removeFromTop(4);
+
+    autoMuteStatusLabel.setBounds(area.removeFromTop(20));
+    area.removeFromTop(20);
 
     saveAndLaunchButton.setBounds(area.removeFromTop(36).removeFromRight(160));
 }

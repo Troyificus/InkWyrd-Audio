@@ -12,12 +12,21 @@ void MasterEngine::setDiscordSender(DiscordAudioSender* sender)
     discordSender.store(sender);
 }
 
+void MasterEngine::setMicMuted(bool muted)
+{
+    // exchange, so the callback fires on a real transition rather than
+    // on every click of a button that was already in that state.
+    if (micMuted.exchange(muted) != muted && onMicMuteChanged != nullptr)
+        onMicMuteChanged(muted);
+}
+
 void MasterEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
     currentSampleRate = device->getCurrentSampleRate();
     auto blockSize = device->getCurrentBufferSizeSamples();
 
     musicMixer.prepareToPlay(blockSize, currentSampleRate);
+    noiseSuppressor.prepare(currentSampleRate, blockSize);
     voiceChain.prepareToPlay(currentSampleRate, blockSize);
 
     micBuffer.setSize(2, blockSize);
@@ -49,6 +58,12 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
     }
     if (micMuted.load())
         micBuffer.clear();
+
+    // Suppression runs BEFORE the VST chain, not after: the plugins are
+    // there to shape the voice, and shaping a signal that still has the
+    // room in it means the FX process the room too. A no-op when the
+    // user hasn't turned it on.
+    noiseSuppressor.process(micBuffer, numSamples);
 
     scratchMidi.clear();
     voiceChain.processBlock(micBuffer, scratchMidi);
