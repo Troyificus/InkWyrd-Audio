@@ -1,4 +1,4 @@
-﻿juce_add_gui_app(InkwyrdAudioApp
+juce_add_gui_app(InkwyrdAudioApp
     PRODUCT_NAME "Inkwyrd Audio"
 )
 
@@ -23,6 +23,8 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/InkwyrdLookAndFeel.cpp
     gui/InkwyrdLookAndFeel.h
     gui/InkwyrdTheme.h
+    gui/NowPlayingDisplay.cpp
+    gui/NowPlayingDisplay.h
     gui/WindowLayoutStore.cpp
     gui/WindowLayoutStore.h
     gui/WindowSnapping.cpp

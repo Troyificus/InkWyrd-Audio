@@ -66,6 +66,21 @@ public:
 
     juce::File getCurrentTrackFile() const { return currentTrackFile; }
 
+    // Where the playing track is up to, and how long it is, in seconds.
+    // Both 0 when nothing is loaded. Read from the ACTIVE deck only:
+    // during a crossfade the outgoing deck is still running, and
+    // reporting whichever happened to be louder would make the readout
+    // jump backwards mid-fade.
+    double getCurrentPositionSeconds() const;
+    double getCurrentTrackLengthSeconds() const;
+
+    // Jump within the playing track. Clamped to the track's length;
+    // ignored when nothing is loaded. Deliberately does NOT touch the
+    // crossfade state - seeking during a fade would leave the outgoing
+    // deck mid-curve with no way to finish cleanly, so a seek only ever
+    // moves the deck the user can actually hear.
+    void setPositionSeconds(double seconds);
+
     // The resolved play order, and how far through it playback has got.
     // Read-only. Mainly here so the ordering guarantees above can actually
     // be asserted in the self-test - "it didn't crash" is not evidence

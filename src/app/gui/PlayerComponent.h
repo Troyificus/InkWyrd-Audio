@@ -3,7 +3,10 @@
 #include <functional>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <memory>
+
 #include "MasterEngine.h"
+#include "NowPlayingDisplay.h"
 #include "PlaylistEngine.h"
 
 // The Player window's whole content: status/transport across the top,
@@ -80,7 +83,10 @@ private:
     PlaylistEngine& playlist;
     MasterEngine& masterEngine;
 
-    juce::Label nowPlayingLabel;
+    // The design's "digital screen": art slot, artist/title/time, the
+    // spectrum, and a draggable seek bar. Replaced a single bold
+    // "Now playing:" label.
+    std::unique_ptr<NowPlayingDisplay> nowPlaying;
     juce::Label discordStatusLabel;
     juce::Label warningBannerLabel; // hidden (zero height) unless given non-empty text
     juce::Label monitorHintLabel;   // "Monitor is off" - only while that actually means silence

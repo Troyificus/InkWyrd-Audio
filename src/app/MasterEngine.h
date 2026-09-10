@@ -7,6 +7,7 @@
 
 #include "DiscordAudioSender.h"
 #include "NoiseSuppressor.h"
+#include "SpectrumTap.h"
 #include "PlaylistEngine.h"
 #include "SoundboardEngine.h"
 #include "PluginChain.h"
@@ -65,6 +66,13 @@ public:
     // for why this is a toggle and not always-on.
     NoiseSuppressor& getNoiseSuppressor() { return noiseSuppressor; }
 
+    // The finished master mix, tapped for the Player window's spectrum
+    // display. Taken AFTER the master fader, so what the display shows
+    // is what Discord is actually being sent - a meter that ignores the
+    // fader would say the same thing whether the room could hear
+    // anything or not.
+    SpectrumTap& getSpectrumTap() { return spectrumTap; }
+
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
                                            int numInputChannels,
                                            float* const* outputChannelData,
@@ -81,6 +89,7 @@ private:
 
     juce::MixerAudioSource musicMixer; // playlist + soundboard
     NoiseSuppressor noiseSuppressor;
+    SpectrumTap spectrumTap;
 
     std::atomic<DiscordAudioSender*> discordSender { nullptr };
     std::atomic<bool> micMuted { false };

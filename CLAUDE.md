@@ -1641,11 +1641,70 @@ Worth knowing, because both produced convincing false failures:
 And the standing one, which ate a whole run again: **the first click on
 an inactive window is consumed activating it.** Throw one away.
 
+## The now-playing display (beta.16) - first fully-drawn component
+
+Agreed direction after the skin pass: a **rich version of the existing
+green design**, drawn entirely in code, rather than Winamp-style
+skeuomorphism or real `.wsz` skin support. (The user raised Winamp only
+as an example of a fully-drawn GUI, not as a target - worth not
+misreading if it comes up again.) `.wsz` was considered and rejected on
+its merits: those sprite sheets assume Winamp's exact window geometry,
+have no sprite for a soundboard or a Voice FX rack, and are fixed-size 1x
+bitmaps that look small and soft on a 1080p display.
+
+`NowPlayingDisplay` is the first component with no stock JUCE widgets in
+it at all: art slot, artist/title/time readout, live spectrum, draggable
+seek bar. **No image assets anywhere** - the ink-bottle mark is still the
+vector approximation in `InkwyrdLookAndFeel::drawLogo()`.
+
+- **`SpectrumTap`** splits the work so the audio thread never does any:
+  it only copies samples into a circular buffer and bumps an index - no
+  FFT, no allocation, no locks. The UI thread transforms at its repaint
+  rate. Deliberately NOT a lock-free FIFO with claim/commit: the reader
+  wants "the most recent N samples", not "every sample exactly once", and
+  a dropped frame in a visualiser is invisible.
+- Bands are spaced **logarithmically** and measured in **dB over a 60dB
+  window**. Linear spacing gives forty bands of inaudible treble and
+  three doing all the work; linear magnitude leaves everything quiet
+  pinned to the bottom pixel.
+- **The glow around the mark is drawn, not baked** - concentric fading
+  rings driven by the spectrum peak. That's what lets it breathe with the
+  music, and it's why the real logo artwork should arrive WITHOUT a glow:
+  JUCE's SVG renderer ignores blur filters, so a baked one would silently
+  vanish.
+- Artist/title come from **splitting the filename on " - "**. Nothing in
+  the app reads embedded tags, and inventing an artist would mean being
+  confidently wrong rather than honestly blank.
+- Seeking needed three new `PlaylistEngine` accessors. They read the
+  **active deck only**: during a crossfade the outgoing deck is still
+  running, and reporting whichever was louder would make the readout jump
+  backwards mid-fade.
+
+### Two layout lessons
+
+- **Fixed row heights, not fractions.** Deriving them from the available
+  height produced a font sized at 1.5x its own row, which overflowed
+  upward and drew the time readout straight through the TIME caption. It
+  then happened AGAIN one size down, because the rows needed 122px and
+  the block only had 96 - a fraction-based layout fails silently, by
+  overlapping, instead of clipping visibly.
+- **Anchor the bottom row to the bottom.** The window is sized for its
+  worst case (warning banner and monitor hint both showing); stacking
+  every row from the top left that spare height pooled as dead space
+  under the last row instead of above it.
+
+### Saved layouts are a preference about a DIFFERENT window
+
+Anyone upgrading has a player height from before this display existed,
+and restoring it verbatim buried the transport off the bottom of a window
+they never chose to make that small. `PlayerWindow` grows it once, on
+construction, keeping their position and width.
+
 ### Not yet built
 
-- **The player widgets the mockup shows**: album art, the spectrum
-  visualiser, the seek/progress bar, and the Library window's folder
-  tree. Agreed as the next drop.
+- **The Library window's folder tree**, and the same fully-drawn
+  treatment for the other four windows - their content is still stock
+  widgets wearing the palette.
 
 ## Auto-muting the user in Discord: the RPC spike (answered - it works)
 

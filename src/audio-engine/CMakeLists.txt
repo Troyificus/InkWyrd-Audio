@@ -1,4 +1,4 @@
-﻿add_library(AudioEngine STATIC
+add_library(AudioEngine STATIC
     PlaylistEngine.cpp
     PlaylistLibrary.cpp
     SoundboardEngine.cpp
@@ -6,6 +6,7 @@
     TrackSettingsStore.cpp
     TrackLibrary.cpp
     NoiseSuppressor.cpp
+    SpectrumTap.cpp
     Mp3AudioFormat.cpp
     MediaFoundationAudioFormat.cpp
     PlaylistEngine.h
@@ -15,6 +16,7 @@
     TrackSettingsStore.h
     TrackLibrary.h
     NoiseSuppressor.h
+    SpectrumTap.h
     Mp3AudioFormat.h
     MediaFoundationAudioFormat.h
 )
@@ -38,6 +40,7 @@ target_link_libraries(AudioEngine PUBLIC
     juce::juce_events
     juce::juce_audio_basics
     juce::juce_audio_devices
+    juce::juce_dsp
     juce::juce_audio_formats
     # For MediaFoundationAudioFormat.cpp (AAC/M4A + WMA decode)
     mfplat

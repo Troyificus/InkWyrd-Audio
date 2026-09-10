@@ -261,6 +261,27 @@ void PlaylistEngine::crossfadeToTrackInCurrentList(const juce::File& file)
     beginCrossfadeTo(pickNextFile());
 }
 
+double PlaylistEngine::getCurrentPositionSeconds() const
+{
+    return decks[activeDeck].transport.getCurrentPosition();
+}
+
+double PlaylistEngine::getCurrentTrackLengthSeconds() const
+{
+    return decks[activeDeck].transport.getLengthInSeconds();
+}
+
+void PlaylistEngine::setPositionSeconds(double seconds)
+{
+    auto& transport = decks[activeDeck].transport;
+    auto length = transport.getLengthInSeconds();
+
+    if (length <= 0.0)
+        return;
+
+    transport.setPosition(juce::jlimit(0.0, length, seconds));
+}
+
 void PlaylistEngine::stop()
 {
     playbackRequested = false;

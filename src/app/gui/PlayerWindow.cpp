@@ -7,7 +7,7 @@ namespace
     juce::Rectangle<int> defaultPlayerBounds()
     {
         auto area = WindowLayoutStore::primaryDisplayArea();
-        return juce::Rectangle<int>(640, 356).withPosition(area.getX() + 40, area.getY() + 40);
+        return juce::Rectangle<int>(640, 596).withPosition(area.getX() + 40, area.getY() + 40);
     }
 }
 
@@ -39,6 +39,17 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
     // setContentOwned regardless of this flag) still stretches the
     // content to fill whatever the window's real size is.
     setContentOwned(component, false);
+
+    // Anyone upgrading has a saved height from before the now-playing
+    // display existed, and restoring it verbatim leaves the transport
+    // squeezed off the bottom of a window they never chose to make that
+    // small. Grow it once, keeping their position and width - a saved
+    // layout IS a preference, but it was expressed about a different
+    // window.
+    constexpr int kMinimumUsefulHeight = 596;
+    if (getHeight() < kMinimumUsefulHeight)
+        setSize(getWidth(), kMinimumUsefulHeight);
+
     setVisible(true);
 }
 

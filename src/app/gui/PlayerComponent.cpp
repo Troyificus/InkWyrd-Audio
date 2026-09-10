@@ -21,8 +21,8 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
       onToggleVoiceFx(std::move(onToggleVoiceFxToUse)),
       onToggleSoundboard(std::move(onToggleSoundboardToUse))
 {
-    nowPlayingLabel.setFont(juce::Font(juce::FontOptions(16.0f, juce::Font::bold)));
-    addAndMakeVisible(nowPlayingLabel);
+    nowPlaying = std::make_unique<NowPlayingDisplay>(playlist, masterEngine.getSpectrumTap());
+    addAndMakeVisible(*nowPlaying);
 
     discordStatusLabel.setText("Local monitor only - no Discord credentials configured.", juce::dontSendNotification);
     discordStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
@@ -195,7 +195,7 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     // component's own size, so an explicit size here IS the window size.
     // Tall enough for every row PLUS the warning banner and monitor hint
     // both showing at once - the worst case, not just the common one.
-    setSize(640, 356);
+    setSize(640, 596);
 }
 
 void PlayerComponent::setDiscordStatus(const juce::String& text)
@@ -297,10 +297,8 @@ void PlayerComponent::setWarningBanner(const juce::String& text)
 
 void PlayerComponent::timerCallback()
 {
-    auto text = "Now playing: " + playlist.getCurrentTrackName();
-    if (playlist.isCrossfading())
-        text += " (crossfading)";
-    nowPlayingLabel.setText(text, juce::dontSendNotification);
+    // The now-playing readout repaints itself on its own timer - it has
+    // to, for the spectrum - so there is nothing to push into it here.
 
     // Shuffle/mute can also change via the Stream Deck plugin's
     // ControlServer commands, and monitoring flips off when Discord
@@ -336,11 +334,10 @@ void PlayerComponent::resized()
 {
     auto area = getLocalBounds().reduced(kMargin);
 
-    auto headerRow = area.removeFromTop(28);
+    auto headerRow = area.removeFromTop(26);
     settingsButton.setBounds(headerRow.removeFromRight(90));
-    nowPlayingLabel.setBounds(headerRow);
-
-    discordStatusLabel.setBounds(area.removeFromTop(22));
+    headerRow.removeFromRight(8);
+    discordStatusLabel.setBounds(headerRow);
     area.removeFromTop(8);
 
     if (warningBannerLabel.getText().isNotEmpty())
@@ -361,6 +358,16 @@ void PlayerComponent::resized()
     else
     {
         monitorHintLabel.setBounds(0, 0, 0, 0);
+    }
+
+    // The screen gets a fixed, generous share off the top. Fixed rather
+    // than proportional because the rows below it have real minimum
+    // heights - letting the display grow with the window would squeeze
+    // the transport before it squeezed anything decorative.
+    if (nowPlaying != nullptr)
+    {
+        nowPlaying->setBounds(area.removeFromTop(juce::jmin(224, juce::jmax(150, area.getHeight() - 150))));
+        area.removeFromTop(10);
     }
 
     // Row one is the transport - the things pressed during a session.
@@ -408,7 +415,13 @@ void PlayerComponent::resized()
 
     // Row four: one activator per satellite window. Every window gets a
     // way back - closing one with its X used to strand it.
-    auto activatorRow = area.removeFromTop(28);
+    //
+    // Anchored to the BOTTOM rather than stacked after the row above it.
+    // The window is sized for the worst case (warning banner AND monitor
+    // hint both showing), so on the common run where neither does, that
+    // spare height would otherwise pool as dead space under this row
+    // instead of above it.
+    auto activatorRow = area.removeFromBottom(28);
     juce::TextButton* activators[] = { &playlistButton, &libraryButton,
                                         &voiceFxButton, &soundboardButton };
 

@@ -1,0 +1,292 @@
+#include "NowPlayingDisplay.h"
+
+#include "InkwyrdLookAndFeel.h"
+#include "InkwyrdTheme.h"
+
+using namespace inkwyrd::theme;
+
+namespace
+{
+    constexpr int kRefreshHz = 30;
+    constexpr int kSeekBarHeight = 18;
+    constexpr int kGap = 12;
+
+    juce::String formatTime(double seconds)
+    {
+        if (seconds < 0.0 || ! std::isfinite(seconds))
+            seconds = 0.0;
+
+        auto total = (int) seconds;
+        return juce::String::formatted("%02d:%02d", total / 60, total % 60);
+    }
+
+    // Filenames in this library are overwhelmingly "Artist - Title", so
+    // splitting on the first " - " gets a real artist line most of the
+    // time. Deliberately NOT tag reading: nothing in the app reads
+    // embedded metadata yet, and pretending otherwise would mean a
+    // confidently wrong artist rather than an honestly blank one.
+    struct TrackName
+    {
+        juce::String artist, title;
+    };
+
+    TrackName splitTrackName(const juce::File& file)
+    {
+        auto name = file.getFileNameWithoutExtension();
+        auto separator = name.indexOf(" - ");
+
+        if (separator > 0)
+            return { name.substring(0, separator).trim(), name.substring(separator + 3).trim() };
+
+        return { {}, name };
+    }
+
+    void drawCaption(juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text)
+    {
+        g.setColour(textDim);
+        g.setFont(InkwyrdLookAndFeel::labelFont(11.0f).withExtraKerningFactor(0.18f));
+        g.drawText(text.toUpperCase(), area, juce::Justification::centredLeft, false);
+    }
+}
+
+NowPlayingDisplay::NowPlayingDisplay(PlaylistEngine& engineToUse, SpectrumTap& spectrumToUse)
+    : engine(engineToUse), spectrum(spectrumToUse)
+{
+    startTimerHz(kRefreshHz);
+}
+
+void NowPlayingDisplay::timerCallback()
+{
+    haveBands = spectrum.readBands(bands);
+
+    if (haveBands)
+    {
+        float peak = 0.0f;
+        for (auto band : bands)
+            peak = juce::jmax(peak, band);
+
+        // Rises with the music, falls back slowly, so the glow pulses
+        // rather than flickering on every transient.
+        glow = peak > glow ? peak : glow * 0.9f;
+    }
+    else
+    {
+        glow *= 0.9f;
+    }
+
+    repaint();
+}
+
+void NowPlayingDisplay::resized()
+{
+    auto area = getLocalBounds().reduced(kGap);
+
+    seekArea = area.removeFromBottom(kSeekBarHeight);
+    area.removeFromBottom(10);
+    spectrumArea = area.removeFromBottom(juce::jlimit(28, 44, area.getHeight() / 3));
+    area.removeFromBottom(12);
+
+    // Square art slot on the left, capped so it can't eat the info
+    // block on a wide window.
+    auto artSize = juce::jlimit(56, 120, juce::jmin(area.getHeight(), area.getWidth() / 3));
+    artArea = area.removeFromLeft(artSize).withHeight(artSize);
+    area.removeFromLeft(kGap + 6);
+    infoArea = area;
+}
+
+void NowPlayingDisplay::paint(juce::Graphics& g)
+{
+    InkwyrdLookAndFeel::drawInsetWell(g, getLocalBounds());
+
+    paintArtSlot(g, artArea);
+    paintTrackInfo(g, infoArea);
+    paintSpectrum(g, spectrumArea);
+    paintSeekBar(g, seekArea);
+}
+
+void NowPlayingDisplay::paintArtSlot(juce::Graphics& g, juce::Rectangle<int> area)
+{
+    if (area.isEmpty())
+        return;
+
+    auto slot = area.toFloat();
+
+    g.setColour(panelDeep);
+    g.fillRoundedRectangle(slot, cornerRadius);
+
+    // The glow is drawn HERE rather than baked into the mark, as
+    // concentric fading rings. That's what lets it react to the audio -
+    // and it's also why the real logo artwork, when it arrives, should
+    // arrive WITHOUT a glow: JUCE's SVG renderer ignores blur filters
+    // anyway, so a baked one would silently vanish.
+    auto centre = slot.getCentre();
+    auto maxRadius = slot.getWidth() * 0.46f;
+
+    for (int ring = 5; ring >= 1; --ring)
+    {
+        auto t = (float) ring / 5.0f;
+        auto radius = maxRadius * (0.55f + 0.45f * t) * (0.85f + 0.3f * glow);
+        g.setColour(accent.withAlpha(0.05f * glow * (1.0f - t) + 0.015f));
+        g.fillEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre));
+    }
+
+    InkwyrdLookAndFeel::drawLogo(g, slot.reduced(slot.getWidth() * 0.22f),
+                                  accent.withMultipliedBrightness(0.9f + 0.3f * glow),
+                                  accentSoft.withAlpha(0.35f + 0.25f * glow));
+
+    g.setColour(outline.withAlpha(0.7f));
+    g.drawRoundedRectangle(slot.reduced(0.5f), cornerRadius, 1.0f);
+}
+
+void NowPlayingDisplay::paintTrackInfo(juce::Graphics& g, juce::Rectangle<int> area)
+{
+    if (area.isEmpty())
+        return;
+
+    auto file = engine.getCurrentTrackFile();
+    auto name = splitTrackName(file);
+
+    // FIXED row heights, not fractions of the available space. Deriving
+    // them from the height meant a font sized at 1.5x its own row, which
+    // overflowed upward and drew the time readout straight through the
+    // "TIME" caption above it.
+    constexpr int kCaptionRow = 12;
+    constexpr int kArtistRow = 18;
+    constexpr int kTitleRow = 24;
+    constexpr int kTimeRow = 28;
+
+    drawCaption(g, area.removeFromTop(kCaptionRow), "Artist");
+    g.setColour(text);
+    g.setFont(InkwyrdLookAndFeel::labelFont(15.0f));
+    g.drawText(name.artist.isNotEmpty() ? name.artist : juce::String("--"),
+                area.removeFromTop(kArtistRow), juce::Justification::centredLeft, true);
+
+    area.removeFromTop(2);
+
+    // The crossfade marker rides on the caption rather than being
+    // appended to the title, which would push the actual track name out
+    // of view on exactly the tracks you most want to read.
+    drawCaption(g, area.removeFromTop(kCaptionRow),
+                 engine.isCrossfading() ? "Title  -  crossfading" : "Title");
+    g.setColour(accent);
+    g.setFont(InkwyrdLookAndFeel::titleFont(19.0f));
+    g.drawText(name.title.isNotEmpty() ? name.title : juce::String("Nothing playing"),
+                area.removeFromTop(kTitleRow), juce::Justification::centredLeft, true);
+
+    area.removeFromTop(2);
+
+    drawCaption(g, area.removeFromTop(kCaptionRow), "Time");
+
+    auto length = engine.getCurrentTrackLengthSeconds();
+    auto position = scrubbing ? scrubProportion * length : engine.getCurrentPositionSeconds();
+
+    auto timeArea = area.removeFromTop(kTimeRow);
+    auto timeText = formatTime(position) + "  /  " + formatTime(length);
+
+    // A faint copy behind the text, offset by nothing but blurred by
+    // being drawn larger and translucent - enough to read as a lit
+    // display rather than flat text, without a real blur.
+    g.setColour(accent.withAlpha(0.25f));
+    g.setFont(InkwyrdLookAndFeel::digitFont(23.0f));
+    g.drawText(timeText, timeArea.expanded(1), juce::Justification::centredLeft, false);
+
+    g.setColour(accent);
+    g.setFont(InkwyrdLookAndFeel::digitFont(23.0f));
+    g.drawText(timeText, timeArea, juce::Justification::centredLeft, false);
+}
+
+void NowPlayingDisplay::paintSpectrum(juce::Graphics& g, juce::Rectangle<int> area)
+{
+    if (area.isEmpty())
+        return;
+
+    auto bandCount = (int) bands.size();
+    auto barWidth = (float) area.getWidth() / (float) bandCount;
+    auto gap = juce::jmax(1.0f, barWidth * 0.25f);
+
+    for (int i = 0; i < bandCount; ++i)
+    {
+        auto level = haveBands ? bands[(size_t) i] : 0.0f;
+
+        // A floor, so an idle display reads as a row of dim segments
+        // rather than an empty box that looks broken.
+        auto height = juce::jmax(2.0f, (float) area.getHeight() * level);
+
+        juce::Rectangle<float> bar(area.getX() + (float) i * barWidth,
+                                    (float) area.getBottom() - height,
+                                    barWidth - gap,
+                                    height);
+
+        g.setColour(accent.withAlpha(0.35f + 0.65f * level));
+        g.fillRect(bar);
+    }
+}
+
+void NowPlayingDisplay::paintSeekBar(juce::Graphics& g, juce::Rectangle<int> area)
+{
+    if (area.isEmpty())
+        return;
+
+    auto length = engine.getCurrentTrackLengthSeconds();
+    auto proportion = scrubbing ? scrubProportion
+                                : (length > 0.0 ? engine.getCurrentPositionSeconds() / length : 0.0);
+    proportion = juce::jlimit(0.0, 1.0, proportion);
+
+    auto centreY = (float) area.getCentreY();
+    juce::Rectangle<float> track((float) area.getX(), centreY - 2.0f, (float) area.getWidth(), 4.0f);
+
+    g.setColour(panelDeep);
+    g.fillRoundedRectangle(track, 2.0f);
+
+    g.setColour(length > 0.0 ? accent : outline);
+    g.fillRoundedRectangle(track.withWidth(track.getWidth() * (float) proportion), 2.0f);
+
+    if (length > 0.0)
+    {
+        auto handleX = track.getX() + track.getWidth() * (float) proportion;
+        constexpr float radius = 7.0f;
+
+        g.setColour(accent);
+        g.fillEllipse(handleX - radius, centreY - radius, radius * 2.0f, radius * 2.0f);
+        g.setColour(background);
+        g.fillEllipse(handleX - radius * 0.4f, centreY - radius * 0.4f, radius * 0.8f, radius * 0.8f);
+    }
+}
+
+void NowPlayingDisplay::mouseDown(const juce::MouseEvent& e)
+{
+    if (! seekArea.expanded(0, 8).contains(e.getPosition()) || engine.getCurrentTrackLengthSeconds() <= 0.0)
+        return;
+
+    scrubbing = true;
+    seekTo(e);
+}
+
+void NowPlayingDisplay::mouseDrag(const juce::MouseEvent& e)
+{
+    if (scrubbing)
+        seekTo(e);
+}
+
+void NowPlayingDisplay::mouseUp(const juce::MouseEvent& e)
+{
+    if (! scrubbing)
+        return;
+
+    // Committed on release as well as during the drag, so letting go
+    // always lands on exactly what the handle was showing.
+    seekTo(e);
+    scrubbing = false;
+}
+
+void NowPlayingDisplay::seekTo(const juce::MouseEvent& e)
+{
+    if (seekArea.getWidth() <= 0)
+        return;
+
+    scrubProportion = juce::jlimit(0.0, 1.0,
+                                    (double) (e.x - seekArea.getX()) / (double) seekArea.getWidth());
+
+    engine.setPositionSeconds(scrubProportion * engine.getCurrentTrackLengthSeconds());
+    repaint();
+}

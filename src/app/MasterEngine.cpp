@@ -106,6 +106,10 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
             juce::FloatVectorOperations::clear(outputChannelData[ch], numSamples);
     }
 
+    // Tapped here, after the fader and before the send, so the display
+    // reflects the mix as it actually leaves.
+    spectrumTap.pushBlock(masterBuffer, numSamples);
+
     // Unaffected by local monitoring - what Discord receives is the same
     // master mix either way.
     if (auto* sender = discordSender.load())
