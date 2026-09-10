@@ -4,6 +4,7 @@
 #include "WindowSnapping.h"
 
 juce::Array<DetachableWindow*> DetachableWindow::activeWindows;
+bool DetachableWindow::groupMoveInProgress = false;
 
 namespace
 {
@@ -99,8 +100,24 @@ void DetachableWindow::captureDockedGroup(juce::Rectangle<int> boundsToTestFrom)
 
 void DetachableWindow::translateDockedGroup(juce::Point<int> delta)
 {
-    if (delta.isOrigin())
+    if (delta.isOrigin() || dockedGroup.isEmpty())
         return;
+
+    // THE re-entrancy guard, and it is not optional. Moving a companion
+    // fires that companion's own moved(), which without this treats
+    // ITSELF as a drag leader, captures the window that just moved it as
+    // its companion, and moves that one back - a feedback loop where
+    // every round adds the delta again. It runs a docked pair off the
+    // screen within a few frames and recurses until the stack gives out
+    // (a real STATUS_FATAL_USER_CALLBACK_EXCEPTION, 0xc000041d, reported
+    // from beta.11).
+    //
+    // It only bites on SLOW drags, which is why it survived testing: at
+    // ~5px per move the leader has already travelled past kDockTolerance
+    // by the time the companion looks, so the companion finds nothing to
+    // carry and the loop breaks by luck. At 1-2px per move - a careful
+    // drag towards another window, exactly what a user does - it doesn't.
+    const juce::ScopedValueSetter<bool> scope(groupMoveInProgress, true);
 
     for (auto& member : dockedGroup)
         if (auto* window = member.getComponent())
@@ -162,9 +179,11 @@ void DetachableWindow::moved()
 
     auto position = getBounds().getPosition();
 
-    // Skipped while invisible (startup restore) and while applying our
-    // own correction - neither is a user drag.
-    if (isVisible() && ! applyingSnap)
+    // Skipped while invisible (startup restore), while applying our own
+    // correction, and while some other window is carrying this one along
+    // - none of those is this window being dragged, and treating them as
+    // such is what caused the runaway described in translateDockedGroup.
+    if (isVisible() && ! applyingSnap && ! groupMoveInProgress)
     {
         if (! movementInProgress)
         {

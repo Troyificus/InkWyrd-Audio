@@ -1362,6 +1362,29 @@ one override covers the button, the taskbar, Win+D and Aero shake alike.
 Verified specifically through the OS path (`ShowWindow SW_MINIMIZE`),
 which is the one an in-app button handler would miss.
 
+**beta.11 shipped with a crash in this, found by the user within
+minutes - and the fix is a re-entrancy guard.** Moving a docked
+companion fires that companion's own `moved()`, which without a guard
+treats ITSELF as a drag leader, captures the window that just moved it as
+its companion, and moves that one back. Every round adds the delta again:
+a docked pair runs off the screen (reproduced: both windows at
+x = -32768, matching the user's "both disappeared") and the recursion
+eventually takes the stack with it - a real
+`STATUS_FATAL_USER_CALLBACK_EXCEPTION` (0xc000041d) in the Windows event
+log, an exception escaping a window callback.
+
+Why the original testing missed it, which is the part worth remembering:
+the automated drag moved ~5px per step, so by the time the companion
+looked at the leader it had already travelled past `kDockTolerance`
+(4px), found nothing to carry, and broke the loop **by luck**. A slow,
+careful drag - 1-2px per move, exactly what a person does when easing one
+window up against another - keeps every step inside the tolerance and the
+loop never breaks. Fixed with a static `groupMoveInProgress` flag set for
+the duration of the propagation; any window that moves while it's set is
+being carried, not dragged, and skips leader logic entirely. Re-verified
+against the same repro plus five consecutive 1px-per-step drags in both
+directions and with leader/follower roles reversed.
+
 **The persistence trap this creates, and the guard for it**: hiding
 satellites on minimise runs through `visibilityChanged()` ->
 `persistNow()`, so a naive version saves every satellite as

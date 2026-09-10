@@ -122,4 +122,10 @@ private:
     bool applyingSnap = false;
 
     static juce::Array<DetachableWindow*> activeWindows;
+
+    // True only while some window is propagating a move to its docked
+    // companions. Any window that moves during that window of time is
+    // being CARRIED, not dragged, and must not run leader logic - see
+    // translateDockedGroup() for what happens without this.
+    static bool groupMoveInProgress;
 };
