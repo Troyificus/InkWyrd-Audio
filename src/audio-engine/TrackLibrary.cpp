@@ -105,7 +105,12 @@ int TrackLibrary::registerTracks(const juce::Array<juce::File>& files)
             ++added;
 
     if (added > 0)
+    {
         save();
+
+        if (onTracksAdded)
+            onTracksAdded();
+    }
 
     return added;
 }

@@ -23,6 +23,7 @@ public:
     PlayerWindow(AppSettings& settingsToUse,
                  PlaylistEngine& playlist,
                  MasterEngine& masterEngine,
+                 const TrackMetadataStore& trackMetadata,
                  std::function<void()> onTogglePlaylist,
                  std::function<void()> onToggleLibrary,
                  std::function<void()> onToggleVoiceFx,

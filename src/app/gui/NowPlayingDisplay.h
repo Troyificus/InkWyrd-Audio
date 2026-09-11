@@ -6,6 +6,7 @@
 
 #include "PlaylistEngine.h"
 #include "SpectrumTap.h"
+#include "TrackMetadataStore.h"
 
 // The "digital screen" from the design: art slot, artist/title/time
 // readout, spectrum, and a seek bar you can drag.
@@ -22,7 +23,8 @@ class NowPlayingDisplay : public juce::Component,
                            private juce::Timer
 {
 public:
-    NowPlayingDisplay(PlaylistEngine& engineToUse, SpectrumTap& spectrumToUse);
+    NowPlayingDisplay(PlaylistEngine& engineToUse, SpectrumTap& spectrumToUse,
+                       const TrackMetadataStore& trackMetadataToUse);
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -42,6 +44,7 @@ private:
 
     PlaylistEngine& engine;
     SpectrumTap& spectrum;
+    const TrackMetadataStore& trackMetadata;
 
     juce::Rectangle<int> artArea, infoArea, spectrumArea, seekArea;
 

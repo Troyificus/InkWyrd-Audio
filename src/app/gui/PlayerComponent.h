@@ -29,6 +29,7 @@ class PlayerComponent : public juce::Component,
 public:
     PlayerComponent(PlaylistEngine& playlistToUse,
                      MasterEngine& masterEngineToUse,
+                     const TrackMetadataStore& trackMetadata,
                      std::function<void()> onTogglePlaylistToUse,
                      std::function<void()> onToggleLibraryToUse,
                      std::function<void()> onToggleVoiceFxToUse,

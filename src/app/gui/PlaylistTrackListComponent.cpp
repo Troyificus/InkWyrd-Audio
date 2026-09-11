@@ -10,20 +10,19 @@ namespace
     constexpr int kButtonHeight = 26;
 }
 
-class PlaylistTrackListComponent::Model : public juce::ListBoxModel
+class PlaylistTrackListComponent::Model : public juce::TableListBoxModel
 {
 public:
+    enum ColumnId { title = 1, artist };
+
     explicit Model(PlaylistTrackListComponent& ownerToUse) : owner(ownerToUse) {}
 
     int getNumRows() override { return owner.resolvedTracks.files.size(); }
 
-    void paintListBoxItem(int row, juce::Graphics& g, int width, int height, bool selected) override
+    void paintRowBackground(juce::Graphics& g, int row, int, int height, bool selected) override
     {
         if (! juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()))
             return;
-
-        auto file = owner.resolvedTracks.files[row];
-        auto playing = file == owner.engine.getCurrentTrackFile();
 
         if (selected)
             g.fillAll(inkwyrd::theme::accentSoft.withAlpha(0.35f));
@@ -31,24 +30,41 @@ public:
         // The now-playing row gets a bar down its left edge as well as
         // brighter text - the mockup's own way of marking it, and it
         // survives being both playing AND selected, where two shades of
-        // green would not.
-        if (playing)
+        // green would not. On the row background rather than in a cell,
+        // so it spans the row whatever the columns are doing.
+        if (isPlaying(row))
         {
             g.setColour(inkwyrd::theme::accent);
             g.fillRect(0, 0, 3, height);
         }
+    }
+
+    void paintCell(juce::Graphics& g, int row, int columnId, int width, int height, bool) override
+    {
+        if (! juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()))
+            return;
+
+        auto file = owner.resolvedTracks.files[row];
+        auto metadata = owner.trackMetadata.get(file);
+        auto playing = isPlaying(row);
+
+        juce::String text;
+
+        if (columnId == title)
+            text = (playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   "))
+                    + metadata.displayTitle(file);
+        else if (columnId == artist)
+            text = metadata.artist;
 
         g.setColour(playing ? inkwyrd::theme::accent : inkwyrd::theme::text);
-        auto shownName = owner.trackMetadata.get(file).displayTitle(file);
-        g.drawText((playing ? juce::String::fromUTF8("\xe2\x96\xb6 ") : juce::String("   "))
-                        + shownName,
-                    juce::Rectangle<int>(6, 0, width - 12, height),
+        g.setFont(juce::Font(juce::FontOptions(14.0f)));
+        g.drawText(text, juce::Rectangle<int>(6, 0, width - 12, height),
                     juce::Justification::centredLeft, true);
     }
 
     void selectedRowsChanged(int) override { owner.updateButtons(); }
 
-    void listBoxItemDoubleClicked(int row, const juce::MouseEvent&) override
+    void cellDoubleClicked(int row, int, const juce::MouseEvent&) override
     {
         if (juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()) && owner.onPlayTrack)
             owner.onPlayTrack(owner.shownId, owner.resolvedTracks.files[row]);
@@ -57,6 +73,11 @@ public:
     void deleteKeyPressed(int) override { owner.removeSelectedTrack(); }
 
 private:
+    bool isPlaying(int row) const
+    {
+        return owner.resolvedTracks.files[row] == owner.engine.getCurrentTrackFile();
+    }
+
     PlaylistTrackListComponent& owner;
 };
 
@@ -76,9 +97,21 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
     addAndMakeVisible(captionLabel);
 
     model = std::make_unique<Model>(*this);
-    trackListBox.setModel(model.get());
-    trackListBox.setRowHeight(kRowHeight);
-    addAndMakeVisible(trackListBox);
+    trackTable.setModel(model.get());
+    trackTable.setRowHeight(kRowHeight);
+
+    // visible | resizable only: no sortable flag (see the header comment -
+    // the playlist's order IS the play order) and no dragging columns
+    // about, which is noise on a two-column table.
+    constexpr int kColumnFlags = juce::TableHeaderComponent::visible
+                                  | juce::TableHeaderComponent::resizable;
+
+    auto& header = trackTable.getHeader();
+    header.addColumn("Title",  Model::title,  240, 120, -1, kColumnFlags);
+    header.addColumn("Artist", Model::artist, 140, 70,  -1, kColumnFlags);
+    header.setStretchToFitActive(true);
+
+    addAndMakeVisible(trackTable);
 
     removeButton.onClick = [this] { removeSelectedTrack(); };
     addAndMakeVisible(removeButton);
@@ -89,8 +122,8 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
 
 PlaylistTrackListComponent::~PlaylistTrackListComponent()
 {
-    // The model outlives the ListBox otherwise.
-    trackListBox.setModel(nullptr);
+    // The model outlives the table otherwise.
+    trackTable.setModel(nullptr);
 }
 
 void PlaylistTrackListComponent::setPlaylist(const juce::Uuid& id)
@@ -115,19 +148,28 @@ void PlaylistTrackListComponent::refresh()
                               juce::dontSendNotification);
     }
 
-    trackListBox.updateContent();
-    trackListBox.repaint();
+    trackTable.updateContent();
+
+    // TableListBox only fits its columns to the width in resized(). A
+    // playlist long enough to scroll brings in the vertical scrollbar
+    // AFTER that, narrowing the space - and the columns, still sized for
+    // the wider area, spilled under it with a horizontal scrollbar. So
+    // re-fit whenever the rows change.
+    trackTable.getHeader().resizeAllColumnsToFit(trackTable.getVisibleContentWidth());
+    trackTable.setMinimumContentWidth(trackTable.getHeader().getTotalWidth());
+
+    trackTable.repaint();
     updateButtons();
 }
 
 void PlaylistTrackListComponent::updateButtons()
 {
-    removeButton.setEnabled(trackListBox.getSelectedRow() >= 0 && library.findById(shownId) != nullptr);
+    removeButton.setEnabled(trackTable.getSelectedRow() >= 0 && library.findById(shownId) != nullptr);
 }
 
 void PlaylistTrackListComponent::removeSelectedTrack()
 {
-    auto row = trackListBox.getSelectedRow();
+    auto row = trackTable.getSelectedRow();
     if (! juce::isPositiveAndBelow(row, resolvedTracks.files.size()))
         return;
 
@@ -232,7 +274,7 @@ void PlaylistTrackListComponent::timerCallback()
     if (current != lastSeenPlayingTrack)
     {
         lastSeenPlayingTrack = current;
-        trackListBox.repaint(); // only the marker moved, row count is unchanged
+        trackTable.repaint(); // only the marker moved, row count is unchanged
     }
 }
 
@@ -246,5 +288,5 @@ void PlaylistTrackListComponent::resized()
     removeButton.setBounds(area.removeFromBottom(kButtonHeight));
     area.removeFromBottom(6);
 
-    trackListBox.setBounds(area);
+    trackTable.setBounds(area);
 }

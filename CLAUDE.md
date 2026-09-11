@@ -1768,6 +1768,51 @@ confirmed untagged, not a bug: Windows reports nothing for them either.)
 - The Vol column is deliberately **not sortable** - it's a control, not a
   value.
 
+### Tags everywhere, and the scan-coverage gap beta.17 shipped with (beta.18)
+
+The Player's now-playing display and the Playlist window now read tags
+too. The display looks the playing file up on every paint (one map
+lookup at 30 Hz) rather than caching per track, so tags that arrive
+mid-track just appear; each field falls back to the filename's
+`Artist - Title` split on its own. The Playlist window is a two-column
+Title/Artist `TableListBox` whose headers are deliberately NOT
+sortable: its order is the playlist's own, which is the play order with
+shuffle off, and a re-ordered view would lie about what plays next.
+
+**The gap:** beta.17 scanned `trackLibrary.getAllTracks()` once, at
+startup, and never again. Tracks added mid-session (Add files, Add
+folder, Explorer drops) showed filenames until the next launch, and
+tracks that were only ever in a PLAYLIST (dropped onto the Playlist
+window, or new files in a linked folder) were never scanned at all -
+which would have left the Player's display on the filename for exactly
+those tracks. Fixed with one `InkwyrdAudioApplication::rescanTrackMetadata()`
+over the library AND every resolved playlist, run at startup, from
+`TrackLibrary::onTracksAdded` (fires only when a batch added something
+new, so re-adding a folder doesn't rescan), and from every
+`handlePlaylistEdited`. `scanAsync` de-duplicates its input by key,
+since those two sources overlap heavily.
+
+**A second bug that fix would have created:** a cancelled scan didn't
+save. Scans now get cancelled routinely (a restart cancels the running
+one), and the restarted scan often finds nothing left to do - so it
+returned early without saving either, and everything was re-read next
+launch. The scan thread now saves whenever it read anything, cancelled
+or not; each entry is a complete read of one file, so partial results
+are valid results.
+
+**`TableListBox` only fits its columns in `resized()`** (checked in
+`juce_TableListBox.cpp`, not assumed). Rows that arrive after sizing can
+bring in the vertical scrollbar, narrowing the space while the columns
+stay sized for the wider area - a horizontal scrollbar appeared under
+the Playlist table in the first launch test. Both tables now re-fit
+(`resizeAllColumnsToFit(getVisibleContentWidth())` +
+`setMinimumContentWidth`) after every `updateContent()`.
+
+Table headers are now skinned (`TableHeaderComponent` colour ids). V4's
+header was flat light grey. `drawTableHeaderColumn` is overridden solely
+because V2 hard-codes the sort arrow as `0x99000000`, which vanishes on
+a dark header.
+
 ### Not yet built
 
 - **The Library's folder-tree view.** The table is one view; a tree over

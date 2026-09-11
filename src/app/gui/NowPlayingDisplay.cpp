@@ -20,16 +20,14 @@ namespace
         return juce::String::formatted("%02d:%02d", total / 60, total % 60);
     }
 
-    // Filenames in this library are overwhelmingly "Artist - Title", so
-    // splitting on the first " - " gets a real artist line most of the
-    // time. Deliberately NOT tag reading: nothing in the app reads
-    // embedded metadata yet, and pretending otherwise would mean a
-    // confidently wrong artist rather than an honestly blank one.
     struct TrackName
     {
         juce::String artist, title;
     };
 
+    // The fallback when a file has no title tag, or hasn't been scanned
+    // yet: filenames are very often "Artist - Title", so splitting on the
+    // first " - " still gets a real artist line a lot of the time.
     TrackName splitTrackName(const juce::File& file)
     {
         auto name = file.getFileNameWithoutExtension();
@@ -41,6 +39,25 @@ namespace
         return { {}, name };
     }
 
+    // Tags first - the same source as the Library and Playlist windows,
+    // so the three never disagree about what a track is called. Each
+    // field falls back on its own: a file tagged with an artist but no
+    // title still gets its artist.
+    TrackName trackNameFor(const juce::File& file, const TrackMetadataStore& trackMetadata)
+    {
+        if (file == juce::File())
+            return {};
+
+        auto metadata = trackMetadata.get(file);
+        auto fromFilename = splitTrackName(file);
+
+        if (metadata.title.isNotEmpty())
+            return { metadata.artist, metadata.title };
+
+        return { metadata.artist.isNotEmpty() ? metadata.artist : fromFilename.artist,
+                  fromFilename.title };
+    }
+
     void drawCaption(juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text)
     {
         g.setColour(textDim);
@@ -49,8 +66,9 @@ namespace
     }
 }
 
-NowPlayingDisplay::NowPlayingDisplay(PlaylistEngine& engineToUse, SpectrumTap& spectrumToUse)
-    : engine(engineToUse), spectrum(spectrumToUse)
+NowPlayingDisplay::NowPlayingDisplay(PlaylistEngine& engineToUse, SpectrumTap& spectrumToUse,
+                                      const TrackMetadataStore& trackMetadataToUse)
+    : engine(engineToUse), spectrum(spectrumToUse), trackMetadata(trackMetadataToUse)
 {
     startTimerHz(kRefreshHz);
 }
@@ -143,8 +161,10 @@ void NowPlayingDisplay::paintTrackInfo(juce::Graphics& g, juce::Rectangle<int> a
     if (area.isEmpty())
         return;
 
-    auto file = engine.getCurrentTrackFile();
-    auto name = splitTrackName(file);
+    // Looked up every paint rather than cached per track: it's one map
+    // lookup, and it means tags that arrive from a scan mid-track show up
+    // without anything having to tell this display about them.
+    auto name = trackNameFor(engine.getCurrentTrackFile(), trackMetadata);
 
     // FIXED row heights, not fractions of the available space. Deriving
     // them from the height meant a font sized at 1.5x its own row, which

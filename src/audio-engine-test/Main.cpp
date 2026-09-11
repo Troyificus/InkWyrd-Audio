@@ -436,8 +436,20 @@ namespace
                    "the same path in different case is recognised as the same track");
             check(tracks.getNumTracks() == 1, "so case alone never creates a second row");
 
+            // The hook the app uses to read tags for tracks added
+            // mid-session: fires for a batch with something new in it,
+            // and stays quiet for one that changes nothing, so re-adding
+            // a folder doesn't kick off a pointless re-scan.
+            int addedNotifications = 0;
+            tracks.onTracksAdded = [&] { ++addedNotifications; };
+
             tracks.registerTracks(folderTracks);
             check(tracks.getNumTracks() == folderTracks.size(), "registering a batch adds the rest");
+            check(addedNotifications == 1, "a batch with new tracks in it announces itself, once");
+
+            tracks.registerTracks(folderTracks);
+            check(addedNotifications == 1, "a batch that adds nothing new stays quiet");
+            tracks.onTracksAdded = nullptr;
             tracks.save();
 
             {

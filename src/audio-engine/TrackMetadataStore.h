@@ -4,6 +4,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_events/juce_events.h> // MessageManager::callAsync, for reporting scan progress

@@ -14,6 +14,7 @@ namespace
 PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
                             PlaylistEngine& playlist,
                             MasterEngine& masterEngine,
+                            const TrackMetadataStore& trackMetadata,
                             std::function<void()> onTogglePlaylist,
                             std::function<void()> onToggleLibrary,
                             std::function<void()> onToggleVoiceFx,
@@ -23,7 +24,7 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
     : DetachableWindow("Inkwyrd Audio", "player", "Audio Player", settingsToUse, defaultPlayerBounds(), true,
                         juce::DocumentWindow::closeButton | juce::DocumentWindow::minimiseButton)
 {
-    auto* component = new PlayerComponent(playlist, masterEngine,
+    auto* component = new PlayerComponent(playlist, masterEngine, trackMetadata,
                                            std::move(onTogglePlaylist),
                                            std::move(onToggleLibrary),
                                            std::move(onToggleVoiceFx),

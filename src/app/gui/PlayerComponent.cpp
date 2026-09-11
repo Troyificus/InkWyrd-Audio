@@ -9,6 +9,7 @@ namespace
 
 PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
                                   MasterEngine& masterEngineToUse,
+                                  const TrackMetadataStore& trackMetadata,
                                   std::function<void()> onTogglePlaylistToUse,
                                   std::function<void()> onToggleLibraryToUse,
                                   std::function<void()> onToggleVoiceFxToUse,
@@ -21,7 +22,7 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
       onToggleVoiceFx(std::move(onToggleVoiceFxToUse)),
       onToggleSoundboard(std::move(onToggleSoundboardToUse))
 {
-    nowPlaying = std::make_unique<NowPlayingDisplay>(playlist, masterEngine.getSpectrumTap());
+    nowPlaying = std::make_unique<NowPlayingDisplay>(playlist, masterEngine.getSpectrumTap(), trackMetadata);
     addAndMakeVisible(*nowPlaying);
 
     discordStatusLabel.setText("Local monitor only - no Discord credentials configured.", juce::dontSendNotification);

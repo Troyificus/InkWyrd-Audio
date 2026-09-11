@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <map>
 
 #include <juce_core/juce_core.h>
@@ -44,6 +45,13 @@ public:
     // new, which is what makes a migration able to report itself.
     bool registerTrack(const juce::File& file);
     int registerTracks(const juce::Array<juce::File>& files);
+
+    // Fired by registerTracks() when at least one track was actually new.
+    // Lets the app read tags for files added mid-session without every
+    // place that adds tracks having to remember to ask - there are
+    // several, and the one that forgets is the one whose tracks show
+    // filenames until the next launch.
+    std::function<void()> onTracksAdded;
 
     // Forget a track. Playlists are untouched - see the note above.
     void removeTrack(const juce::File& file);

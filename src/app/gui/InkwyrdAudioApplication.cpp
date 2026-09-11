@@ -298,8 +298,34 @@ void InkwyrdAudioApplication::playTrackInPlaylist(const juce::Uuid& playlistId, 
     playlist.crossfadeToTrackInCurrentList(file);
 }
 
+void InkwyrdAudioApplication::rescanTrackMetadata()
+{
+    auto files = trackLibrary.getAllTracks();
+
+    for (int i = 0; i < library.getNumPlaylists(); ++i)
+        if (auto* playlistToScan = library.getPlaylist(i))
+            files.addArray(library.resolve(*playlistToScan).files);
+
+    // Progress and completion both just repaint - the Library re-sorts,
+    // since tags arriving can change the order; the Playlist window's
+    // order is fixed, so only its text changes. The Player's display
+    // looks tags up on every paint and needs no telling.
+    auto showNewTags = [this]
+    {
+        if (libraryWindow != nullptr)
+            libraryWindow->repaintTrackList();
+        if (playlistWindow != nullptr)
+            playlistWindow->getTrackList().repaintTracks();
+    };
+
+    trackMetadata.scanAsync(files, showNewTags, showNewTags);
+}
+
 void InkwyrdAudioApplication::handlePlaylistEdited(const juce::Uuid& id)
 {
+    // Whichever playlist it was, anything new in it needs its tags read.
+    rescanTrackMetadata();
+
     // Editing a playlist you aren't listening to is purely a UI matter -
     // it gets picked up whenever it's next activated.
     if (id != activePlaylistId)
@@ -474,7 +500,7 @@ void InkwyrdAudioApplication::showPlayer()
         // these five windows live for the rest of the app's life;
         // Settings only ever hides them (see showSetup()).
         playerWindow = std::make_unique<PlayerWindow>(
-            settings, playlist, masterEngine,
+            settings, playlist, masterEngine, trackMetadata,
             [this]
             {
                 if (playlistWindow != nullptr)
@@ -540,10 +566,11 @@ void InkwyrdAudioApplication::showPlayer()
 
     // Fill in any tags that aren't cached yet. Started here rather than
     // during initialise() so the windows are already up and can repaint
-    // as results arrive.
-    trackMetadata.scanAsync(trackLibrary.getAllTracks(),
-                             [this] { if (libraryWindow != nullptr) libraryWindow->repaintTrackList(); },
-                             [this] { if (libraryWindow != nullptr) libraryWindow->repaintTrackList(); });
+    // as results arrive - and the hook is set here too, after the
+    // migration's own registerTracks() call, so that never triggers a
+    // scan with no windows to show it.
+    trackLibrary.onTracksAdded = [this] { rescanTrackMetadata(); };
+    rescanTrackMetadata();
 
     auto& player = playerWindow->getPlayerComponent();
 

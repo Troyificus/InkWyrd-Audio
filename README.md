@@ -21,6 +21,17 @@ rights needed.
 > warning the first time you run the installer. This is a small beta
 > project without a paid code-signing certificate yet, not a sign
 > anything is wrong. Click **More info -> Run anyway** to continue.
+>
+> Your browser may also say the file **"isn't commonly downloaded."**
+> That's the same thing: a new release has no download history yet.
+>
+> If **Microsoft Defender blocks it as a threat**, please don't override
+> Defender. [Open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
+> instead, so the file can be sent to Microsoft for analysis. New,
+> unsigned programs sometimes trip Defender's automatic detection (names
+> ending in `!ml`). Each release's notes list the installer's SHA-256, so
+> you can check your download matches with
+> `Get-FileHash <installer>.exe` in PowerShell.
 
 ## Setting up your Discord bot
 
@@ -154,9 +165,10 @@ the time elapsed and total, a live spectrum of everything being sent
 out, and a **seek bar** - click or drag anywhere along it to move
 through the track.
 
-Artist and title are read from the filename. Files named
-`Artist - Title` split correctly; anything else shows the whole name as
-the title. Inkwyrd doesn't read embedded tags yet.
+Artist and title come from the file's own tags, the same ones the
+Library and Playlist windows show. A file with no tags falls back to its
+filename: `Artist - Title` splits into both, and anything else shows the
+whole name as the title.
 
 **The transport row:** **Pause** (keeps your place), **Stop** (silences
 everything and starts the list from the top next time), **Fade out**
@@ -192,12 +204,19 @@ The top half is **your playlists**. Keep as many as you like (one per
 scene, mood or session). Click one to look at its tracks in the Playlist
 window; **double-click, or hit Play, to switch to it.** The music
 crossfades across rather than cutting. **New**, **Rename** and
-**Delete** manage the list, and **Open folder** shows you where they're
-stored (readable JSON files).
+**Delete** manage the list. To see where they're stored (readable JSON
+files), use **Open playlists folder** in Settings.
 
-The bottom half is **All tracks**: every track Inkwyrd knows about,
+The bottom half is **All Tracks**: every track Inkwyrd knows about,
 independent of which playlists happen to use it. It stays put while you
 click between playlists.
+
+All Tracks is a table of **Title, Artist, Album and Genre**, read from
+each file's embedded tags. Click a column header to sort by it, and
+click again to reverse. Sorting by Album keeps each record in
+track-number order. The first launch after adding music reads the tags
+in the background, so rows may show filenames for a moment before they
+fill in.
 
 **Add files...** and **Add folder...** put tracks into this library.
 Add folder either keeps the folder linked (files you add to it later
@@ -208,11 +227,11 @@ To get tracks into a playlist, select them here and click
 **Add to playlist**, or **drag them onto the Playlist window**.
 
 **Remove** takes a track out of the library. It does *not* touch any
-playlist already using it - a track can disappear from All tracks and
+playlist already using it - a track can disappear from All Tracks and
 still play fine in a playlist that has it.
 
 **Every track has its own volume and its own fade length**, reached by
-clicking the small bar at the right of its row.
+clicking the small bar in its **Vol** column.
 
 **Volume** is for the track that was exported hotter than everything else
 and makes everyone jump when shuffle lands on it. Pull it down once and
@@ -231,7 +250,10 @@ straight away if that track is playing.
 ### The Playlist window
 
 Shows the tracks in whichever playlist is selected in the Library, with
-the playing one marked. Double-click a track to jump to it. Drop files
+the playing one marked, in **Title** and **Artist** columns. The columns
+don't sort: the list is always in the playlist's own order, which is
+the order it plays in with Shuffle off. Double-click a track to jump to
+it. Drop files
 here (from the Library or from Explorer) to add them to that playlist,
 and **Remove from playlist** (or the Delete key) takes one out.
 
@@ -345,8 +367,6 @@ the next launch, not immediately. Everything else applies right away.
 - Changing your Discord bot token/server/channel via Settings takes
   effect on the next launch, not immediately. The app won't drop an
   active Discord connection to reconnect with new details mid-session.
-- Track names come from filenames; embedded tags aren't read yet, so the
-  artist line is blank unless a file is named `Artist - Title`.
 - Automatic Discord muting needs its own one-time setup (see
   [above](#optional-muting-yourself-in-discord-automatically)) and the
   redirect URI has to be `https://inkwyrd.com/rpc`, first in the list if

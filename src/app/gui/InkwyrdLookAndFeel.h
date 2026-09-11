@@ -64,6 +64,13 @@ public:
                         bool isScrollbarVertical, int thumbStartPosition, int thumbSize,
                         bool isMouseOver, bool isMouseDown) override;
 
+    // Only to recolour the sort arrow, which JUCE hard-codes as
+    // translucent black - invisible on a dark header.
+    void drawTableHeaderColumn(juce::Graphics& g, juce::TableHeaderComponent& header,
+                                const juce::String& columnName, int columnId,
+                                int width, int height, bool isMouseOver, bool isMouseDown,
+                                int columnFlags) override;
+
     void drawComboBox(juce::Graphics& g, int width, int height, bool isButtonDown,
                        int buttonX, int buttonY, int buttonW, int buttonH,
                        juce::ComboBox& box) override;

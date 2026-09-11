@@ -95,6 +95,14 @@ InkwyrdLookAndFeel::InkwyrdLookAndFeel()
     setColour(juce::ListBox::textColourId, text);
     setColour(juce::ListBox::outlineColourId, outlineFaint);
 
+    // Column headers on the Library and Playlist tables. Left to V4's
+    // defaults these were a flat light grey - the one unskinned surface
+    // left in either window.
+    setColour(juce::TableHeaderComponent::backgroundColourId, panelRaised);
+    setColour(juce::TableHeaderComponent::textColourId, text);
+    setColour(juce::TableHeaderComponent::outlineColourId, outline);
+    setColour(juce::TableHeaderComponent::highlightColourId, accentSoft.withAlpha(0.35f));
+
     setColour(juce::ScrollBar::thumbColourId, accentSoft);
     setColour(juce::ScrollBar::trackColourId, panelDeep);
 
@@ -371,6 +379,40 @@ void InkwyrdLookAndFeel::drawTextEditorOutline(juce::Graphics& g, int width, int
 
     g.drawRoundedRectangle(juce::Rectangle<float>(0.0f, 0.0f, (float) width, (float) height).reduced(0.5f),
                             cornerRadius, 1.0f);
+}
+
+void InkwyrdLookAndFeel::drawTableHeaderColumn(juce::Graphics& g, juce::TableHeaderComponent& header,
+                                                const juce::String& columnName, int,
+                                                int width, int height, bool isMouseOver, bool isMouseDown,
+                                                int columnFlags)
+{
+    // LookAndFeel_V2's version, line for line, except the arrow colour.
+    auto highlightColour = header.findColour(juce::TableHeaderComponent::highlightColourId);
+
+    if (isMouseDown)
+        g.fillAll(highlightColour);
+    else if (isMouseOver)
+        g.fillAll(highlightColour.withMultipliedAlpha(0.625f));
+
+    juce::Rectangle<int> area(width, height);
+    area.reduce(4, 0);
+
+    if ((columnFlags & (juce::TableHeaderComponent::sortedForwards
+                         | juce::TableHeaderComponent::sortedBackwards)) != 0)
+    {
+        juce::Path sortArrow;
+        sortArrow.addTriangle(0.0f, 0.0f,
+                               0.5f, (columnFlags & juce::TableHeaderComponent::sortedForwards) != 0 ? -0.8f : 0.8f,
+                               1.0f, 0.0f);
+
+        g.setColour(accent);
+        g.fillPath(sortArrow, sortArrow.getTransformToScaleToFit(
+                                   area.removeFromRight(height / 2).reduced(2).toFloat(), true));
+    }
+
+    g.setColour(header.findColour(juce::TableHeaderComponent::textColourId));
+    g.setFont(withDefaultMetrics(juce::FontOptions((float) height * 0.5f, juce::Font::bold)));
+    g.drawFittedText(columnName, area, juce::Justification::centredLeft, 1);
 }
 
 void InkwyrdLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar&,

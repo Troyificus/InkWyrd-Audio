@@ -96,6 +96,14 @@ private:
     // one currently playing.
     void handlePlaylistEdited(const juce::Uuid& id);
 
+    // Reads tags for anything in the library OR any playlist that isn't
+    // cached yet. Both, because a playlist can hold tracks the library
+    // doesn't (dropped straight onto the Playlist window, or new files in
+    // a linked folder) and the Player's display needs tags for whatever
+    // is actually playing. Cheap when nothing's new: only a size/date
+    // check per file.
+    void rescanTrackMetadata();
+
     // A different playlist was SELECTED for browsing - the Playlist
     // window follows this. Never touches playback.
     void handlePlaylistSelected(const juce::Uuid& id);

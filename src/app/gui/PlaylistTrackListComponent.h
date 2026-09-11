@@ -21,6 +21,11 @@
 //
 // Still marks the playing track, so when the selected and playing
 // playlists are the same (the common case) it reads exactly as before.
+//
+// Title and Artist columns, like the Library's table - but NOT sortable.
+// The order here is the playlist's own order, which is the order it plays
+// in with shuffle off; a header click that re-ordered the view would make
+// the list lie about what plays next.
 class PlaylistTrackListComponent : public juce::Component,
                                     public juce::FileDragAndDropTarget,
                                     private juce::Timer
@@ -50,6 +55,10 @@ public:
     // somewhere else, e.g. tracks added from the Library window).
     void refresh();
 
+    // Repaint only - for tags arriving from a scan, which change what the
+    // rows say but never which rows there are.
+    void repaintTracks() { trackTable.repaint(); }
+
     // juce::FileDragAndDropTarget - accepts both a drag from the Library
     // window's master list and a plain drag from Explorer; they arrive
     // through the same path because the in-app drag is performed as a
@@ -77,7 +86,7 @@ private:
     ResolvedPlaylist resolvedTracks;
 
     juce::Label captionLabel;
-    juce::ListBox trackListBox;
+    juce::TableListBox trackTable;
     std::unique_ptr<Model> model;
     juce::TextButton removeButton { "Remove from playlist" };
 

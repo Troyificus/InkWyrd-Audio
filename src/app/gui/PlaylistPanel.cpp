@@ -542,6 +542,12 @@ void PlaylistPanel::sortLibraryTracks()
 
     trackTable->updateContent();
 
+    // Re-fit the columns - see the matching comment in
+    // PlaylistTrackListComponent::refresh(). Hits here when a library
+    // short enough not to scroll has tracks added and starts to.
+    trackTable->getHeader().resizeAllColumnsToFit(trackTable->getVisibleContentWidth());
+    trackTable->setMinimumContentWidth(trackTable->getHeader().getTotalWidth());
+
     trackTable->deselectAllRows();
     for (int row = 0; row < libraryTracks.size(); ++row)
         if (selected.contains(libraryTracks[row]))

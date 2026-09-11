@@ -184,6 +184,7 @@ public:
 #endif
 
         int sinceProgress = 0;
+        int scannedCount = 0;
 
         for (const auto& file : files)
         {
@@ -192,6 +193,7 @@ public:
 
             auto metadata = TrackMetadataStore::readFromFile(file, owner.formatManager);
             metadata.scanned = true;
+            ++scannedCount;
 
             {
                 const juce::ScopedLock scope(owner.lock);
@@ -221,7 +223,13 @@ public:
         // Saving from this thread is safe: the store file is only ever
         // written here and from the message thread's save(), and both go
         // through the same lock.
-        if (! threadShouldExit())
+        //
+        // Saved even when cancelled part-way. Every entry written is a
+        // complete, valid read of one file, and scans now get cancelled
+        // routinely - adding tracks restarts the scan - so skipping the
+        // save meant the restarted scan found nothing left to do, never
+        // saved either, and the whole lot was re-read next launch.
+        if (scannedCount > 0)
             owner.save();
 
         if (onFinished)
@@ -309,12 +317,18 @@ void TrackMetadataStore::scanAsync(const juce::Array<juce::File>& files,
     {
         const juce::ScopedLock scope(lock);
 
+        // Callers pass the library AND every playlist, which overlap
+        // heavily - without this a track in three playlists is read four
+        // times.
+        std::set<juce::String> queued;
+
         for (const auto& file : files)
         {
-            if (! file.existsAsFile())
+            auto key = keyFor(file);
+            if (! queued.insert(key).second || ! file.existsAsFile())
                 continue;
 
-            auto it = entries.find(keyFor(file));
+            auto it = entries.find(key);
             if (it == entries.end() || isStale(file, it->second))
                 work.add(file);
         }
