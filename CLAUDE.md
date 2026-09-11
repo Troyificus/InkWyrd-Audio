@@ -2149,6 +2149,45 @@ release:
   the build's. Both are a couple of `Get-Item` calls. Do that, record
   the installer's SHA-256, and say plainly in the handover that the full
   install/uninstall cycle was skipped and why.
+- **Every release ships two assets** (from beta.18): the installer AND
+  `InkwyrdAudio-Portable-<version>.zip`, built by
+  `installer/make-portable-zip.ps1` after `iscc` (it reads the version
+  from the `.iss`, so there's still one place to bump). Both SHA-256s go
+  in the release notes - the README tells users they're there. Build
+  both AFTER any README edit: the README is packaged into each as
+  `README.txt`. The ZIP CAN be launch-tested safely from here (unzip to
+  scratch, run with `INKWYRD_NO_DISCORD=1` +
+  `INKWYRD_ALLOW_MULTIPLE_INSTANCES=1`, back up and restore the settings
+  file), unlike the install cycle above.
+
+### Why the ZIP exists: antivirus flagged the installer, not the program
+
+beta.17's installer was blocked on a user's machine by Defender
+(`Trojan:Win32/Sabsik.EN.D!ml`), and Microsoft's analyst response to a
+false-positive submission was "meets our criteria for malware, detection
+remains". Worked through as a possible real infection, not dismissed -
+the build PC has a history of cracked-software detections:
+
+- VirusTotal on the installer: **4/71**, all generic ML/heuristic labels
+  (Microsoft `Wacatac.B!ml`, DeepInstinct, SecureAge,
+  Skyhigh `BehavesLike.Win32.Dropper`), no named family, every major
+  signature engine clean. Tags `peexe` + `overlay` - the overlay is
+  Inno Setup's appended compressed payload.
+- VirusTotal on the bare `Inkwyrd Audio.exe`: **0/70**, Microsoft
+  included.
+- Defender Offline scan of the build PC: clean. `libdave.dll` is
+  byte-identical to Discord's hash-pinned release; the exe's sections
+  and imports are what the source explains.
+
+Conclusion: the unsigned installer's shape (unknown publisher, packed
+overlay, unpacks executables) is what trips ML "dropper" models. Mitigations
+shipped in beta.18: the portable ZIP; real publisher fields on both
+binaries (CMake `COMPANY_*`, `.iss` `VersionInfo*` - the exe previously
+said "yourcompany", JUCE's placeholder); an icon on both, rendered from
+`drawLogo()` by `INKWYRD_ICONRENDER` and packed by
+`installer/make-icon.ps1`. The actual fix is code signing, not yet done.
+Still not done either: a clean-machine build (GitHub Actions), which
+would remove the build-PC question for good.
 
 ## Dev environment
 

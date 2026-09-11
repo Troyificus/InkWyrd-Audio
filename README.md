@@ -10,28 +10,40 @@ Heavily inspired by [Kenku FM](https://www.kenku.fm/).
 
 ## Download
 
-Grab the latest installer from the
-[Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases)
-(the newest one at the top, GitHub's "latest" shortcut skips
-pre-releases entirely, so it doesn't work while this is still a beta)
-and run it. It installs just for your own Windows account, no admin
-rights needed.
+Get the latest release from the
+[Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases).
+Take the newest one at the top: GitHub's "latest" shortcut skips
+pre-releases, so it doesn't work while this is still a beta.
+
+Each release comes in two forms, the same program in both:
+
+- **The installer** (`InkwyrdAudio-Setup-...exe`) installs just for your
+  own Windows account, with no admin rights needed. It adds a Start menu
+  entry and an uninstaller.
+- **The portable ZIP** (`InkwyrdAudio-Portable-...zip`) needs no
+  installing: unzip it anywhere and run `Inkwyrd Audio.exe`. To remove
+  it, delete the folder. Your settings and playlists live in
+  `%APPDATA%\Inkwyrd Audio` either way, so you can switch between the two
+  without losing anything.
 
 > Windows will likely show a **"Windows protected your PC"** SmartScreen
-> warning the first time you run the installer. This is a small beta
+> warning the first time you run either one. This is a small beta
 > project without a paid code-signing certificate yet, not a sign
 > anything is wrong. Click **More info -> Run anyway** to continue.
 >
 > Your browser may also say the file **"isn't commonly downloaded."**
 > That's the same thing: a new release has no download history yet.
 >
-> If **Microsoft Defender blocks it as a threat**, please don't override
-> Defender. [Open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
-> instead, so the file can be sent to Microsoft for analysis. New,
-> unsigned programs sometimes trip Defender's automatic detection (names
-> ending in `!ml`). Each release's notes list the installer's SHA-256, so
-> you can check your download matches with
-> `Get-FileHash <installer>.exe` in PowerShell.
+> If **Microsoft Defender blocks the installer as a threat**, use the
+> portable ZIP instead, and please don't override Defender.
+> Some antivirus products' automatic checks (detection names ending in
+> `!ml`, or "dropper") have flagged the unsigned *installer*, because
+> an installer unpacking files is what that kind of malware looks like.
+> The program inside it has scanned clean. If the ZIP is blocked too,
+> [open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues).
+>
+> Each release's notes list the SHA-256 of both downloads, so you can
+> check yours matches with `Get-FileHash <file>` in PowerShell.
 
 ## Setting up your Discord bot
 

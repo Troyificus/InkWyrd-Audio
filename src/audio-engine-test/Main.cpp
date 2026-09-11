@@ -19,6 +19,8 @@
 #endif
 
 #include "DiscordRpcClient.h"
+#include "InkwyrdLookAndFeel.h"
+#include "InkwyrdTheme.h"
 #include "NoiseSuppressor.h"
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
@@ -1248,6 +1250,56 @@ namespace
         return failures == 0 ? 0 : 1;
     }
 
+    // INKWYRD_ICONRENDER=<folder>: renders the app icon as a PNG at every
+    // size a Windows .ico carries, from the same drawLogo() the title bars
+    // use - so the icon is the in-app mark rather than a second drawing of
+    // it that could drift. installer/make-icon.ps1 packs the PNGs into
+    // installer/InkwyrdAudio.ico; icon-256.png is also the ICON_BIG JUCE
+    // builds into the exe. Re-run both when the logo changes.
+    int runIconRender(const juce::File& folder)
+    {
+        using namespace inkwyrd::theme;
+
+        juce::ScopedJuceInitialiser_GUI gui; // fonts, for the "W"
+        folder.createDirectory();
+
+        for (int size : { 16, 20, 24, 32, 40, 48, 64, 128, 256 })
+        {
+            juce::Image image(juce::Image::ARGB, size, size, true);
+
+            {
+                juce::Graphics g(image);
+
+                // Designed on a 24-unit grid - the size the logo was drawn
+                // for - and scaled, so its fixed-width strokes stay in
+                // proportion at 256px instead of turning into hairlines.
+                g.addTransform(juce::AffineTransform::scale((float) size / 24.0f));
+
+                juce::Rectangle<float> tile(0.5f, 0.5f, 23.0f, 23.0f);
+                g.setColour(panelDeep);
+                g.fillRoundedRectangle(tile, 5.0f);
+                g.setColour(outline);
+                g.drawRoundedRectangle(tile, 5.0f, 1.0f);
+
+                InkwyrdLookAndFeel::drawLogo(g, tile.reduced(2.5f), accent, accentSoft.withAlpha(0.45f));
+            }
+
+            auto file = folder.getChildFile("icon-" + juce::String(size) + ".png");
+            file.deleteFile();
+
+            juce::FileOutputStream out(file);
+            if (! out.openedOk() || ! juce::PNGImageFormat().writeImageToStream(image, out))
+            {
+                std::cout << "Couldn't write " << file.getFullPathName() << std::endl;
+                return 1;
+            }
+
+            std::cout << file.getFullPathName() << std::endl;
+        }
+
+        return 0;
+    }
+
     // INKWYRD_TAGTEST=1: embedded-tag reading, against whatever is
     // actually in the user's track library rather than a synthetic
     // fixture.
@@ -1739,6 +1791,10 @@ int main(int argc, char* argv[])
     // goes above the PLAYLIST_FOLDER guard like the others.
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_TAGTEST", "").isNotEmpty())
         return runTagTest();
+
+    auto iconFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_ICONRENDER", "");
+    if (iconFolder.isNotEmpty())
+        return runIconRender(juce::File(iconFolder));
 
     auto playlistFolder = juce::SystemStats::getEnvironmentVariable("PLAYLIST_FOLDER", "");
     auto soundboardFolder = juce::SystemStats::getEnvironmentVariable("SOUNDBOARD_FOLDER", "");

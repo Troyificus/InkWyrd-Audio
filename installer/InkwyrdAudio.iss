@@ -26,6 +26,11 @@
 ; release rather than two.
 #define MyAppVersion "0.1.0-beta.18"
 #define MyAppPublisher "Troy"
+#define MyAppURL "https://github.com/Troyificus/InkWyrd-Audio"
+; Windows' numeric version fields hold at most four numbers, which can't
+; carry "beta.14.1" - so the file version stays at the base version and
+; the full beta string goes in the text fields alongside it.
+#define MyAppBaseVersion "0.1.0"
 ; The CMake target is named InkwyrdAudioApp, but juce_add_gui_app names
 ; the actual output binary after PRODUCT_NAME ("Inkwyrd Audio") - unlike
 ; juce_add_console_app, which used the target name. Confirmed by building
@@ -40,6 +45,24 @@ AppId={{CA652386-31DE-4EC3-8625-D21D268A5831}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}/issues
+AppUpdatesURL={#MyAppURL}/releases
+AppCopyright=Copyright (c) 2026 {#MyAppPublisher}
+; The installer's own version resource and icon. Without these the setup
+; exe said nothing about who made it - one more thing for antivirus
+; heuristics to hold against an unsigned download, and the installer is
+; what they were flagging (VirusTotal: installer 4/71, all generic
+; machine-learning/heuristic labels; the program inside it 0/70).
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoCopyright=Copyright (c) 2026 {#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoProductName={#MyAppName}
+VersionInfoVersion={#MyAppBaseVersion}
+VersionInfoTextVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppBaseVersion}
+VersionInfoProductTextVersion={#MyAppVersion}
+SetupIconFile=InkwyrdAudio.ico
 ; Per-user install, no admin/UAC needed - simpler for the actual target
 ; user (a DM setting this up for a game night, not an IT admin) and
 ; matches how e.g. VS Code and Discord itself install by default.

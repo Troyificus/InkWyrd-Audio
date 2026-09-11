@@ -16,6 +16,9 @@ target_sources(AudioEngineTest PRIVATE
     # Pure geometry, no Component/peer needed - covers the magnetic-snap
     # math headlessly rather than only by manual dragging.
     ../app/gui/WindowSnapping.cpp
+    # For INKWYRD_ICONRENDER, which draws the app icon with the same
+    # drawLogo() the title bars use.
+    ../app/gui/InkwyrdLookAndFeel.cpp
     # For deriveApplicationId(), which is a pure function over a string
     # and the one part of the Discord auto-mute path that can be checked
     # without a running Discord client.

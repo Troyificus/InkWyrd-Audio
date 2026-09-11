@@ -1,5 +1,19 @@
+# The publisher fields end up in the exe's version resource (right-click ->
+# Properties -> Details). Left unset, JUCE fills CompanyName with its
+# placeholder "yourcompany", and a program with placeholder publisher
+# details and no icon is one more thing for antivirus heuristics to
+# dislike about an unsigned download. Keep COMPANY_NAME matching
+# MyAppPublisher in installer/InkwyrdAudio.iss.
 juce_add_gui_app(InkwyrdAudioApp
     PRODUCT_NAME "Inkwyrd Audio"
+    COMPANY_NAME "Troy"
+    COMPANY_COPYRIGHT "Copyright (c) 2026 Troy"
+    COMPANY_WEBSITE "https://github.com/Troyificus/InkWyrd-Audio"
+    DESCRIPTION "Plays music and sound effects into a Discord voice channel"
+    # Rendered from InkwyrdLookAndFeel::drawLogo() by the test harness's
+    # INKWYRD_ICONRENDER mode - see installer/make-icon.ps1.
+    ICON_BIG "${CMAKE_SOURCE_DIR}/assets/icon/icon-256.png"
+    ICON_SMALL "${CMAKE_SOURCE_DIR}/assets/icon/icon-32.png"
 )
 
 target_sources(InkwyrdAudioApp PRIVATE
