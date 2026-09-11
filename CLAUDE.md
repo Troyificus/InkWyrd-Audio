@@ -2189,6 +2189,21 @@ said "yourcompany", JUCE's placeholder); an icon on both, rendered from
 Still not done either: a clean-machine build (GitHub Actions), which
 would remove the build-PC question for good.
 
+**Update after release - the ZIP is NOT a way round Defender.** The
+beta.18 exe as shipped (SHA-256 `588E8B61...`) came back **1/64,
+Microsoft only, `Wacatac.B!ml`**, where the earlier build of the same
+code (`F44AD0EC...`, before the publisher fields and icon) was 0/70.
+So Microsoft's ML verdict flips between builds of identical source,
+and on a machine running Defender both downloads are likely blocked
+until Microsoft clears the hashes. The installer was 3/71 (SecureAge
+dropped off after the publisher fields went in). Both files were
+submitted together as one ZIP encrypted with the password `infected`,
+per the submission portal's own instruction. Do NOT respond by
+rebuilding until the model scores a build clean - that's evading a
+detector, and the next release starts over. The routes are Microsoft
+clearing it and code signing. README and the beta.18 release notes
+were corrected to stop saying the program scanned clean.
+
 ## Dev environment
 
 - **VCPKG_ROOT** is set as a user env var, pointing at `C:\vcpkg`

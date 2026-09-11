@@ -34,13 +34,15 @@ Each release comes in two forms, the same program in both:
 > Your browser may also say the file **"isn't commonly downloaded."**
 > That's the same thing: a new release has no download history yet.
 >
-> If **Microsoft Defender blocks the installer as a threat**, use the
-> portable ZIP instead, and please don't override Defender.
-> Some antivirus products' automatic checks (detection names ending in
-> `!ml`, or "dropper") have flagged the unsigned *installer*, because
-> an installer unpacking files is what that kind of malware looks like.
-> The program inside it has scanned clean. If the ZIP is blocked too,
-> [open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues).
+> If **Microsoft Defender blocks a download as a threat**, please don't
+> override it. [Open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
+> instead. Microsoft's automatic machine-learning check (detection names
+> ending in `!ml`) has flagged Inkwyrd's unsigned downloads, while other
+> antivirus products flag few or none of them, and its verdict has
+> flipped between builds of identical code. It has been reported to
+> Microsoft as a false positive; code signing is the long-term fix. The
+> portable ZIP avoids the checks that flag *installers* specifically,
+> but Microsoft's check has flagged the program itself too.
 >
 > Each release's notes list the SHA-256 of both downloads, so you can
 > check yours matches with `Get-FileHash <file>` in PowerShell.
