@@ -24,7 +24,7 @@
 ; used to just say "0.1.0" for every beta, indistinguishable) AND
 ; OutputBaseFilename further down, so there's one place to update per
 ; release rather than two.
-#define MyAppVersion "0.1.0-beta.18"
+#define MyAppVersion "0.1.0-beta.19"
 #define MyAppPublisher "Troy"
 #define MyAppURL "https://github.com/Troyificus/InkWyrd-Audio"
 ; Windows' numeric version fields hold at most four numbers, which can't
@@ -52,8 +52,10 @@ AppCopyright=Copyright (c) 2026 {#MyAppPublisher}
 ; The installer's own version resource and icon. Without these the setup
 ; exe said nothing about who made it - one more thing for antivirus
 ; heuristics to hold against an unsigned download, and the installer is
-; what they were flagging (VirusTotal: installer 4/71, all generic
-; machine-learning/heuristic labels; the program inside it 0/70).
+; what they were flagging (VirusTotal on beta.18: installer 3/71, all
+; generic machine-learning/heuristic labels; the program inside it 1/64,
+; Microsoft's ML only - and 0/70 for the build before these fields were
+; added, so that verdict flips between builds of identical code).
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoCopyright=Copyright (c) 2026 {#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
