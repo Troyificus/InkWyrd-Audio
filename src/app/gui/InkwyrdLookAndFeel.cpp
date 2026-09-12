@@ -103,6 +103,16 @@ InkwyrdLookAndFeel::InkwyrdLookAndFeel()
     setColour(juce::TableHeaderComponent::outlineColourId, outline);
     setColour(juce::TableHeaderComponent::highlightColourId, accentSoft.withAlpha(0.35f));
 
+    // The Library's folder tree. JUCE fills a selected row itself from
+    // selectedItemBackgroundColourId (see ItemComponent::paint), which is
+    // why the items' own paintItem draws no selection.
+    setColour(juce::TreeView::backgroundColourId, panelDeep);
+    setColour(juce::TreeView::linesColourId, outlineFaint);
+    setColour(juce::TreeView::selectedItemBackgroundColourId, accentSoft.withAlpha(0.35f));
+    setColour(juce::TreeView::oddItemsColourId, juce::Colours::transparentBlack);
+    setColour(juce::TreeView::evenItemsColourId, juce::Colours::transparentBlack);
+    setColour(juce::TreeView::dragAndDropIndicatorColourId, accent);
+
     setColour(juce::ScrollBar::thumbColourId, accentSoft);
     setColour(juce::ScrollBar::trackColourId, panelDeep);
 

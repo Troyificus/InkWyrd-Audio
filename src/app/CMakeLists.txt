@@ -55,6 +55,8 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/PlaylistTrackListComponent.h
     gui/LibraryWindow.cpp
     gui/LibraryWindow.h
+    gui/LibraryFolderTree.cpp
+    gui/LibraryFolderTree.h
     gui/PlaylistPanel.cpp
     gui/PlaylistPanel.h
     gui/SoundboardWindow.cpp

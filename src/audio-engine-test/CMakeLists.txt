@@ -11,6 +11,9 @@ target_sources(AudioEngineTest PRIVATE
     # everything else rather than relying on a manual drag.
     ../app/gui/PlaylistPanel.cpp
     ../app/gui/PlaylistTrackListComponent.cpp
+    # buildFolderTree() is pure grouping over paths - covered headlessly
+    # here rather than only by opening the window and looking.
+    ../app/gui/LibraryFolderTree.cpp
     ../app/gui/SoundboardGridComponent.cpp
     ../app/gui/Dialogs.cpp
     # Pure geometry, no Component/peer needed - covers the magnetic-snap

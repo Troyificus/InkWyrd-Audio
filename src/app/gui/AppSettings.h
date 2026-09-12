@@ -86,6 +86,12 @@ public:
     // Whether the one-time "union every existing playlist's tracks into
     // the new master Track Library" migration has run. Same explicit-flag
     // reasoning as the other two migration flags above.
+    // Which view the Library window's track pane was last showing:
+    // false = the sortable table, true = the folder tree. A view is a
+    // preference, so it survives a restart.
+    bool isLibraryFolderView() const;
+    void setLibraryFolderView(bool shouldShowFolders);
+
     bool isTrackLibraryMigrated() const;
     void setTrackLibraryMigrated(bool migrated);
 

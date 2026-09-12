@@ -25,6 +25,7 @@
 #include "PlaylistEngine.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
+#include "LibraryFolderTree.h"
 #include "PlaylistTrackListComponent.h"
 #include "TrackLibrary.h"
 #include "TrackMetadataStore.h"
@@ -414,6 +415,60 @@ namespace
                 check(target != nullptr && reloaded.resolve(*target).files.size() == 1,
                        "and it's on disk immediately, not just in memory");
             }
+        }
+
+        {
+            // The Library window's folder tree: pure grouping over paths,
+            // so it can be checked without opening a window.
+            juce::Array<juce::File> paths;
+            for (auto path : { "G:/Music/Black Waters/02 Alone.mp3",
+                                "G:/Music/Black Waters/10 Creep.mp3",
+                                "G:/Music/Black Waters/1 Seance.mp3",
+                                "G:/Music/Sentinel/Abyss.mp3",
+                                "G:/Music/loose.mp3",
+                                "D:/Other/thing.mp3" })
+                paths.add(juce::File(juce::String(path)));
+
+            auto tree = inkwyrd::buildFolderTree(paths);
+
+            check(tree->children.size() == 2, "tracks on two drives give two top-level folders");
+            check(tree->totalTrackCount == paths.size(), "every track is counted once, at the root");
+
+            // D: sorts before G:, and the D: side is a single chain with
+            // one file, so the whole run collapses to one row.
+            auto* dDrive = tree->children[0];
+            check(dDrive->files.size() == 1 && dDrive->children.isEmpty(),
+                   "a chain of folders with nothing branching collapses to a single row");
+            check(dDrive->name.contains("Other"),
+                   "and the collapsed row names the whole run rather than just the drive");
+
+            auto* music = tree->children[1];
+            check(music->children.size() == 2, "a folder with two sub-folders keeps them both");
+            check(music->files.size() == 1,
+                   "a folder holding both files and sub-folders keeps its own files");
+            check(music->totalTrackCount == 5, "and counts everything underneath it");
+            check(music->name.contains("Music"),
+                   "the collapse stops where the folder actually branches");
+
+            auto* blackWaters = music->children[0];
+            check(blackWaters->name == "Black Waters", "sub-folders are named by their own folder");
+            check(blackWaters->files.size() == 3, "with the tracks that are in them");
+            check(blackWaters->files[0].getFileName().startsWith("1 ")
+                   && blackWaters->files[1].getFileName().startsWith("02 ")
+                   && blackWaters->files[2].getFileName().startsWith("10 "),
+                   "tracks sort naturally, so 2 comes before 10 rather than after it");
+
+            // Windows paths are case-insensitive, so the same folder
+            // spelled two ways is one row, not two.
+            juce::Array<juce::File> mixedCase;
+            mixedCase.add(juce::File("G:/Music/a.mp3"));
+            mixedCase.add(juce::File("g:/music/b.mp3"));
+            auto caseTree = inkwyrd::buildFolderTree(mixedCase);
+            check(caseTree->children.size() == 1 && caseTree->children[0]->files.size() == 2,
+                   "the same folder in different case is one folder, holding both tracks");
+
+            check(inkwyrd::buildFolderTree({})->children.isEmpty(),
+                   "an empty library gives an empty tree rather than a phantom row");
         }
 
         {

@@ -1813,10 +1813,50 @@ header was flat light grey. `drawTableHeaderColumn` is overridden solely
 because V2 hard-codes the sort arrow as `0x99000000`, which vanishes on
 a dark header.
 
+### The Library's folder tree (beta.19)
+
+`src/app/gui/LibraryFolderTree.{h,cpp}` - the second view of the master
+track list, switched by a Table/Folders pair on the "All Tracks" caption
+row. Decisions worth keeping:
+
+- **`buildFolderTree()` is pure** (paths in, node tree out, no disk
+  access), which is why it is covered in `INKWYRD_SELFTEST` rather than
+  only by opening the window. The .cpp is in the test target's sources
+  for that reason, like `WindowSnapping.cpp`.
+- **Ordering is `StrCmpLogicalW`, not `juce::String::compareNatural`.**
+  A view of folders on disk should match the order Explorer shows, and
+  compareNatural does NOT: it falls back to plain text comparison as soon
+  as either number has a leading zero (see `naturalStringCompare` in
+  juce_String.cpp), so a folder mixing "1 Seance" with "02 Alone" comes
+  out in an order no file manager would produce. Caught by a self-test
+  that mixed padded and unpadded names on purpose.
+- **Single-child chains collapse into one row**, so a path that branches
+  nowhere isn't several clicks deep. The invisible root is deliberately
+  NOT collapsed - that would swallow the top-level row.
+- **Selecting a folder means every track under it**, which is what makes
+  "add this album to a playlist" one click. `collectTracks` walks the
+  MODEL, not the sub-items: a folder never opened has no sub-items yet.
+- **Sub-items are built on first open.** A few thousand tracks would
+  otherwise cost every row in every folder before anything showed.
+- **Openness and selection survive a rebuild** (a track added, the tag
+  scan finishing) - captured and restored by unique name, which is why
+  the items have real `getUniqueName()`s.
+- **The view preference is passed IN** (`startInFolderView` plus an
+  `onTrackViewChanged` callback, defaulted so existing call sites still
+  compile) rather than PlaylistPanel reading AppSettings: the headless
+  tests build this panel, and they must never touch the real settings
+  file. LibraryWindow does the reading and writing.
+- Both views exist at once and one is hidden - rebuilding the hidden one
+  on every switch would lose which folders were open.
+- JUCE fills a selected tree row itself from
+  `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
+  so the items' own `paintItem` draws no selection.
+
 ### Not yet built
 
-- **The Library's folder-tree view.** The table is one view; a tree over
-  the source folders is the other, and the view switcher goes in with it.
+- **Dragging from the folder tree onto the Playlist window.** The table
+  is a drag source (a real OS file drag); the tree isn't yet, so it uses
+  the "Add to playlist" button.
 - The same fully-drawn treatment for the other four windows - their
   content is still stock widgets wearing the palette.
 

@@ -18,6 +18,7 @@ namespace
     constexpr const char* kLoopGapSecondsKey = "loopGapSeconds";
     constexpr const char* kWindowLayoutKey = "windowLayout";
     constexpr const char* kTrackLibraryMigratedKey = "trackLibraryMigrated";
+    constexpr const char* kLibraryFolderViewKey = "libraryFolderView";
     constexpr const char* kNoiseSuppressionKey = "noiseSuppressionEnabled";
     constexpr const char* kDiscordAutoMuteKey = "discordAutoMuteEnabled";
     constexpr const char* kDiscordClientSecretKey = "discordClientSecret";
@@ -198,6 +199,16 @@ bool AppSettings::isTrackLibraryMigrated() const
 void AppSettings::setTrackLibraryMigrated(bool migrated)
 {
     settings()->setValue(kTrackLibraryMigratedKey, migrated);
+}
+
+bool AppSettings::isLibraryFolderView() const
+{
+    return settings()->getBoolValue(kLibraryFolderViewKey, false);
+}
+
+void AppSettings::setLibraryFolderView(bool shouldShowFolders)
+{
+    settings()->setValue(kLibraryFolderViewKey, shouldShowFolders);
 }
 
 bool AppSettings::isNoiseSuppressionEnabled() const

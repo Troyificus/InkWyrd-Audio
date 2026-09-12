@@ -25,7 +25,13 @@ LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
     auto* panel = new PlaylistPanel(library, trackLibrary, playlist, trackGains, trackMetadata,
                                      std::move(onActivatePlaylist),
                                      std::move(onPlaylistEdited),
-                                     std::move(onPlaylistSelected));
+                                     std::move(onPlaylistSelected),
+                                     settingsToUse.isLibraryFolderView(),
+                                     [&settings = settingsToUse](bool folderView)
+                                     {
+                                         settings.setLibraryFolderView(folderView);
+                                         settings.save(); // AppSettings has no autosave
+                                     });
     panel->setSize(440, 620);
     playlistPanel = panel;
 

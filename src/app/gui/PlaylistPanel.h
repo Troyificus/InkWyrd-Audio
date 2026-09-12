@@ -8,6 +8,7 @@
 #include "PlaylistLibrary.h"
 #include "TrackLibrary.h"
 #include "TrackMetadataStore.h"
+#include "LibraryFolderTree.h"
 #include "TrackSettingsStore.h"
 
 // The Library window: created playlists on top, and underneath the MASTER
@@ -44,7 +45,13 @@ public:
                    // Fired when the SELECTED playlist changes, so the
                    // Playlist window can show it. Selection is browsing
                    // only - it never interrupts playback.
-                   std::function<void(const juce::Uuid&)> onPlaylistSelected);
+                   std::function<void(const juce::Uuid&)> onPlaylistSelected,
+                   // Which view the track pane opens in, and a way to
+                   // remember a change. Passed in rather than read from
+                   // AppSettings here, so the headless tests that build
+                   // this panel never touch the real settings file.
+                   bool startInFolderView = false,
+                   std::function<void(bool)> onTrackViewChanged = {});
 
     // Defined in the .cpp: the ListBoxModels below are forward-declared
     // here, and destroying a unique_ptr needs the complete type.
@@ -82,6 +89,7 @@ private:
     void activateSelected();
     void refreshLibraryTracks();
     void sortLibraryTracks();
+    void setFolderView(bool shouldShowFolders, bool notify);
     void updateButtonEnablement();
     void selectRowForSelectedId();
     void notifyEdited(const juce::Uuid& id);
@@ -139,6 +147,15 @@ private:
     juce::Label trackCaption { {}, "All Tracks" };
     std::unique_ptr<DraggableTrackTable> trackTable;
     std::unique_ptr<LibraryTrackTableModel> trackModel;
+
+    // The same tracks, grouped by the folders they live in. Both views
+    // exist at once and one is hidden: rebuilding the hidden one on every
+    // switch would lose which folders were open.
+    std::unique_ptr<LibraryFolderTree> folderTree;
+    juce::TextButton tableViewButton { "Table" };
+    juce::TextButton folderViewButton { "Folders" };
+    bool folderView = false;
+    std::function<void(bool)> onTrackViewChanged;
 
     juce::TextButton addFilesButton { "Add files..." };
     juce::TextButton addFolderButton { "Add folder..." };

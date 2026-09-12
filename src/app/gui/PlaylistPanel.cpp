@@ -271,7 +271,9 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
                               TrackMetadataStore& trackMetadataToUse,
                               std::function<void(const juce::Uuid&)> onActivatePlaylistToUse,
                               std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
-                              std::function<void(const juce::Uuid&)> onPlaylistSelectedToUse)
+                              std::function<void(const juce::Uuid&)> onPlaylistSelectedToUse,
+                              bool startInFolderView,
+                              std::function<void(bool)> onTrackViewChangedToUse)
     : library(libraryToUse),
       trackLibrary(trackLibraryToUse),
       engine(engineToUse),
@@ -279,7 +281,8 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
       trackMetadata(trackMetadataToUse),
       onActivatePlaylist(std::move(onActivatePlaylistToUse)),
       onPlaylistEdited(std::move(onPlaylistEditedToUse)),
-      onPlaylistSelected(std::move(onPlaylistSelectedToUse))
+      onPlaylistSelected(std::move(onPlaylistSelectedToUse)),
+      onTrackViewChanged(std::move(onTrackViewChangedToUse))
 {
     playlistModel = std::make_unique<PlaylistListModel>(*this);
     trackModel = std::make_unique<LibraryTrackTableModel>(*this);
@@ -352,6 +355,22 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     };
     addAndMakeVisible(trackTable.get());
 
+    folderTree = std::make_unique<LibraryFolderTree>(trackMetadata, engine);
+    folderTree->onSelectionChanged = [this] { updateButtonEnablement(); };
+    folderTree->onTracksDoubleClicked = [this] { addSelectedTracksToPlaylist(); };
+    addChildComponent(folderTree.get());
+
+    for (auto* button : { &tableViewButton, &folderViewButton })
+    {
+        button->setClickingTogglesState(false);
+        addAndMakeVisible(button);
+    }
+
+    tableViewButton.onClick = [this] { setFolderView(false, true); };
+    folderViewButton.onClick = [this] { setFolderView(true, true); };
+
+    setFolderView(startInFolderView, false);
+
     refresh();
 }
 
@@ -391,6 +410,11 @@ void PlaylistPanel::selectPlaylist(int row)
 
 juce::Array<juce::File> PlaylistPanel::getSelectedLibraryTracks() const
 {
+    // A selected FOLDER means every track under it, which is what makes
+    // "add this album to a playlist" one click.
+    if (folderView)
+        return folderTree->getSelectedTracks();
+
     juce::Array<juce::File> selected;
 
     auto rows = trackTable->getSelectedRows();
@@ -492,6 +516,10 @@ void PlaylistPanel::refreshLibraryTracks()
     trackCaption.setText("All Tracks (" + juce::String(libraryTracks.size()) + ")",
                           juce::dontSendNotification);
     sortLibraryTracks();
+
+    // The tree does its own grouping and ordering from the same set - it
+    // is about where tracks live, not how the table happens to be sorted.
+    folderTree->setTracks(libraryTracks);
 }
 
 void PlaylistPanel::sortLibraryTracks()
@@ -556,11 +584,34 @@ void PlaylistPanel::sortLibraryTracks()
     trackTable->repaint();
 }
 
+void PlaylistPanel::setFolderView(bool shouldShowFolders, bool notify)
+{
+    folderView = shouldShowFolders;
+
+    trackTable->setVisible(! folderView);
+    folderTree->setVisible(folderView);
+
+    // Which view you're in is shown by which button is lit, so the pair
+    // reads as one switch rather than two buttons that do nothing
+    // visible.
+    tableViewButton.setToggleState(! folderView, juce::dontSendNotification);
+    folderViewButton.setToggleState(folderView, juce::dontSendNotification);
+
+    // The two views have their own selections, and the buttons act on
+    // whichever view is showing.
+    updateButtonEnablement();
+
+    if (notify && onTrackViewChanged != nullptr)
+        onTrackViewChanged(folderView);
+}
+
 void PlaylistPanel::repaintTrackList()
 {
     // Tags arriving can change what the list is ordered BY, not just what
-    // the rows say - so this re-sorts rather than only repainting.
+    // the rows say - so this re-sorts rather than only repainting. The
+    // tree's order is the folders' own, so it only needs repainting.
     sortLibraryTracks();
+    folderTree->refreshLabels();
 }
 
 void PlaylistPanel::selectRowForSelectedId()
@@ -880,12 +931,21 @@ void PlaylistPanel::resized()
     layoutButtonRow({ &deleteButton, &refreshButton });
 
     area.removeFromTop(8);
-    trackCaption.setBounds(area.removeFromTop(kCaptionHeight));
+
+    // The view switch rides on the caption row: it belongs to this list,
+    // and a row of its own would cost height the list needs more.
+    auto captionRow = area.removeFromTop(kCaptionHeight);
+    folderViewButton.setBounds(captionRow.removeFromRight(62));
+    tableViewButton.setBounds(captionRow.removeFromRight(62));
+    trackCaption.setBounds(captionRow);
 
     // The master list's own buttons sit directly under it, so they read
     // as belonging to that list rather than to the playlists above.
     auto bottom = area.removeFromBottom(kButtonHeight * 2 + kButtonGap);
+
+    // Both views get the same bounds; only one is visible at a time.
     trackTable->setBounds(area);
+    folderTree->setBounds(area);
 
     auto rowOne = bottom.removeFromTop(kButtonHeight);
     bottom.removeFromTop(kButtonGap);

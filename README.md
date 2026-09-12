@@ -225,12 +225,23 @@ The bottom half is **All Tracks**: every track Inkwyrd knows about,
 independent of which playlists happen to use it. It stays put while you
 click between playlists.
 
-All Tracks is a table of **Title, Artist, Album and Genre**, read from
-each file's embedded tags. Click a column header to sort by it, and
-click again to reverse. Sorting by Album keeps each record in
-track-number order. The first launch after adding music reads the tags
-in the background, so rows may show filenames for a moment before they
-fill in.
+All Tracks has two views, switched with the **Table** and **Folders**
+buttons next to its heading. Whichever you last used is remembered.
+
+**Table** shows **Title, Artist, Album and Genre**, read from each file's
+embedded tags. Click a column header to sort by it, and click again to
+reverse. Sorting by Album keeps each record in track-number order. The
+first launch after adding music reads the tags in the background, so rows
+may show filenames for a moment before they fill in.
+
+**Folders** shows the same tracks grouped by the folders they actually
+live in, in the same order Windows Explorer would, with a count on each
+folder. Folders that lead to a single folder are joined into one row, so
+a path like `Artist\Album` isn't several clicks deep for nothing.
+**Selecting a folder selects everything in it**, which is the quick way
+to put a whole album into a playlist: click the folder, then **Add to
+playlist**. Dragging onto the Playlist window works from the table view
+only.
 
 **Add files...** and **Add folder...** put tracks into this library.
 Add folder either keeps the folder linked (files you add to it later
