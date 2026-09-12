@@ -2195,7 +2195,11 @@ release:
   from the `.iss`, so there's still one place to bump). Both SHA-256s go
   in the release notes - the README tells users they're there. Build
   both AFTER any README edit: the README is packaged into each as
-  `README.txt`. The ZIP CAN be launch-tested safely from here (unzip to
+  `README.txt`. **Present the ZIP FIRST** in the README and in every
+  release's notes, with the installer second for people who want
+  shortcuts and an uninstaller: the ZIP is the one with the least that
+  can go wrong for a new user, and it dodges the antivirus heuristics
+  that target installers (below). The ZIP CAN be launch-tested safely from here (unzip to
   scratch, run with `INKWYRD_NO_DISCORD=1` +
   `INKWYRD_ALLOW_MULTIPLE_INSTANCES=1`, back up and restore the settings
   file), unlike the install cycle above.

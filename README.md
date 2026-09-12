@@ -15,16 +15,20 @@ Get the latest release from the
 Take the newest one at the top: GitHub's "latest" shortcut skips
 pre-releases, so it doesn't work while this is still a beta.
 
-Each release comes in two forms, the same program in both:
+Each release comes in two forms, the same program in both.
 
-- **The installer** (`InkwyrdAudio-Setup-...exe`) installs just for your
-  own Windows account, with no admin rights needed. It adds a Start menu
-  entry and an uninstaller.
-- **The portable ZIP** (`InkwyrdAudio-Portable-...zip`) needs no
-  installing: unzip it anywhere and run `Inkwyrd Audio.exe`. To remove
-  it, delete the folder. Your settings and playlists live in
-  `%APPDATA%\Inkwyrd Audio` either way, so you can switch between the two
-  without losing anything.
+**The portable ZIP** (`InkwyrdAudio-Portable-...zip`) is the simplest,
+and the one to start with. Unzip it anywhere and run
+`Inkwyrd Audio.exe`. Nothing is installed, nothing is written outside
+the folder you unzipped, and you remove it by deleting that folder.
+
+**The installer** (`InkwyrdAudio-Setup-...exe`) is worth it if you'd
+rather have a Start menu entry, a desktop shortcut and an uninstaller.
+It installs for your own Windows account only, with no admin rights
+needed, and upgrades replace the old version in place.
+
+Your settings and playlists live in `%APPDATA%\Inkwyrd Audio` whichever
+you choose, so you can switch between them without losing anything.
 
 > Windows will likely show a **"Windows protected your PC"** SmartScreen
 > warning the first time you run either one. This is a small beta
@@ -122,7 +126,7 @@ don't run.
 
 ## Installing and running
 
-1. Install and run the app as described under [Download](#download).
+1. Get the app and run it as described under [Download](#download).
 2. **First run:** a Setup screen appears. Click **Browse...** and point
    it at a folder of music files (WAV, AIFF, FLAC, Ogg Vorbis, MP3,
    AAC/M4A, or WMA), that's the only required field. Optionally Browse
