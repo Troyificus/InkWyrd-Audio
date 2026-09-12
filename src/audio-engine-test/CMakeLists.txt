@@ -14,6 +14,10 @@ target_sources(AudioEngineTest PRIVATE
     # buildFolderTree() is pure grouping over paths - covered headlessly
     # here rather than only by opening the window and looking.
     ../app/gui/LibraryFolderTree.cpp
+    # Skin parsing: pure over juce::var, so the rules a skin author will
+    # actually hit (missing keys, typos, a newer schema) are covered here
+    # rather than by opening Settings and looking.
+    ../app/gui/SkinLoader.cpp
     ../app/gui/SoundboardGridComponent.cpp
     ../app/gui/Dialogs.cpp
     # Pure geometry, no Component/peer needed - covers the magnetic-snap

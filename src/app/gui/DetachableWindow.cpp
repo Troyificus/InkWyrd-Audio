@@ -430,6 +430,21 @@ void DetachableWindow::applyOwnershipIfNeeded()
 #endif
 }
 
+void DetachableWindow::applyThemeMetricsToAll()
+{
+    // Title bar height is applied per window when it is built, so a skin
+    // that changes it has to reach every window that already exists.
+    // Everything else in the palette is read at paint time and needs only
+    // a repaint.
+    for (auto* window : activeWindows)
+    {
+        window->setTitleBarHeight(inkwyrd::theme::titleBarHeight);
+        window->sendLookAndFeelChange();
+        window->resized();
+        window->repaint();
+    }
+}
+
 void DetachableWindow::applyOwnershipToAll()
 {
     for (auto* window : activeWindows)

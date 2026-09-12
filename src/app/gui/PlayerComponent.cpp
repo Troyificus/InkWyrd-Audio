@@ -26,14 +26,11 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     addAndMakeVisible(*nowPlaying);
 
     discordStatusLabel.setText("Local monitor only - no Discord credentials configured.", juce::dontSendNotification);
-    discordStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     addAndMakeVisible(discordStatusLabel);
 
-    warningBannerLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
     warningBannerLabel.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
     addAndMakeVisible(warningBannerLabel);
 
-    monitorHintLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
     monitorHintLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
     addAndMakeVisible(monitorHintLabel);
 
@@ -191,6 +188,10 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     settingsButton.onClick = [onSettingsClickedToUse] { if (onSettingsClickedToUse) onSettingsClickedToUse(); };
 
     startTimer(500);
+
+    // The label colours this component owns. Also re-applied on a
+    // skin change - see lookAndFeelChanged().
+    lookAndFeelChanged();
 
     // setContentOwned(..., true) resizes the window to fit this
     // component's own size, so an explicit size here IS the window size.
@@ -434,4 +435,14 @@ void PlayerComponent::resized()
         button->setBounds(activatorRow.removeFromLeft(buttonWidth));
         activatorRow.removeFromLeft(gap);
     }
+}
+
+// Label colours are COPIES of the palette taken when the component is
+// built, so a skin change has to re-apply them - JUCE calls this on
+// every child when a window sends a look-and-feel change.
+void PlayerComponent::lookAndFeelChanged()
+{
+    discordStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
+    warningBannerLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
+    monitorHintLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
 }

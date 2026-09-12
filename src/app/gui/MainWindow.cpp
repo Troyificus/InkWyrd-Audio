@@ -27,10 +27,11 @@ MainWindow::MainWindow(const juce::String& name, AppSettings& settingsToUse)
 
 void MainWindow::showSetupView(AppSettings& settings, bool isFirstRun,
                                 std::function<void(SetupComponent::Result)> onSaveAndLaunch,
-                                std::function<void(juce::String, SetupComponent::AuthoriseCallback)> onAuthoriseRpc)
+                                std::function<void(juce::String, SetupComponent::AuthoriseCallback)> onAuthoriseRpc,
+                                SetupComponent::ApplySkinCallback onApplySkin)
 {
     setContentOwned(new SetupComponent(settings, isFirstRun, std::move(onSaveAndLaunch),
-                                        std::move(onAuthoriseRpc)), true);
+                                        std::move(onAuthoriseRpc), std::move(onApplySkin)), true);
 }
 
 void MainWindow::closeButtonPressed()

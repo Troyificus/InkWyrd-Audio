@@ -35,16 +35,28 @@ public:
     // saving and reopening Settings first. Its callback reports back
     // here for display.
     using AuthoriseCallback = std::function<void(bool success, juce::String message)>;
+
+    // Applies a skin by folder name ({} for the built-in look) and
+    // returns a message to show - empty when it loaded cleanly. Applying
+    // happens the moment it is picked rather than on Save, because the
+    // whole point of choosing a skin is seeing it.
+    using ApplySkinCallback = std::function<juce::String(const juce::String& skinName)>;
+
     SetupComponent(AppSettings& settingsToUse,
                     bool isFirstRun,
                     std::function<void(Result)> onSaveAndLaunchToUse,
-                    std::function<void(juce::String secret, AuthoriseCallback)> onAuthoriseRpcToUse);
+                    std::function<void(juce::String secret, AuthoriseCallback)> onAuthoriseRpcToUse,
+                    ApplySkinCallback onApplySkinToUse = {});
 
     void resized() override;
 
 private:
     void browseForFolder(juce::Label& targetLabel, juce::File& targetValue, const juce::String& chooserTitle);
     void updateSaveButtonEnablement();
+
+    void refreshSkinList(const juce::String& nameToSelect);
+    void applySelectedSkin();
+    void exportCurrentSkin();
 
     // juce::TextEditor::Listener
     void textEditorTextChanged(juce::TextEditor&) override { updateSaveButtonEnablement(); }
@@ -93,6 +105,21 @@ private:
     // ones used every session.
     juce::Label playlistFilesCaption { {}, "Playlist files" };
     juce::TextButton openPlaylistFolderButton { "Open playlists folder" };
+
+    // Skins. A skin is a folder of its own under %APPDATA%\Inkwyrd Audio    // skins; "Export current..." writes what is on screen out as one,
+    // which is the starting point for editing rather than typing a file
+    // from scratch.
+    juce::Label skinSectionCaption { {}, "Skin" };
+    juce::ComboBox skinBox;
+    juce::TextButton openSkinsFolderButton { "Open skins folder" };
+    juce::TextButton reloadSkinsButton { "Reload" };
+    juce::TextButton exportSkinButton { "Export current..." };
+    juce::Label skinStatusLabel;
+
+    // Parallel to the combo's items from id 2 up; id 1 is the built-in
+    // look, which has no folder.
+    juce::Array<juce::File> skinFolders;
+    ApplySkinCallback onApplySkin;
 
     juce::TextButton saveAndLaunchButton;
 

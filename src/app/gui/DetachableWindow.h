@@ -145,6 +145,11 @@ public:
     // it's the behaviour the Winamp-style layout was asking for.
     static void applyOwnershipToAll();
 
+    // Re-applies anything from the palette that a window holds a COPY of
+    // rather than reading at paint time - currently the title bar height
+    // - and repaints. Called after a skin is applied.
+    static void applyThemeMetricsToAll();
+
     // Called ONLY from the native window-procedure hook. Public because
     // that hook is a free function rather than a member - not part of
     // this class's real interface. `nativeRect` is a Win32 RECT* in

@@ -62,7 +62,6 @@ VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
     };
     addAndMakeVisible(noiseSuppressionToggle);
 
-    noiseSuppressionHint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     noiseSuppressionHint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(noiseSuppressionHint);
     updateNoiseSuppressionHint();
@@ -74,7 +73,6 @@ VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
 
     emptyMessage.setText("No plugins added yet. Click \"Add VST3...\" and pick the ones you want "
                           "for your microphone.", juce::dontSendNotification);
-    emptyMessage.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     emptyMessage.setJustificationType(juce::Justification::topLeft);
     addAndMakeVisible(emptyMessage);
 
@@ -88,11 +86,11 @@ VoiceFxComponent::VoiceFxComponent(PluginScanner& scannerToUse,
     // wording promised one.
     chainHint.setText("These run on your microphone, in order. Click a plugin to open its own window.",
                        juce::dontSendNotification);
-    chainHint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     chainHint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(chainHint);
 
     chainListViewport.setViewedComponent(&chainListPanel, false);
+    lookAndFeelChanged();
     addAndMakeVisible(chainListViewport);
 
     rebuildPluginListUI();
@@ -347,4 +345,14 @@ void VoiceFxComponent::resized()
     chainListViewport.setBounds(chainColumn);
     layoutRows(chainListPanel, editChainButtons, removeChainButtons, kEditButtonWidth,
                 chainListViewport.getWidth() - chainListViewport.getScrollBarThickness());
+}
+
+// Label colours are COPIES of the palette taken when the component is
+// built, so a skin change has to re-apply them - JUCE calls this on
+// every child when a window sends a look-and-feel change.
+void VoiceFxComponent::lookAndFeelChanged()
+{
+    noiseSuppressionHint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
+    emptyMessage.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
+    chainHint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
 }

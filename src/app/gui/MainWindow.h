@@ -23,7 +23,8 @@ public:
 
     void showSetupView(AppSettings& settings, bool isFirstRun,
                         std::function<void(SetupComponent::Result)> onSaveAndLaunch,
-                        std::function<void(juce::String, SetupComponent::AuthoriseCallback)> onAuthoriseRpc);
+                        std::function<void(juce::String, SetupComponent::AuthoriseCallback)> onAuthoriseRpc,
+                        SetupComponent::ApplySkinCallback onApplySkin = {});
 
     void closeButtonPressed() override;
 };

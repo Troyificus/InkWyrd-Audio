@@ -4,6 +4,7 @@
 #include "Log.h"
 
 #include "Dialogs.h"
+#include "SkinLoader.h"
 
 #include <ixwebsocket/IXNetSystem.h>
 #include <sodium.h>
@@ -49,6 +50,14 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     // background colour from the LookAndFeel at construction, and every
     // window's title bar is drawn by it.
     juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
+
+    // The saved skin, before any window exists - a window reads its
+    // background colour and title bar height at construction, so applying
+    // a skin afterwards would leave the first frame on the old palette.
+    writeExampleSkinsIfNeeded();
+    auto skinMessage = applySkin(settings.getSkinName());
+    if (skinMessage.isNotEmpty())
+        logLine("[Skin] " + skinMessage);
 
     formatManager.registerBasicFormats(); // WAV/AIFF/FLAC/Ogg Vorbis
     formatManager.registerFormat(new Mp3AudioFormat(), false);
@@ -387,6 +396,144 @@ void InkwyrdAudioApplication::shutdown()
     ix::uninitNetSystem();
 }
 
+juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
+{
+    auto palette = inkwyrd::theme::builtIn();
+    juce::File logo;
+    juce::String message;
+
+    if (skinName.isNotEmpty())
+    {
+        auto result = inkwyrd::SkinLoader::loadFromFolder(
+            inkwyrd::SkinLoader::getDefaultFolder().getChildFile(skinName));
+
+        if (result.ok)
+        {
+            palette = result.palette;
+            logo = result.logoFile;
+            message = result.warnings.joinIntoString(" ");
+        }
+        else
+        {
+            // A skin that won't load leaves the app usable rather than
+            // half-painted: built-in look, and say what was wrong.
+            // JUCE's own parse errors don't end in a full stop, so one
+            // is added rather than running two sentences together.
+            auto reason = result.message.trim();
+            if (! reason.endsWithChar('.'))
+                reason << ".";
+
+            message = reason + " Using the built-in look.";
+        }
+    }
+
+    inkwyrd::theme::applyPalette(palette);
+
+    juce::String logoError;
+    if (! InkwyrdLookAndFeel::setSkinLogo(logo, logoError))
+        message = message.isEmpty() ? logoError : message + " " + logoError;
+
+    // The palette's values are read at paint time, but JUCE's own widgets
+    // hold COPIES taken from it, and a window holds its title bar height
+    // - both have to be pushed again.
+    lookAndFeel.refreshColours();
+    DetachableWindow::applyThemeMetricsToAll();
+
+    if (mainWindow != nullptr)
+    {
+        mainWindow->sendLookAndFeelChange();
+        mainWindow->repaint();
+    }
+
+    return message;
+}
+
+void InkwyrdAudioApplication::writeExampleSkinsIfNeeded()
+{
+    // Something to look at and copy, rather than a folder that is empty
+    // until someone reads the README. Guarded by an explicit flag, like
+    // the other one-time steps here, so deleting them is permanent.
+    if (settings.areExampleSkinsWritten())
+        return;
+
+    using Palette = inkwyrd::theme::Palette;
+
+    Palette amber;
+    amber.background = juce::Colour(0xff0b0803);
+    amber.panelDeep = juce::Colour(0xff120d05);
+    amber.panel = juce::Colour(0xff1b1206);
+    amber.panelRaised = juce::Colour(0xff241908);
+    amber.titleBar = juce::Colour(0xffe0a94f);
+    amber.titleBarText = juce::Colour(0xff1a1204);
+    amber.titleBarSubtle = juce::Colour(0xff5c421a);
+    amber.text = juce::Colour(0xffefc98a);
+    amber.textDim = juce::Colour(0xffa8854a);
+    amber.accent = juce::Colour(0xffffb340);
+    amber.accentSoft = juce::Colour(0xff8a5f1e);
+    amber.outline = juce::Colour(0xff5c4520);
+    amber.outlineFaint = juce::Colour(0xff2e2310);
+    amber.warning = juce::Colour(0xff7fb6ff);
+    amber.danger = juce::Colour(0xffff6b5a);
+
+    Palette midnight;
+    midnight.background = juce::Colour(0xff05070f);
+    midnight.panelDeep = juce::Colour(0xff080c18);
+    midnight.panel = juce::Colour(0xff0d1424);
+    midnight.panelRaised = juce::Colour(0xff131d33);
+    midnight.titleBar = juce::Colour(0xff7fa8e8);
+    midnight.titleBarText = juce::Colour(0xff06101f);
+    midnight.titleBarSubtle = juce::Colour(0xff2a3d5c);
+    midnight.text = juce::Colour(0xffb8cdf0);
+    midnight.textDim = juce::Colour(0xff7189b0);
+    midnight.accent = juce::Colour(0xff5a9cff);
+    midnight.accentSoft = juce::Colour(0xff2c4f80);
+    midnight.outline = juce::Colour(0xff2a3f66);
+    midnight.outlineFaint = juce::Colour(0xff16233a);
+
+    // Maximum contrast, square corners, no mid-tones - for anyone who
+    // finds the default's greens hard to read.
+    Palette contrast;
+    contrast.background = juce::Colour(0xff000000);
+    contrast.panelDeep = juce::Colour(0xff000000);
+    contrast.panel = juce::Colour(0xff0a0a0a);
+    contrast.panelRaised = juce::Colour(0xff1a1a1a);
+    contrast.titleBar = juce::Colour(0xffffffff);
+    contrast.titleBarText = juce::Colour(0xff000000);
+    contrast.titleBarSubtle = juce::Colour(0xff555555);
+    contrast.text = juce::Colour(0xffffffff);
+    contrast.textDim = juce::Colour(0xffcccccc);
+    contrast.accent = juce::Colour(0xffffe600);
+    contrast.accentSoft = juce::Colour(0xff6b6100);
+    contrast.outline = juce::Colour(0xffffffff);
+    contrast.outlineFaint = juce::Colour(0xff666666);
+    contrast.warning = juce::Colour(0xffffa500);
+    contrast.danger = juce::Colour(0xffff4040);
+    contrast.cornerRadius = 0.0f;
+
+    const std::pair<const char*, Palette> examples[] =
+    {
+        { "Amber", amber },
+        { "Midnight", midnight },
+        { "High Contrast", contrast }
+    };
+
+    auto folder = inkwyrd::SkinLoader::getDefaultFolder();
+
+    for (const auto& example : examples)
+    {
+        juce::String error;
+        if (! inkwyrd::SkinLoader::writeToFolder(example.second, example.first,
+                                                  folder.getChildFile(example.first), error))
+            logLine("[Skin] Couldn't write the " + juce::String(example.first)
+                     + " example skin: " + error);
+    }
+
+    logLine("[Skin] Wrote example skins to " + folder.getFullPathName());
+
+    settings.setExampleSkinsWritten(true);
+    settings.save(); // AppSettings has no autosave
+}
+
 void InkwyrdAudioApplication::showSetup()
 {
     // First run is the case where there's nothing to come back to: no
@@ -452,7 +599,8 @@ void InkwyrdAudioApplication::showSetup()
                                        if (callback)
                                            callback(success, message);
                                    });
-                               });
+                               },
+                               [this](const juce::String& skinName) { return applySkin(skinName); });
     mainWindow->setVisible(true);
     mainWindow->toFront(true);
 }

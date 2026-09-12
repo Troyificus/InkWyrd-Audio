@@ -86,6 +86,17 @@ public:
     // Whether the one-time "union every existing playlist's tracks into
     // the new master Track Library" migration has run. Same explicit-flag
     // reasoning as the other two migration flags above.
+    // The folder name of the skin in use, under
+    // %APPDATA%\Inkwyrd Audio\skins. Empty means the built-in look.
+    juce::String getSkinName() const;
+    void setSkinName(const juce::String& name);
+
+    // Whether the example skins have been written out. An explicit flag,
+    // like the other one-time steps here, so deleting them doesn't bring
+    // them back on the next launch.
+    bool areExampleSkinsWritten() const;
+    void setExampleSkinsWritten(bool written);
+
     // Which view the Library window's track pane was last showing:
     // false = the sortable table, true = the folder tree. A view is a
     // preference, so it survives a restart.

@@ -225,11 +225,11 @@ SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToU
     hint.setText("Click an empty button to assign a sound, or drag files in. Click a button's volume "
                   "bar to adjust it. Right-click to rename, recolour, add a picture or clear.",
                   juce::dontSendNotification);
-    hint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     hint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(hint);
 
     viewport.setViewedComponent(&gridPanel, false);
+    lookAndFeelChanged();
     viewport.setScrollBarsShown(true, false);
     addAndMakeVisible(viewport);
 
@@ -743,4 +743,19 @@ void SoundboardGridComponent::layOutGrid()
                                cellWidth,
                                kCellHeight);
     }
+}
+
+// Label colours are COPIES of the palette taken when the component is
+// built, so a skin change has to re-apply them - JUCE calls this on
+// every child when a window sends a look-and-feel change.
+void SoundboardGridComponent::lookAndFeelChanged()
+{
+    hint.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
+
+    // An EMPTY pad is painted in the palette's colours, but a pad holds
+    // the colours it was given rather than reading them each paint (a
+    // filled pad's colour is the user's own choice, stored per slot). So
+    // a skin change has to hand them out again.
+    for (int i = 0; i < layout.getNumSlots(); ++i)
+        applyAppearance(i);
 }

@@ -70,8 +70,17 @@ namespace
 
 InkwyrdLookAndFeel::InkwyrdLookAndFeel()
 {
+    refreshColours();
+}
+
+void InkwyrdLookAndFeel::refreshColours()
+{
     // The colour IDs that components read directly. Everything the app
     // creates without explicit colours lands on these.
+    //
+    // Called again whenever a skin is applied: these are COPIES of the
+    // palette taken once, so changing inkwyrd::theme's values alone would
+    // leave every stock JUCE widget on the old skin's colours.
     setColour(juce::ResizableWindow::backgroundColourId, panel);
     setColour(juce::DocumentWindow::textColourId, titleBarText);
 
@@ -148,12 +157,12 @@ InkwyrdLookAndFeel::InkwyrdLookAndFeel()
 
 juce::Font InkwyrdLookAndFeel::titleFont(float height)
 {
-    return makeFont("Segoe UI Semibold", height, juce::Font::bold);
+    return makeFont(current().titleFontName, height, juce::Font::bold);
 }
 
 juce::Font InkwyrdLookAndFeel::labelFont(float height)
 {
-    return makeFont("Segoe UI", height, juce::Font::plain);
+    return makeFont(current().labelFontName, height, juce::Font::plain);
 }
 
 juce::Font InkwyrdLookAndFeel::digitFont(float height)
@@ -161,12 +170,85 @@ juce::Font InkwyrdLookAndFeel::digitFont(float height)
     // Monospaced, for the readouts the mockup renders as a digital
     // display - times, track numbers, dB values. Their columns lining up
     // is most of what makes them read as a readout rather than as text.
-    return makeFont("Consolas", height, juce::Font::plain);
+    return makeFont(current().digitFontName, height, juce::Font::plain);
 }
+
+namespace
+{
+    // The skin's logo, loaded once. Static because drawLogo() is static -
+    // it is called from the title bar of every window and from the
+    // now-playing display, none of which have a LookAndFeel to hand.
+    std::unique_ptr<juce::Drawable> skinLogo;
+
+    // Enough for any sensible mark at any size this app draws one. A
+    // 12,000px PNG in a shared skin would otherwise be decoded and
+    // rescaled behind every title bar.
+    constexpr int kMaxLogoPixels = 2048;
+    constexpr juce::int64 kMaxLogoBytes = 8 * 1024 * 1024;
+}
+
+bool InkwyrdLookAndFeel::setSkinLogo(const juce::File& file, juce::String& errorMessage)
+{
+    skinLogo.reset();
+
+    if (file == juce::File())
+        return true; // no logo is not a failure - the drawn mark is used
+
+    if (file.getSize() > kMaxLogoBytes)
+    {
+        errorMessage = "Logo is larger than 8 MB - using the drawn mark.";
+        return false;
+    }
+
+    if (file.hasFileExtension("svg"))
+    {
+        // JUCE's SVG renderer ignores filters and blur and doesn't draw
+        // text - a logo relying on those will come out plainer than it
+        // looks in a browser. Shapes and paths are fine.
+        if (auto parsed = juce::Drawable::createFromSVGFile(file))
+        {
+            skinLogo = std::move(parsed);
+            return true;
+        }
+
+        errorMessage = "Couldn't read that SVG - using the drawn mark.";
+        return false;
+    }
+
+    auto image = juce::ImageFileFormat::loadFrom(file);
+
+    if (! image.isValid())
+    {
+        errorMessage = "Couldn't read that image - using the drawn mark.";
+        return false;
+    }
+
+    if (image.getWidth() > kMaxLogoPixels || image.getHeight() > kMaxLogoPixels)
+    {
+        errorMessage = "Logo is bigger than " + juce::String(kMaxLogoPixels)
+                        + " pixels - using the drawn mark.";
+        return false;
+    }
+
+    auto drawable = std::make_unique<juce::DrawableImage>();
+    drawable->setImage(image);
+    skinLogo = std::move(drawable);
+    return true;
+}
+
+bool InkwyrdLookAndFeel::hasSkinLogo() { return skinLogo != nullptr; }
 
 void InkwyrdLookAndFeel::drawLogo(juce::Graphics& g, juce::Rectangle<float> area,
                                    juce::Colour ink, juce::Colour glow)
 {
+    // A skin's own artwork replaces the drawn mark entirely, colours and
+    // all - recolouring someone's logo to the palette would wreck it.
+    if (skinLogo != nullptr)
+    {
+        skinLogo->drawWithin(g, area, juce::RectanglePlacement::centred, 1.0f);
+        return;
+    }
+
     auto bottle = area.reduced(area.getWidth() * 0.14f, area.getHeight() * 0.08f);
 
     // Neck and cap sit on top of a rounded body - enough to read as an

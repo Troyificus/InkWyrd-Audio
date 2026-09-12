@@ -19,6 +19,8 @@ namespace
     constexpr const char* kWindowLayoutKey = "windowLayout";
     constexpr const char* kTrackLibraryMigratedKey = "trackLibraryMigrated";
     constexpr const char* kLibraryFolderViewKey = "libraryFolderView";
+    constexpr const char* kSkinNameKey = "skinName";
+    constexpr const char* kExampleSkinsWrittenKey = "exampleSkinsWritten";
     constexpr const char* kNoiseSuppressionKey = "noiseSuppressionEnabled";
     constexpr const char* kDiscordAutoMuteKey = "discordAutoMuteEnabled";
     constexpr const char* kDiscordClientSecretKey = "discordClientSecret";
@@ -199,6 +201,26 @@ bool AppSettings::isTrackLibraryMigrated() const
 void AppSettings::setTrackLibraryMigrated(bool migrated)
 {
     settings()->setValue(kTrackLibraryMigratedKey, migrated);
+}
+
+juce::String AppSettings::getSkinName() const
+{
+    return settings()->getValue(kSkinNameKey, {});
+}
+
+void AppSettings::setSkinName(const juce::String& name)
+{
+    settings()->setValue(kSkinNameKey, name);
+}
+
+bool AppSettings::areExampleSkinsWritten() const
+{
+    return settings()->getBoolValue(kExampleSkinsWrittenKey, false);
+}
+
+void AppSettings::setExampleSkinsWritten(bool written)
+{
+    settings()->setValue(kExampleSkinsWrittenKey, written);
 }
 
 bool AppSettings::isLibraryFolderView() const

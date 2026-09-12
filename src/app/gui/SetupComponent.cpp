@@ -1,14 +1,17 @@
 #include "SetupComponent.h"
 
 #include "PlaylistLibrary.h"
+#include "SkinLoader.h"
 
 SetupComponent::SetupComponent(AppSettings& settingsToUse,
                                 bool isFirstRun,
                                 std::function<void(Result)> onSaveAndLaunchToUse,
-                                std::function<void(juce::String, AuthoriseCallback)> onAuthoriseRpcToUse)
+                                std::function<void(juce::String, AuthoriseCallback)> onAuthoriseRpcToUse,
+                                ApplySkinCallback onApplySkinToUse)
     : settings(settingsToUse),
       onSaveAndLaunch(std::move(onSaveAndLaunchToUse)),
-      onAuthoriseRpc(std::move(onAuthoriseRpcToUse))
+      onAuthoriseRpc(std::move(onAuthoriseRpcToUse)),
+      onApplySkin(std::move(onApplySkinToUse))
 {
     saveAndLaunchButton.setButtonText(isFirstRun ? "Save & Launch" : "Save & Apply");
     titleLabel.setText("Inkwyrd Audio - Setup", juce::dontSendNotification);
@@ -110,6 +113,40 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     };
     addAndMakeVisible(openPlaylistFolderButton);
 
+    addAndMakeVisible(skinSectionCaption);
+
+    skinBox.setTextWhenNothingSelected("Inkwyrd (built-in)");
+    skinBox.onChange = [this] { applySelectedSkin(); };
+    addAndMakeVisible(skinBox);
+
+    openSkinsFolderButton.onClick = [this]
+    {
+        // Created on the way out: sending someone to a folder that isn't
+        // there is worse than useless.
+        auto folder = inkwyrd::SkinLoader::getDefaultFolder();
+        folder.createDirectory();
+        folder.startAsProcess();
+    };
+    addAndMakeVisible(openSkinsFolderButton);
+
+    reloadSkinsButton.onClick = [this]
+    {
+        // Skins get edited in a text editor with the app running, so
+        // re-reading has to be a button rather than a restart.
+        refreshSkinList(settings.getSkinName());
+        applySelectedSkin();
+    };
+    addAndMakeVisible(reloadSkinsButton);
+
+    exportSkinButton.onClick = [this] { exportCurrentSkin(); };
+    addAndMakeVisible(exportSkinButton);
+
+    skinStatusLabel.setFont(juce::Font(juce::FontOptions(12.0f)));
+    skinStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
+    addAndMakeVisible(skinStatusLabel);
+
+    refreshSkinList(settings.getSkinName());
+
     addAndMakeVisible(saveAndLaunchButton);
     saveAndLaunchButton.onClick = [this]
     {
@@ -132,7 +169,7 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     // component's own size, so an explicit size here IS the window size.
     // Taller than it was: the auto-mute section adds three rows, and
     // leaving the height alone would have pushed Save off the bottom.
-    setSize(640, 670);
+    setSize(640, 760); // the skin section added ~90px
 }
 
 void SetupComponent::browseForFolder(juce::Label& targetLabel, juce::File& targetValue, const juce::String& chooserTitle)
@@ -170,6 +207,93 @@ void SetupComponent::updateSaveButtonEnablement()
     auto discordFieldsValid = (hasToken == hasGuild) && (hasGuild == hasChannel);
 
     saveAndLaunchButton.setEnabled(chosenPlaylistFolder.isDirectory() && discordFieldsValid);
+}
+
+void SetupComponent::refreshSkinList(const juce::String& nameToSelect)
+{
+    skinFolders = inkwyrd::SkinLoader::findSkinFolders(inkwyrd::SkinLoader::getDefaultFolder());
+
+    skinBox.clear(juce::dontSendNotification);
+    skinBox.addItem("Inkwyrd (built-in)", 1);
+
+    for (int i = 0; i < skinFolders.size(); ++i)
+        skinBox.addItem(skinFolders[i].getFileName(), i + 2);
+
+    // Falls back to built-in if the saved skin's folder has been renamed
+    // or deleted since - silently, since that is the user's own doing.
+    int idToSelect = 1;
+    for (int i = 0; i < skinFolders.size(); ++i)
+        if (skinFolders[i].getFileName() == nameToSelect)
+            idToSelect = i + 2;
+
+    skinBox.setSelectedId(idToSelect, juce::dontSendNotification);
+}
+
+void SetupComponent::applySelectedSkin()
+{
+    if (onApplySkin == nullptr)
+        return;
+
+    auto selected = skinBox.getSelectedId();
+    auto name = selected >= 2 && juce::isPositiveAndBelow(selected - 2, skinFolders.size())
+                    ? skinFolders[selected - 2].getFileName()
+                    : juce::String();
+
+    auto message = onApplySkin(name);
+
+    // Persisted here and now rather than on Save & Apply: a skin is a
+    // preference like the Library's view, and someone who picks one and
+    // closes Settings means it.
+    settings.setSkinName(name);
+    settings.save(); // AppSettings has no autosave
+
+    skinStatusLabel.setColour(juce::Label::textColourId,
+                               message.isEmpty() ? inkwyrd::theme::textDim : inkwyrd::theme::warning);
+    skinStatusLabel.setText(message.isEmpty()
+                                ? (name.isEmpty() ? juce::String("Using the built-in look.")
+                                                  : "Using " + name + ".")
+                                : message,
+                             juce::dontSendNotification);
+}
+
+void SetupComponent::exportCurrentSkin()
+{
+    auto* window = new juce::AlertWindow("Export current skin",
+                                          "A folder of this name is written to your skins folder. "
+                                          "Edit its skin.json to make it your own.",
+                                          juce::MessageBoxIconType::NoIcon, this);
+    window->addTextEditor("name", "My Skin");
+    window->addButton("Export", 1);
+    window->addButton("Cancel", 0);
+
+    window->enterModalState(true, juce::ModalCallbackFunction::create(
+        [this, safeThis = juce::Component::SafePointer<SetupComponent>(this), window](int result)
+    {
+        std::unique_ptr<juce::AlertWindow> owned(window);
+        if (result != 1 || safeThis == nullptr)
+            return;
+
+        auto name = owned->getTextEditorContents("name").trim();
+        if (name.isEmpty())
+            return;
+
+        // A skin name becomes a folder name, so anything Windows won't
+        // accept in one has to go.
+        auto folderName = juce::File::createLegalFileName(name);
+        auto folder = inkwyrd::SkinLoader::getDefaultFolder().getChildFile(folderName);
+
+        juce::String error;
+        if (! inkwyrd::SkinLoader::writeToFolder(inkwyrd::theme::current(), name, folder, error))
+        {
+            skinStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
+            skinStatusLabel.setText("Couldn't export: " + error, juce::dontSendNotification);
+            return;
+        }
+
+        refreshSkinList(folderName);
+        applySelectedSkin();
+        folder.startAsProcess();
+    }));
 }
 
 void SetupComponent::resized()
@@ -233,6 +357,22 @@ void SetupComponent::resized()
     auto playlistFilesRow = area.removeFromTop(28);
     playlistFilesCaption.setBounds(playlistFilesRow.removeFromLeft(140));
     openPlaylistFolderButton.setBounds(playlistFilesRow.removeFromLeft(190));
+    area.removeFromTop(16);
+
+    skinSectionCaption.setBounds(area.removeFromTop(24));
+    area.removeFromTop(4);
+
+    auto skinRow = area.removeFromTop(28);
+    skinBox.setBounds(skinRow.removeFromLeft(170));
+    skinRow.removeFromLeft(8);
+    openSkinsFolderButton.setBounds(skinRow.removeFromLeft(146));
+    skinRow.removeFromLeft(8);
+    reloadSkinsButton.setBounds(skinRow.removeFromLeft(74));
+    skinRow.removeFromLeft(8);
+    exportSkinButton.setBounds(skinRow.removeFromLeft(146));
+
+    area.removeFromTop(4);
+    skinStatusLabel.setBounds(area.removeFromTop(20));
     area.removeFromTop(16);
 
     saveAndLaunchButton.setBounds(area.removeFromTop(36).removeFromRight(160));

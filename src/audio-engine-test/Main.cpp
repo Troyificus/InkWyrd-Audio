@@ -26,6 +26,7 @@
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
 #include "LibraryFolderTree.h"
+#include "SkinLoader.h"
 #include "PlaylistTrackListComponent.h"
 #include "TrackLibrary.h"
 #include "TrackMetadataStore.h"
@@ -415,6 +416,102 @@ namespace
                 check(target != nullptr && reloaded.resolve(*target).files.size() == 1,
                        "and it's on disk immediately, not just in memory");
             }
+        }
+
+        {
+            // Skins. These rules are what a skin author actually hits -
+            // a typo, a missing key, a file from a newer version - so
+            // they are checked here rather than by opening Settings.
+            using inkwyrd::SkinLoader;
+
+            juce::Colour colour;
+            check(SkinLoader::parseColour("#4fe08a", colour) && colour == juce::Colour(0xff4fe08a),
+                   "a #rrggbb colour parses, opaque");
+            check(SkinLoader::parseColour("4fe08a", colour) && colour == juce::Colour(0xff4fe08a),
+                   "the hash is optional");
+            check(SkinLoader::parseColour("804fe08a", colour) && colour.getAlpha() == 0x80,
+                   "eight digits carry their own alpha");
+            check(! SkinLoader::parseColour("#4fe08", colour), "a five-digit colour is refused, not guessed at");
+            check(! SkinLoader::parseColour("green", colour), "a colour name is refused");
+            check(! SkinLoader::parseColour("", colour), "an empty colour is refused");
+
+            check(! SkinLoader::parse(juce::var("nonsense"), {}).ok,
+                   "a skin file that isn't a JSON object is refused with a message");
+
+            auto parseText = [](const char* text)
+            {
+                juce::var parsed;
+                juce::JSON::parse(juce::String(text), parsed);
+                return SkinLoader::parse(parsed, {});
+            };
+
+            auto newer = parseText(R"({ "schemaVersion": 99, "colours": { "accent": "#ffffff" } })");
+            check(! newer.ok && newer.message.contains("newer"),
+                   "a skin from a newer version is skipped rather than half-read");
+
+            auto partial = parseText(R"({ "name": "Partial", "colours": { "accent": "#ff0000" } })");
+            auto builtIn = inkwyrd::theme::builtIn();
+            check(partial.ok, "a skin that sets one colour still loads");
+            check(partial.palette.accent == juce::Colour(0xffff0000), "and that colour is used");
+            check(partial.palette.background == builtIn.background,
+                   "while everything it left out keeps the built-in value");
+            check(partial.name == "Partial", "the skin's own name is used when it has one");
+
+            auto odd = parseText(R"({ "colours": { "accnet": "#ff0000", "accent": "lime" } })");
+            check(odd.ok, "a typo doesn't stop the rest of the skin loading");
+            check(odd.warnings.size() == 2, "but both the unknown key and the bad value are reported");
+            check(odd.palette.accent == builtIn.accent, "and an unreadable colour keeps the built-in one");
+
+            auto sized = parseText(R"({ "metrics": { "titleBarHeight": 2, "cornerRadius": 3.5 } })");
+            check(sized.palette.titleBarHeight == inkwyrd::theme::Palette::kMinTitleBarHeight,
+                   "a title bar too small to drag is clamped");
+            check(! sized.warnings.isEmpty(), "and the author is told it was clamped");
+            check(juce::approximatelyEqual(sized.palette.cornerRadius, 3.5f), "corner radius comes through");
+
+            auto fonts = parseText(R"({ "fonts": { "digits": "Courier New", "wrong": "x" } })");
+            check(fonts.palette.digitFontName == "Courier New", "a font family is taken from the skin");
+            check(fonts.palette.titleFontName == builtIn.titleFontName, "and the others are left alone");
+            check(fonts.warnings.size() == 1, "an unknown font slot is reported");
+
+            auto missingLogo = parseText(R"({ "logo": "nope.png" })");
+            check(missingLogo.ok && missingLogo.logoFile == juce::File(),
+                   "a logo that isn't there leaves the drawn mark");
+            check(! missingLogo.warnings.isEmpty(), "and says so");
+
+            // Export -> read back: what the Settings button writes has to
+            // be a skin the app can load, or it's a useless template.
+            auto custom = builtIn;
+            custom.accent = juce::Colour(0xff112233);
+            custom.textDim = juce::Colour(0x80aabbcc);
+            custom.titleBarHeight = 52;
+            custom.cornerRadius = 2.0f;
+            custom.digitFontName = "Courier New";
+
+            auto skinFolder = scratch.getChildFile("skins").getChildFile("Exported");
+            juce::String writeError;
+            check(SkinLoader::writeToFolder(custom, "Exported", skinFolder, writeError),
+                   "the current look can be exported as a skin");
+
+            auto reloaded = SkinLoader::loadFromFolder(skinFolder);
+            check(reloaded.ok, "and read straight back in");
+            check(reloaded.palette.accent == custom.accent
+                   && reloaded.palette.textDim == custom.textDim
+                   && reloaded.palette.titleBarHeight == custom.titleBarHeight
+                   && reloaded.palette.digitFontName == custom.digitFontName,
+                   "with every value intact, alpha included");
+
+            auto folders = SkinLoader::findSkinFolders(scratch.getChildFile("skins"));
+            check(folders.size() == 1 && folders[0].getFileName() == "Exported",
+                   "and it is listed as an available skin");
+
+            auto corrupt = scratch.getChildFile("skins").getChildFile("Broken");
+            corrupt.createDirectory();
+            corrupt.getChildFile("skin.json").replaceWithText("{ this is not json");
+            auto broken = SkinLoader::loadFromFolder(corrupt);
+            check(! broken.ok && broken.message.isNotEmpty(),
+                   "a corrupt skin reports an error rather than crashing");
+            check(SkinLoader::findSkinFolders(scratch.getChildFile("skins")).size() == 2,
+                   "a broken skin is still listed, so its author can see it");
         }
 
         {

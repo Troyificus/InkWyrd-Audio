@@ -24,6 +24,10 @@ class InkwyrdLookAndFeel : public juce::LookAndFeel_V4
 public:
     InkwyrdLookAndFeel();
 
+    // Re-copies the palette into JUCE's colour IDs. Call after applying a
+    // skin, then repaint - see InkwyrdAudioApplication::applySkin().
+    void refreshColours();
+
     // A window can put a second line under "INKWYRD" - "AUDIO LIBRARY",
     // "AUDIO PLAYER", and so on. Implemented as an interface the window
     // provides rather than a setter here, because the LookAndFeel is
@@ -91,6 +95,13 @@ public:
     // juce::Drawable/ImageCache load and the shape below goes away.
     static void drawLogo(juce::Graphics& g, juce::Rectangle<float> area,
                           juce::Colour ink, juce::Colour glow);
+
+    // A skin can replace the drawn mark with its own image (PNG, JPEG,
+    // GIF or SVG). Pass {} to go back to the drawn one. Returns false and
+    // fills errorMessage if the file couldn't be used - the drawn mark
+    // stays, so a bad logo is never a blank title bar.
+    static bool setSkinLogo(const juce::File& file, juce::String& errorMessage);
+    static bool hasSkinLogo();
 
     static juce::Font titleFont(float height);
     static juce::Font labelFont(float height);

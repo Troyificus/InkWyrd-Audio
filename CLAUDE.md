@@ -1852,8 +1852,63 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### User-made skins (beta.20)
+
+Colours, fonts, two metrics and the logo now come from a file a user can
+write: `%APPDATA%\Inkwyrd Audio\skins\<Name>\skin.json`, plus an
+optional logo image. A folder per skin rather than a bare .json, so it
+can carry that image and be zipped and shared as one piece.
+
+- **The palette stayed as plain names.** `inkwyrd::theme::accent` and
+  friends are now mutable globals assigned by `applyPalette()` rather
+  than constants - 40-odd paint sites were left untouched instead of
+  becoming `palette().accent`. They are MESSAGE-THREAD ONLY; painting is
+  their only reader and nothing on the audio thread may touch them.
+- **`SkinLoader` is pure over `juce::var`** and lives in the test
+  target's sources, so a skin author's real mistakes (a typo, a missing
+  key, a file from a newer version) are covered by `INKWYRD_SELFTEST`.
+  Same skip-if-newer rule as every other stored file here.
+- **Everything is optional and unknown keys are ignored**, which is what
+  keeps skins working in both directions as the app gains colours.
+
+**THE TRAP, and it bit three times in one launch test: anything that
+COPIES a palette colour rather than reading it at paint time has to be
+told a skin changed.** Three kinds turned up:
+
+1. JUCE's own colour IDs - `InkwyrdLookAndFeel`'s 86 `setColour` calls
+   are copies, hence `refreshColours()`.
+2. Components that set their own label colours in a constructor
+   (`PlayerComponent`, `VoiceFxComponent`, `SoundboardGridComponent`).
+   Fixed by moving those into `lookAndFeelChanged()` - JUCE calls it on
+   every child when a window's look and feel changes - and calling it
+   once from the constructor.
+3. Soundboard pads, which are HANDED their colours by `applyAppearance()`
+   rather than reading them; empty pads stayed green under an amber skin
+   until `lookAndFeelChanged()` re-applied all of them. A filled pad
+   keeps the colour the user chose for it, which is correct.
+
+Grep for `setColour(` outside a `paint()` before adding a component: if
+it takes a palette value, it needs the same treatment.
+
+- **`titleBarHeight` is clamped 28-80** and re-applied by
+  `DetachableWindow::applyThemeMetricsToAll()`, since a window holds it
+  rather than reading it. A two-pixel title bar is a window that can't be
+  dragged.
+- **A bad skin never breaks the app**: it keeps the previous look and
+  reports under the Skin picker. Verified with a deliberately corrupt
+  `skin.json`.
+- The Settings picker **applies and persists immediately** rather than on
+  Save & Apply - previewing is the point of choosing a skin.
+- Three example skins (Amber, Midnight, High Contrast) are written once,
+  guarded by an explicit `AppSettings` flag like the other one-time
+  steps, so deleting them is permanent.
+
 ### Not yet built
 
+- **Per-widget images** (Winamp-style bitmaps for buttons and sliders).
+  Needs a named slot and state set per control plus nine-slice rules, and
+  it would partly freeze the layout. Revisit if people actually make
+  skins.
 - **Dragging from the folder tree onto the Playlist window.** The table
   is a drag source (a real OS file drag); the tree isn't yet, so it uses
   the "Add to playlist" button.

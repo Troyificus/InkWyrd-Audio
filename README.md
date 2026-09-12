@@ -351,6 +351,91 @@ rather than your room.
 Changing a Discord bot token/server/channel via Settings takes effect on
 the next launch, not immediately. Everything else applies right away.
 
+## Skins
+
+Inkwyrd's colours, fonts, a couple of sizes and the logo all come from a
+skin, and you can write your own.
+
+Open **Settings** and look under **Skin**. Three examples are already
+there - **Amber**, **Midnight** and **High Contrast**. Pick one and the
+whole app changes straight away, no restart.
+
+### Making your own
+
+Click **Export current...** in Settings. That writes what's on screen
+now into your skins folder as a starting point, and opens the folder.
+Edit the `skin.json` inside it, click **Reload**, and your changes
+appear.
+
+A skin is a folder under `%APPDATA%\Inkwyrd Audio\skins`, holding a
+`skin.json` and optionally an image for the logo:
+
+```
+skins\Amber\skin.json
+skins\Amber\logo.png
+```
+
+Everything in the file is optional. Leave anything out and Inkwyrd uses
+its own value, so a short file is fine, and a skin written today keeps
+working when a later version adds a new colour.
+
+```json
+{
+  "schemaVersion": 1,
+  "name": "Amber",
+  "colours": { "accent": "#ffb340", "text": "#efc98a" },
+  "fonts": { "title": "Segoe UI Semibold", "label": "Segoe UI", "digits": "Consolas" },
+  "metrics": { "cornerRadius": 6, "titleBarHeight": 46 },
+  "logo": "logo.png"
+}
+```
+
+Colours are `#rrggbb`, or `#aarrggbb` if you want transparency.
+
+### The colours, and what each one paints
+
+| Key | Where you see it |
+|---|---|
+| `background` | Behind everything, and the deepest areas inside a window |
+| `panelDeep` | List and table backgrounds, the album art slot |
+| `panel` | A window's main body |
+| `panelRaised` | Buttons, table headers, menus, empty soundboard pads |
+| `titleBar` | The title bar across the top of each window |
+| `titleBarText` | The window name and buttons on that bar |
+| `titleBarSubtle` | The smaller second line ("AUDIO PLAYER") |
+| `text` | Normal text |
+| `textDim` | Captions, hints and column headings |
+| `accent` | The playing track, the seek bar, sliders, selected items, the logo |
+| `accentSoft` | Selected rows, scrollbars, pressed buttons |
+| `outline` | Borders around panels, buttons and fields |
+| `outlineFaint` | The fine lines between rows in a list |
+| `warning` | Things needing attention: a missing file, a boosted track |
+| `danger` | The close button when you hover it |
+
+### Fonts, sizes and the logo
+
+**Fonts** name a font family already installed on the machine - nothing
+is bundled. `title` is for headings, `label` for ordinary text and
+`digits` for the time readout, which wants a monospaced font so the
+numbers don't jiggle. A name nobody has falls back to the default rather
+than breaking.
+
+**`cornerRadius`** rounds panels, buttons and fields; `0` gives square
+corners. **`titleBarHeight`** is capped between 28 and 80 pixels - a
+title bar too small to grab would leave a window you can't move.
+
+**`logo`** names an image next to your `skin.json` (PNG, JPEG, GIF or
+SVG) to use in place of the drawn ink bottle, in every title bar and on
+the player's display. SVGs are drawn without blur, filters or text, so
+stick to plain shapes. Leave `logo` out to keep the drawn mark.
+
+### If something's wrong with a skin
+
+Inkwyrd keeps working. A file it can't read leaves the previous look
+alone and says why under the Skin picker; a single colour it can't
+understand keeps that one colour and uses the rest of your file. "Inkwyrd
+(built-in)" in the list always takes you back.
+
 ## Features
 
 - Five detachable windows that snap magnetically to each other and to

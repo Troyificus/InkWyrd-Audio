@@ -104,6 +104,15 @@ private:
     // check per file.
     void rescanTrackMetadata();
 
+    // Applies a skin by folder name ({} = the built-in look) and returns
+    // what to tell the user: empty when it loaded cleanly, otherwise the
+    // warnings, or why it couldn't be used.
+    juce::String applySkin(const juce::String& skinName);
+
+    // Writes the example skins once, so the skins folder has something
+    // in it to copy.
+    void writeExampleSkinsIfNeeded();
+
     // A different playlist was SELECTED for browsing - the Playlist
     // window follows this. Never touches playback.
     void handlePlaylistSelected(const juce::Uuid& id);

@@ -38,6 +38,11 @@ public:
 
     void resized() override;
 
+    // Re-applies the label colours this component sets for itself,
+    // so it follows a skin change like everything drawn from the
+    // palette at paint time does.
+    void lookAndFeelChanged() override;
+
     // Pushed from InkwyrdAudioApplication as DiscordConnector's status
     // callback fires (on the message thread, already marshaled there).
     void setDiscordStatus(const juce::String& text);

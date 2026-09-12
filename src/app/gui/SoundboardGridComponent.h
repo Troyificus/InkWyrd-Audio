@@ -43,6 +43,11 @@ public:
     void refresh();
 
     void resized() override;
+
+    // Re-applies the label colours this component sets for itself,
+    // so it follows a skin change like everything drawn from the
+    // palette at paint time does.
+    void lookAndFeelChanged() override;
     void paintOverChildren(juce::Graphics& g) override;
 
     // juce::FileDragAndDropTarget
