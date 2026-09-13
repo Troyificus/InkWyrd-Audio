@@ -50,6 +50,10 @@ public:
 
     void resized() override;
 
+    // The label colours this screen sets for itself, re-applied when a
+    // skin changes - which can happen while this very screen is open.
+    void lookAndFeelChanged() override;
+
 private:
     void browseForFolder(juce::Label& targetLabel, juce::File& targetValue, const juce::String& chooserTitle);
     void updateSaveButtonEnablement();
@@ -122,6 +126,11 @@ private:
     ApplySkinCallback onApplySkin;
 
     juce::TextButton saveAndLaunchButton;
+
+    // Which build this is, bottom right. The beta-qualified string
+    // (0.1.0-beta.20.1), not JUCE's numeric version - "0.1.0" is the same
+    // for every beta and so answers nothing when someone reports a bug.
+    juce::Label versionLabel;
 
     std::function<void(juce::String, AuthoriseCallback)> onAuthoriseRpc;
 

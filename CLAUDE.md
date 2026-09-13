@@ -2206,6 +2206,15 @@ release:
   than a static "0.1.0" for every one (a real gap: this used to be
   disconnected from the release tag entirely). Bump it *before*
   building the installer for a release, not after.
+- **The app SHOWS that version too** (bottom right of the Settings
+  screen, from beta.20.1). `src/app/CMakeLists.txt` reads `MyAppVersion`
+  out of the `.iss` at configure time and passes it as
+  `INKWYRD_VERSION_STRING`, so the `.iss` stays the single place to bump;
+  the `.iss` is in `CMAKE_CONFIGURE_DEPENDS`, without which editing it
+  alone would leave a stale version compiled in. JUCE's own version can't
+  carry it - Windows' numeric fields hold four numbers, not "beta.20.1" -
+  and "0.1.0" is identical for every beta, so it answers nothing when
+  someone reports a bug.
 - **Each release is its own GitHub Release** (a new tag per version,
   e.g. `v0.1.0-beta.2.1`), not one release with its asset silently
   swapped out - keeps a stable download link per version and a real

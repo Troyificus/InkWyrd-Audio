@@ -80,6 +80,24 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/DiscordConnector.h
 )
 
+# The beta-qualified version string, read from the installer script so
+# there is still ONE place to bump per release (see CLAUDE.md's release
+# process). JUCE's own version can't carry it - Windows' version fields
+# hold four numbers, not "beta.20.1" - so it comes through as a define
+# and is shown on the Settings screen.
+file(READ "${CMAKE_SOURCE_DIR}/installer/InkwyrdAudio.iss" inkwyrd_iss_contents)
+string(REGEX MATCH "#define MyAppVersion \"([^\"]+)\"" inkwyrd_version_match "${inkwyrd_iss_contents}")
+set(INKWYRD_VERSION_STRING "${CMAKE_MATCH_1}")
+
+if(NOT INKWYRD_VERSION_STRING)
+    message(WARNING "Couldn't read MyAppVersion from installer/InkwyrdAudio.iss - falling back")
+    set(INKWYRD_VERSION_STRING "0.1.0")
+endif()
+
+# Otherwise editing the .iss alone leaves a stale version compiled in.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/installer/InkwyrdAudio.iss")
+
 # So gui/*.cpp (in a subdirectory) can #include "MasterEngine.h" etc.
 # unqualified, same as Main.cpp always could when everything lived
 # directly in this directory.
@@ -88,6 +106,7 @@ target_include_directories(InkwyrdAudioApp PRIVATE .)
 target_compile_definitions(InkwyrdAudioApp PRIVATE
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:InkwyrdAudioApp,JUCE_PRODUCT_NAME>"
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:InkwyrdAudioApp,JUCE_VERSION>"
+    INKWYRD_VERSION_STRING="${INKWYRD_VERSION_STRING}"
     JUCE_STANDALONE_APPLICATION=1
     JUCE_USE_CURL=0
     JUCE_WEB_BROWSER=0

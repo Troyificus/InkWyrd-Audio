@@ -142,10 +142,19 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     addAndMakeVisible(exportSkinButton);
 
     skinStatusLabel.setFont(juce::Font(juce::FontOptions(12.0f)));
-    skinStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     addAndMakeVisible(skinStatusLabel);
 
     refreshSkinList(settings.getSkinName());
+
+   #if defined(INKWYRD_VERSION_STRING)
+    versionLabel.setText("Version " INKWYRD_VERSION_STRING, juce::dontSendNotification);
+   #else
+    versionLabel.setText("Version " JUCE_APPLICATION_VERSION_STRING, juce::dontSendNotification);
+   #endif
+    versionLabel.setJustificationType(juce::Justification::centredRight);
+    versionLabel.setFont(juce::Font(juce::FontOptions(12.0f)));
+    addAndMakeVisible(versionLabel);
+    lookAndFeelChanged();
 
     addAndMakeVisible(saveAndLaunchButton);
     saveAndLaunchButton.onClick = [this]
@@ -296,9 +305,23 @@ void SetupComponent::exportCurrentSkin()
     }));
 }
 
+void SetupComponent::lookAndFeelChanged()
+{
+    versionLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
+
+    // The skin status is recoloured by applySelectedSkin() when it has
+    // something to warn about; this is its resting colour.
+    skinStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
+}
+
 void SetupComponent::resized()
 {
     auto area = getLocalBounds().reduced(24);
+
+    // Claimed before anything else lays itself out, so it sits at the
+    // bottom right whatever the rest of the screen does.
+    versionLabel.setBounds(area.removeFromBottom(18));
+    area.removeFromBottom(6);
 
     titleLabel.setBounds(area.removeFromTop(36));
     area.removeFromTop(16);
