@@ -24,7 +24,7 @@
 ; used to just say "0.1.0" for every beta, indistinguishable) AND
 ; OutputBaseFilename further down, so there's one place to update per
 ; release rather than two.
-#define MyAppVersion "0.1.0-beta.20.1"
+#define MyAppVersion "0.1.0-beta.21"
 #define MyAppPublisher "Troy"
 #define MyAppURL "https://github.com/Troyificus/InkWyrd-Audio"
 ; Windows' numeric version fields hold at most four numbers, which can't
