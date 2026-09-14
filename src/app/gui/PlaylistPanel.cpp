@@ -57,49 +57,12 @@ namespace
 }
 
 //==============================================================================
-// A ListBox that can be dragged OUT of, onto the Playlist window.
-//
-// This has to be a real OS-level file drag rather than JUCE's own
-// DragAndDropContainer: a container only covers its own component
-// hierarchy, and the Library and Playlist windows are separate desktop
-// windows. Sending the selection as a file drag also means the Playlist
-// window handles a drag from here and a drag from Explorer through
-// exactly the same path, rather than having two ways in that could
-// behave differently.
+// The master track list. A plain TableListBox: the drag OUT of it is
+// driven by PlaylistPanel as a mouse listener, not from here - see
+// PlaylistPanel::mouseDrag for why an override on this class could never
+// work.
 class PlaylistPanel::DraggableTrackTable : public juce::TableListBox
 {
-public:
-    std::function<juce::StringArray()> getFilesToDrag;
-
-    void mouseDrag(const juce::MouseEvent& e) override
-    {
-        // The distance check keeps an ordinary click - including a click
-        // on the volume bar - from being swallowed as a drag.
-        if (! dragInProgress && e.getDistanceFromDragStart() > 8 && getFilesToDrag != nullptr)
-        {
-            auto files = getFilesToDrag();
-
-            if (! files.isEmpty())
-            {
-                dragInProgress = true;
-
-                juce::DragAndDropContainer::performExternalDragDropOfFiles(
-                    files, false, this,
-                    [safeThis = juce::Component::SafePointer<DraggableTrackTable>(this)]
-                    {
-                        if (safeThis != nullptr)
-                            safeThis->dragInProgress = false;
-                    });
-
-                return;
-            }
-        }
-
-        juce::TableListBox::mouseDrag(e);
-    }
-
-private:
-    bool dragInProgress = false;
 };
 
 //==============================================================================
@@ -240,7 +203,20 @@ public:
         // The volume column IS the control - clicking anywhere in it
         // opens the slider. Much easier to hit than the bar was when it
         // floated at the right-hand end of a full-width row.
-        if (columnId == volume || event.mods.isPopupMenu())
+        if (event.mods.isPopupMenu())
+        {
+            // Right-click used to open the volume callout directly. It is
+            // one item on the menu now - a track has more than one thing
+            // you might want to do to it.
+            auto tracks = owner.getSelectedLibraryTracks();
+            if (tracks.isEmpty() && juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
+                tracks.add(owner.libraryTracks[row]);
+
+            owner.showTracksContextMenu(tracks, row);
+            return;
+        }
+
+        if (columnId == volume)
             owner.showTrackVolumeCallout(row);
     }
 
@@ -273,7 +249,10 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
                               std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
                               std::function<void(const juce::Uuid&)> onPlaylistSelectedToUse,
                               bool startInFolderView,
-                              std::function<void(bool)> onTrackViewChangedToUse)
+                              std::function<void(bool)> onTrackViewChangedToUse,
+                              std::function<void(const juce::File&)> onPreviewTrackToUse,
+                              std::function<void()> onStopPreviewToUse,
+                              std::function<void(const juce::Array<juce::File>&)> onEditTagsToUse)
     : library(libraryToUse),
       trackLibrary(trackLibraryToUse),
       engine(engineToUse),
@@ -282,7 +261,10 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
       onActivatePlaylist(std::move(onActivatePlaylistToUse)),
       onPlaylistEdited(std::move(onPlaylistEditedToUse)),
       onPlaylistSelected(std::move(onPlaylistSelectedToUse)),
-      onTrackViewChanged(std::move(onTrackViewChangedToUse))
+      onTrackViewChanged(std::move(onTrackViewChangedToUse)),
+      onPreviewTrack(std::move(onPreviewTrackToUse)),
+      onStopPreview(std::move(onStopPreviewToUse)),
+      onEditTags(std::move(onEditTagsToUse))
 {
     playlistModel = std::make_unique<PlaylistListModel>(*this);
     trackModel = std::make_unique<LibraryTrackTableModel>(*this);
@@ -296,7 +278,7 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     for (auto* button : { &newButton, &playButton, &renameButton, &deleteButton,
                            &refreshButton,
                            &addFilesButton, &addFolderButton,
-                           &addToPlaylistButton, &removeFromLibraryButton })
+                           &addToPlaylistButton, &previewButton, &removeFromLibraryButton })
         addAndMakeVisible(button);
 
     newButton.onClick = [this] { createNewPlaylist(); };
@@ -317,6 +299,7 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     addFolderButton.onClick = [this] { addFolderToLibrary(); };
     addToPlaylistButton.onClick = [this] { addSelectedTracksToPlaylist(); };
     removeFromLibraryButton.onClick = [this] { removeSelectedTracksFromLibrary(); };
+    previewButton.onClick = [this] { togglePreview(); };
 
     addAndMakeVisible(trackCaption);
     trackTable->setModel(trackModel.get());
@@ -346,18 +329,19 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     header.setStretchToFitActive(true);
     header.setSortColumnId(sortColumnId, sortForwards);
 
-    trackTable->getFilesToDrag = [this]
-    {
-        juce::StringArray paths;
-        for (const auto& file : getSelectedLibraryTracks())
-            paths.add(file.getFullPathName());
-        return paths;
-    };
+    // true: events from the row components too, which is the whole point
+    // - see mouseDrag().
+    trackTable->addMouseListener(this, true);
     addAndMakeVisible(trackTable.get());
 
     folderTree = std::make_unique<LibraryFolderTree>(trackMetadata, engine);
     folderTree->onSelectionChanged = [this] { updateButtonEnablement(); };
     folderTree->onTracksDoubleClicked = [this] { addSelectedTracksToPlaylist(); };
+    folderTree->onContextMenuRequested = [this]
+    {
+        // -1: no row to anchor a volume callout to in the tree.
+        showTracksContextMenu(folderTree->getSelectedTracks(), -1);
+    };
     addChildComponent(folderTree.get());
 
     for (auto* button : { &tableViewButton, &folderViewButton })
@@ -406,6 +390,51 @@ void PlaylistPanel::selectPlaylist(int row)
     // never touches playback.
     if (onPlaylistSelected)
         onPlaylistSelected(selectedId);
+}
+
+void PlaylistPanel::mouseDrag(const juce::MouseEvent& e)
+{
+    // WHY THIS LIVES HERE RATHER THAN IN THE TABLE. A TableListBox never
+    // sees a drag that starts on one of its ROWS: JUCE's own row
+    // components handle mouseDrag themselves and start an INTERNAL drag
+    // from ListBoxModel::getDragSourceDescription (see
+    // RowComponent::mouseDrag in juce_ListBox.cpp), never passing the
+    // event up. An override on the table only ever fired on the empty
+    // space below the last row, which is why dragging a track to the
+    // Playlist window silently did nothing for four releases.
+    //
+    // Registering as a mouse listener on the table AND its children
+    // (addMouseListener(table, true)) does get those row drags.
+    //
+    // It stays an OS FILE drag rather than JUCE's internal one because
+    // the Library and Playlist are separate desktop windows, which
+    // JUCE's drag-and-drop doesn't span - and because a file drag means
+    // a drop from here and a drop from Explorer arrive by one path.
+    if (dragInProgress || e.getDistanceFromDragStart() <= 8)
+        return;
+
+    auto* source = e.eventComponent;
+    auto fromTable = source != nullptr && trackTable != nullptr
+                      && (source == trackTable.get() || trackTable->isParentOf(source));
+
+    if (! fromTable)
+        return;
+
+    juce::StringArray paths;
+    for (const auto& file : getSelectedLibraryTracks())
+        paths.add(file.getFullPathName());
+
+    if (paths.isEmpty())
+        return;
+
+    dragInProgress = true;
+    juce::DragAndDropContainer::performExternalDragDropOfFiles(
+        paths, false, trackTable.get(),
+        [safeThis = juce::Component::SafePointer<PlaylistPanel>(this)]
+        {
+            if (safeThis != nullptr)
+                safeThis->dragInProgress = false;
+        });
 }
 
 juce::Array<juce::File> PlaylistPanel::getSelectedLibraryTracks() const
@@ -513,8 +542,7 @@ void PlaylistPanel::refresh()
 void PlaylistPanel::refreshLibraryTracks()
 {
     libraryTracks = trackLibrary.getAllTracks();
-    trackCaption.setText("All Tracks (" + juce::String(libraryTracks.size()) + ")",
-                          juce::dontSendNotification);
+    updateTrackCaption();
     sortLibraryTracks();
 
     // The tree does its own grouping and ordering from the same set - it
@@ -584,6 +612,112 @@ void PlaylistPanel::sortLibraryTracks()
     trackTable->repaint();
 }
 
+void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks, int rowForVolume)
+{
+    if (tracks.isEmpty())
+        return;
+
+    enum MenuId { previewItem = 1, editTagsItem, addToPlaylistItem, volumeItem, removeItem };
+
+    juce::PopupMenu menu;
+    menu.addItem(previewItem, "Preview", tracks.size() == 1 && onPreviewTrack != nullptr);
+    menu.addItem(editTagsItem,
+                  tracks.size() == 1 ? "Edit tags..."
+                                     : "Edit tags for " + juce::String(tracks.size()) + " tracks...",
+                  onEditTags != nullptr);
+    menu.addSeparator();
+    menu.addItem(addToPlaylistItem,
+                  tracks.size() == 1 ? "Add to playlist"
+                                     : "Add " + juce::String(tracks.size()) + " to playlist",
+                  getSelectedPlaylist() != nullptr);
+
+    // Only from the table: the callout points at a row, and the folder
+    // tree has none to point at.
+    if (rowForVolume >= 0 && tracks.size() == 1)
+        menu.addItem(volumeItem, "Volume and fade...");
+
+    menu.addSeparator();
+    menu.addItem(removeItem, tracks.size() == 1 ? "Remove from library"
+                                                : "Remove " + juce::String(tracks.size()) + " from library");
+
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+                        [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this),
+                         tracks, rowForVolume](int result)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        switch (result)
+        {
+            case previewItem:
+                if (onPreviewTrack)
+                    onPreviewTrack(tracks[0]);
+                break;
+
+            case editTagsItem:
+                if (onEditTags)
+                    onEditTags(tracks);
+                break;
+
+            case addToPlaylistItem:
+                addSelectedTracksToPlaylist();
+                break;
+
+            case volumeItem:
+                showTrackVolumeCallout(rowForVolume);
+                break;
+
+            case removeItem:
+                removeSelectedTracksFromLibrary();
+                break;
+
+            default:
+                break;
+        }
+    });
+}
+
+void PlaylistPanel::togglePreview()
+{
+    // The button is a toggle: while something is previewing it means
+    // Stop, whatever happens to be selected now.
+    if (previewFile != juce::File())
+    {
+        if (onStopPreview)
+            onStopPreview();
+
+        return;
+    }
+
+    auto selected = getSelectedLibraryTracks();
+    if (selected.isEmpty() || onPreviewTrack == nullptr)
+        return;
+
+    onPreviewTrack(selected[0]);
+}
+
+void PlaylistPanel::setPreviewFile(const juce::File& file)
+{
+    previewFile = file;
+
+    previewButton.setButtonText(file != juce::File() ? "Stop" : "Preview");
+    updateTrackCaption();
+    updateButtonEnablement();
+}
+
+void PlaylistPanel::updateTrackCaption()
+{
+    auto caption = "All Tracks (" + juce::String(libraryTracks.size()) + ")";
+
+    // On the caption rather than a label of its own: previewing is a
+    // passing state, and a permanently empty line would cost the list
+    // height it needs more.
+    if (previewFile != juce::File())
+        caption += "   -   previewing " + trackMetadata.get(previewFile).displayTitle(previewFile);
+
+    trackCaption.setText(caption, juce::dontSendNotification);
+}
+
 void PlaylistPanel::setFolderView(bool shouldShowFolders, bool notify)
 {
     folderView = shouldShowFolders;
@@ -637,6 +771,10 @@ void PlaylistPanel::updateButtonEnablement()
     auto hasTracks = ! getSelectedLibraryTracks().isEmpty();
     addToPlaylistButton.setEnabled(hasTracks && hasPlaylist);
     removeFromLibraryButton.setEnabled(hasTracks);
+
+    // Stop stays live with nothing selected, or clicking away would
+    // strand a preview with no way to stop it.
+    previewButton.setEnabled(previewFile != juce::File() || hasTracks);
 }
 
 void PlaylistPanel::activateSelected()
@@ -955,8 +1093,10 @@ void PlaylistPanel::resized()
     rowOne.removeFromLeft(kButtonGap);
     addFolderButton.setBounds(rowOne);
 
-    auto halfTwo = (bottom.getWidth() - kButtonGap) / 2;
-    addToPlaylistButton.setBounds(bottom.removeFromLeft(halfTwo));
+    auto thirdWidth = (bottom.getWidth() - kButtonGap * 2) / 3;
+    addToPlaylistButton.setBounds(bottom.removeFromLeft(thirdWidth));
+    bottom.removeFromLeft(kButtonGap);
+    previewButton.setBounds(bottom.removeFromLeft(thirdWidth));
     bottom.removeFromLeft(kButtonGap);
     removeFromLibraryButton.setBounds(bottom);
 }

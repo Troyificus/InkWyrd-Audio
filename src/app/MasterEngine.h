@@ -4,6 +4,7 @@
 #include <functional>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_audio_devices/juce_audio_devices.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 
 #include "DiscordAudioSender.h"
 #include "NoiseSuppressor.h"
@@ -21,7 +22,35 @@
 class MasterEngine : public juce::AudioIODeviceCallback
 {
 public:
-    MasterEngine(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse, PluginChain& voiceChainToUse);
+    MasterEngine(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse,
+                  PluginChain& voiceChainToUse, juce::AudioFormatManager& formatManagerToUse);
+
+    //==============================================================================
+    // PREVIEW: auditioning a track from the Library.
+    //
+    // Deliberately NOT part of the master mix. It is summed into the
+    // local output only, after the Discord send, so the room never hears
+    // what you are auditioning and the spectrum display keeps showing
+    // what Discord actually gets.
+    //
+    // It also ignores the local-monitoring switch, which is off by
+    // default while Discord is connected - a preview that obeyed it
+    // would be silent exactly when someone most wants to audition
+    // something.
+    //
+    // Message thread only. Returns false if the file couldn't be read.
+    bool startPreview(const juce::File& file, float linearGain);
+    void stopPreview();
+
+    bool isPreviewing() const { return previewActive.load(); }
+    juce::File getPreviewFile() const { return previewFile; }
+
+    // Broadcasts when the preview starts or stops, INCLUDING when it
+    // reaches the end of the file on its own (juce_AudioTransportSource
+    // sends a change message when the stream finishes), which is how the
+    // app knows to resume a playlist it paused.
+    juce::ChangeBroadcaster& getPreviewBroadcaster() { return previewTransport; }
+    bool isPreviewTransportPlaying() const { return previewTransport.isPlaying(); }
 
     // nullptr disables Discord streaming (local monitoring only). Safe
     // to call from any thread - this pointer is only ever read on the
@@ -86,6 +115,16 @@ private:
     PlaylistEngine& playlist;
     SoundboardEngine& soundboard;
     PluginChain& voiceChain;
+    juce::AudioFormatManager& formatManager;
+
+    // The preview player. Its own transport rather than a deck of
+    // PlaylistEngine's: previewing must not disturb the playlist's
+    // position, its crossfade, or what it thinks is playing.
+    juce::AudioTransportSource previewTransport;
+    std::unique_ptr<juce::AudioFormatReaderSource> previewReader;
+    juce::AudioBuffer<float> previewBuffer;
+    juce::File previewFile;                  // message thread only
+    std::atomic<bool> previewActive { false };
 
     juce::MixerAudioSource musicMixer; // playlist + soundboard
     NoiseSuppressor noiseSuppressor;

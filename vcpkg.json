@@ -5,6 +5,7 @@
   "dependencies": [
     "opus",
     "libsodium",
-    "ixwebsocket"
+    "ixwebsocket",
+    "taglib"
   ]
 }

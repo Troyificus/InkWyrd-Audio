@@ -29,7 +29,15 @@ public:
                    TrackMetadataStore& trackMetadata,
                    std::function<void(const juce::Uuid&)> onActivatePlaylist,
                    std::function<void(const juce::Uuid&)> onPlaylistEdited,
-                   std::function<void(const juce::Uuid&)> onPlaylistSelected);
+                   std::function<void(const juce::Uuid&)> onPlaylistSelected,
+                   // Auditioning a track: the app pauses the playlist,
+                   // plays it locally, and resumes afterwards.
+                   std::function<void(const juce::File&)> onPreviewTrack = {},
+                   std::function<void()> onStopPreview = {},
+                   std::function<void(const juce::Array<juce::File>&)> onEditTags = {});
+
+    // Which track is previewing, {} for none.
+    void setPreviewFile(const juce::File& file);
 
     // The playlist currently PLAYING (not merely selected), so the
     // library list can mark it. Forwarded straight to PlaylistPanel.

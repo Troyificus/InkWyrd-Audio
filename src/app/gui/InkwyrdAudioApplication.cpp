@@ -136,6 +136,10 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     mainWindow = std::make_unique<MainWindow>(getApplicationName(), settings);
     logPhase("creating the window");
 
+    // So a preview reaching the end of its file resumes the playlist it
+    // paused - see changeListenerCallback().
+    masterEngine.getPreviewBroadcaster().addChangeListener(this);
+
     // Mirror the mic into the user's own Discord client. Hung off the
     // engine rather than off the Player window's button so the Stream
     // Deck control socket - the other thing that toggles the mic -
@@ -377,10 +381,14 @@ void InkwyrdAudioApplication::shutdown()
     masterEngine.setDiscordSender(nullptr);
     discordConnector.disconnect();
 
+    masterEngine.getPreviewBroadcaster().removeChangeListener(this);
+    masterEngine.stopPreview();
+
     deviceManager.removeAudioCallback(&masterEngine);
     playlist.stop();
     controlServer.stop();
 
+    tagEditorWindow.reset();
     playerWindow.reset();
     playlistWindow.reset();
     libraryWindow.reset();
@@ -394,6 +402,105 @@ void InkwyrdAudioApplication::shutdown()
     juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
 
     ix::uninitNetSystem();
+}
+
+void InkwyrdAudioApplication::openTagEditor(const juce::Array<juce::File>& files)
+{
+    if (files.isEmpty())
+        return;
+
+    // One editor at a time. Two windows open on the same file would be
+    // two truths about one set of tags, and the second save would quietly
+    // undo the first.
+    tagEditorWindow.reset();
+
+    tagEditorWindow = std::make_unique<TagEditorWindow>(
+        files,
+        [this](const juce::Array<juce::File>& toWrite) { return prepareForTagWrite(toWrite); },
+        [this](const juce::Array<juce::File>& written) { handleTagsSaved(written); },
+        [this](TagEditorWindow*) { tagEditorWindow.reset(); });
+}
+
+juce::String InkwyrdAudioApplication::prepareForTagWrite(const juce::Array<juce::File>& files)
+{
+    // A preview holds the file open for reading, which on Windows stops
+    // it being replaced. We can simply stop it.
+    if (masterEngine.isPreviewing() && files.contains(masterEngine.getPreviewFile()))
+        stopPreview();
+
+    // The player's deck also holds its track open, and stopping playback
+    // mid-session is the user's call, not ours.
+    auto loaded = playlist.getCurrentTrackFile();
+    if (loaded != juce::File() && files.contains(loaded))
+        return "\"" + loaded.getFileName() + "\" is loaded in the player. Press Stop, then save again.";
+
+    return {};
+}
+
+void InkwyrdAudioApplication::handleTagsSaved(const juce::Array<juce::File>& files)
+{
+    logLine("[Tags] Wrote tags to " + juce::String(files.size()) + " file(s)");
+
+    // Writing changes size and modification time, which is exactly what
+    // the cache treats as stale - so a rescan re-reads these and only
+    // these, and the lists repaint with the new titles.
+    rescanTrackMetadata();
+}
+
+void InkwyrdAudioApplication::startPreview(const juce::File& file)
+{
+    if (! file.existsAsFile())
+        return;
+
+    // Pause the playlist first, so the two aren't briefly audible at
+    // once, and remember that WE paused it.
+    if (playlist.isPlaying())
+    {
+        playlist.pause();
+        previewPausedPlaylist = true;
+    }
+
+    // At the track's own trim, so an audition sounds like it will in the
+    // mix. Not the master fader: that is a Discord control too, and it
+    // shouldn't decide how loud your own audition is.
+    if (! masterEngine.startPreview(file, trackGains.getLinearGain(file)))
+    {
+        logLine("[Preview] Couldn't read " + file.getFullPathName());
+        stopPreview();
+        return;
+    }
+
+    if (libraryWindow != nullptr)
+        libraryWindow->setPreviewFile(file);
+
+    if (playerWindow != nullptr)
+        playerWindow->getPlayerComponent().refreshToggleStates();
+}
+
+void InkwyrdAudioApplication::stopPreview()
+{
+    masterEngine.stopPreview();
+
+    if (previewPausedPlaylist)
+    {
+        playlist.resume();
+        previewPausedPlaylist = false;
+    }
+
+    if (libraryWindow != nullptr)
+        libraryWindow->setPreviewFile({});
+
+    if (playerWindow != nullptr)
+        playerWindow->getPlayerComponent().refreshToggleStates();
+}
+
+void InkwyrdAudioApplication::changeListenerCallback(juce::ChangeBroadcaster*)
+{
+    // The preview reaching the end of the file looks exactly like it
+    // being stopped, which is what we want: either way the playlist
+    // should come back.
+    if (masterEngine.isPreviewing() && ! masterEngine.isPreviewTransportPlaying())
+        stopPreview();
 }
 
 juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
@@ -674,13 +781,18 @@ void InkwyrdAudioApplication::showPlayer()
         playlistWindow = std::make_unique<PlaylistWindow>(
             settings, trackMetadata, library, playlist,
             [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
-            [this](const juce::Uuid& id, const juce::File& file) { playTrackInPlaylist(id, file); });
+            [this](const juce::Uuid& id, const juce::File& file) { playTrackInPlaylist(id, file); },
+            [this](const juce::File& file) { startPreview(file); },
+            [this](const juce::Array<juce::File>& files) { openTagEditor(files); });
 
         libraryWindow = std::make_unique<LibraryWindow>(
             settings, library, trackLibrary, playlist, trackGains, trackMetadata,
             [this](const juce::Uuid& id) { activatePlaylist(id); },
             [this](const juce::Uuid& id) { handlePlaylistEdited(id); },
-            [this](const juce::Uuid& id) { handlePlaylistSelected(id); });
+            [this](const juce::Uuid& id) { handlePlaylistSelected(id); },
+            [this](const juce::File& file) { startPreview(file); },
+            [this] { stopPreview(); },
+            [this](const juce::Array<juce::File>& files) { openTagEditor(files); });
 
         voiceFxWindow = std::make_unique<VoiceFxWindow>(settings, scanner, voiceChain,
                                                           masterEngine.getNoiseSuppressor(),

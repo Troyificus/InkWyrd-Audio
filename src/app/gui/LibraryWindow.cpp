@@ -19,7 +19,10 @@ LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
                               TrackMetadataStore& trackMetadata,
                               std::function<void(const juce::Uuid&)> onActivatePlaylist,
                               std::function<void(const juce::Uuid&)> onPlaylistEdited,
-                              std::function<void(const juce::Uuid&)> onPlaylistSelected)
+                              std::function<void(const juce::Uuid&)> onPlaylistSelected,
+                              std::function<void(const juce::File&)> onPreviewTrack,
+                              std::function<void()> onStopPreview,
+                              std::function<void(const juce::Array<juce::File>&)> onEditTags)
     : DetachableWindow("Library", "library", "Audio Library", settingsToUse, defaultLibraryBounds())
 {
     auto* panel = new PlaylistPanel(library, trackLibrary, playlist, trackGains, trackMetadata,
@@ -31,7 +34,10 @@ LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
                                      {
                                          settings.setLibraryFolderView(folderView);
                                          settings.save(); // AppSettings has no autosave
-                                     });
+                                     },
+                                     std::move(onPreviewTrack),
+                                     std::move(onStopPreview),
+                                     std::move(onEditTags));
     panel->setSize(440, 620);
     playlistPanel = panel;
 
@@ -46,6 +52,12 @@ void LibraryWindow::repaintTrackList()
 {
     if (playlistPanel != nullptr)
         playlistPanel->repaintTrackList();
+}
+
+void LibraryWindow::setPreviewFile(const juce::File& file)
+{
+    if (playlistPanel != nullptr)
+        playlistPanel->setPreviewFile(file);
 }
 
 void LibraryWindow::setPlayingPlaylistId(const juce::Uuid& id)

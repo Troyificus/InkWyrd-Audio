@@ -64,6 +64,12 @@ public:
 
     void selectedRowsChanged(int) override { owner.updateButtons(); }
 
+    void cellClicked(int row, int, const juce::MouseEvent& event) override
+    {
+        if (event.mods.isPopupMenu())
+            owner.showContextMenuForRow(row);
+    }
+
     void cellDoubleClicked(int row, int, const juce::MouseEvent&) override
     {
         if (juce::isPositiveAndBelow(row, owner.resolvedTracks.files.size()) && owner.onPlayTrack)
@@ -85,12 +91,16 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
                                                         TrackMetadataStore& trackMetadataToUse,
                                                         PlaylistEngine& engineToUse,
                                                         std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
-                                                        std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrackToUse)
+                                                        std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrackToUse,
+                                                        std::function<void(const juce::File&)> onPreviewTrackToUse,
+                                                        std::function<void(const juce::Array<juce::File>&)> onEditTagsToUse)
     : library(libraryToUse),
       trackMetadata(trackMetadataToUse),
       engine(engineToUse),
       onPlaylistEdited(std::move(onPlaylistEditedToUse)),
-      onPlayTrack(std::move(onPlayTrackToUse))
+      onPlayTrack(std::move(onPlayTrackToUse)),
+      onPreviewTrack(std::move(onPreviewTrackToUse)),
+      onEditTags(std::move(onEditTagsToUse))
 {
     captionLabel.setText("No playlist selected", juce::dontSendNotification);
     captionLabel.setFont(juce::Font(juce::FontOptions(15.0f, juce::Font::bold)));
@@ -165,6 +175,43 @@ void PlaylistTrackListComponent::refresh()
 void PlaylistTrackListComponent::updateButtons()
 {
     removeButton.setEnabled(trackTable.getSelectedRow() >= 0 && library.findById(shownId) != nullptr);
+}
+
+void PlaylistTrackListComponent::showContextMenuForRow(int row)
+{
+    if (! juce::isPositiveAndBelow(row, resolvedTracks.files.size()))
+        return;
+
+    // Right-clicking a row that isn't selected acts on THAT row, like
+    // every file manager - otherwise the menu would quietly apply to
+    // whatever was selected before.
+    if (! trackTable.isRowSelected(row))
+        trackTable.selectRow(row);
+
+    auto file = resolvedTracks.files[row];
+
+    enum MenuId { previewItem = 1, editTagsItem, removeItem };
+
+    juce::PopupMenu menu;
+    menu.addItem(previewItem, "Preview", onPreviewTrack != nullptr);
+    menu.addItem(editTagsItem, "Edit tags...", onEditTags != nullptr);
+    menu.addSeparator();
+    menu.addItem(removeItem, "Remove from playlist", library.findById(shownId) != nullptr);
+
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+                        [this, safeThis = juce::Component::SafePointer<PlaylistTrackListComponent>(this),
+                         file](int result)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        if (result == previewItem && onPreviewTrack)
+            onPreviewTrack(file);
+        else if (result == editTagsItem && onEditTags)
+            onEditTags({ file });
+        else if (result == removeItem)
+            removeSelectedTrack();
+    });
 }
 
 void PlaylistTrackListComponent::removeSelectedTrack()

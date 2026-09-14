@@ -40,7 +40,12 @@ public:
                                 std::function<void(const juce::Uuid&)> onPlaylistEdited,
                                 // Double-click: play this track, activating
                                 // its playlist first if it isn't already.
-                                std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack);
+                                std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack,
+                                // Right-click actions, same as the
+                                // Library's: audition a track, or edit
+                                // what the file says it is.
+                                std::function<void(const juce::File&)> onPreviewTrack = {},
+                                std::function<void(const juce::Array<juce::File>&)> onEditTags = {});
 
     ~PlaylistTrackListComponent() override;
 
@@ -74,6 +79,7 @@ private:
 
     void timerCallback() override;
     void removeSelectedTrack();
+    void showContextMenuForRow(int row);
     void updateButtons();
 
     PlaylistLibrary& library;
@@ -81,6 +87,8 @@ private:
     PlaylistEngine& engine;
     std::function<void(const juce::Uuid&)> onPlaylistEdited;
     std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack;
+    std::function<void(const juce::File&)> onPreviewTrack;
+    std::function<void(const juce::Array<juce::File>&)> onEditTags;
 
     juce::Uuid shownId;
     ResolvedPlaylist resolvedTracks;

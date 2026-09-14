@@ -1852,6 +1852,74 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Preview, a drag source that actually works, and the tag editor (beta.21)
+
+**The drag from the Library to the Playlist window had NEVER worked**,
+from the drop that introduced it through four releases.
+`PlaylistPanel::DraggableTrackTable` overrode `mouseDrag` to start an
+external file drag - but a TableListBox never receives a drag that starts
+on one of its ROWS. JUCE's row components handle `mouseDrag` themselves
+and start an *internal* drag from
+`ListBoxModel::getDragSourceDescription` (see `RowComponent::mouseDrag`
+in `juce_ListBox.cpp`); the override only ever fired on the empty space
+below the last row. Fixed by listening on the table AND its children
+(`addMouseListener(table, true)`) and starting
+`performExternalDragDropOfFiles` from there. `LibraryFolderTree` does the
+same, so the tree drags out too. It stays an OS file drag because the two
+windows are separate desktop windows, which JUCE's own drag-and-drop
+can't span.
+
+**Preview** (`MasterEngine::startPreview`) is summed into the LOCAL
+OUTPUT ONLY, after the Discord send and outside the local-monitoring
+switch: the room never hears an audition, the spectrum display keeps
+showing what Discord actually gets, and a preview is audible even with
+Monitor off (which is the default while Discord is connected - obeying it
+would make preview silent exactly when it's wanted). The playlist pauses
+while a preview plays, and the app remembers whether IT paused it, so a
+playlist the user had already paused doesn't start playing when a preview
+ends. `AudioTransportSource` broadcasts a change when the stream
+finishes, which is how the end of a preview is noticed without polling.
+
+**The tag editor** writes through **TagLib** (vcpkg, dual LGPL-2.1 /
+MPL-1.1, linked as a DLL and unmodified - see
+docs/THIRD_PARTY_LICENSES.md, which now has a section on it as the one
+copyleft dependency).
+
+- `TagEditor::write` **never edits in place**: copy, tag the copy,
+  re-read it to prove it still opens, then swap it in with
+  `juce::TemporaryFile`. A failure anywhere leaves the original
+  untouched. The cost is a file copy per save, which is nothing next to
+  corrupting an album nobody has a second copy of.
+- **A file the player has loaded can't be replaced** (Windows holds it
+  open), so the app reports that and asks for Stop. A file being
+  PREVIEWED is stopped automatically, because that one we own.
+- **`TrackMetadataStore` now reads through TagLib first**, with JUCE and
+  the Windows property store as fallbacks. Two readers would mean the
+  lists and the editor disagreeing the moment someone saved a change.
+  Verified against the real library: 56/56 MP3s still read.
+- Multi-track editing: a field only gets written if the user actually
+  edited it, which is what `TagField`'s leave/set/clear is for. Fields
+  that differ across the selection show `<keep>`.
+- The headless suite covers the write path on copies of REAL files and,
+  most importantly, **decodes each file before and after tagging and
+  compares every sample**. MP3 and FLAC both pass.
+
+### Don't drive the UI with synthetic input while the user is at the machine
+
+The launch test for this drop injected mouse clicks and keystrokes to
+open a right-click menu. A screen capture showed why nothing was being
+found: **the user was playing a game full-screen, and the clicks were
+landing in it.** Synthetic input goes to whatever has focus, not to the
+app you meant.
+
+So: before any test that moves the cursor or sends keys, check whether
+the user is actually using the machine, and prefer tests that need no
+input at all (headless suites, or PrintWindow screenshots of a window
+that is simply open). `PrintWindow` also returned black frames for an
+occluded window in this session - JUCE 8 renders with Direct2D - so a
+capture that comes back empty is a reason to stop and look, not to
+retry.
+
 ### User-made skins (beta.20)
 
 Colours, fonts, two metrics and the logo now come from a file a user can

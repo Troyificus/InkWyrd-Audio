@@ -51,7 +51,14 @@ public:
                    // AppSettings here, so the headless tests that build
                    // this panel never touch the real settings file.
                    bool startInFolderView = false,
-                   std::function<void(bool)> onTrackViewChanged = {});
+                   std::function<void(bool)> onTrackViewChanged = {},
+                   // Audition a track locally. The app owns the policy -
+                   // pausing the playlist and resuming afterwards - this
+                   // panel only asks.
+                   std::function<void(const juce::File&)> onPreviewTrack = {},
+                   std::function<void()> onStopPreview = {},
+                   // Open the tag editor on these tracks.
+                   std::function<void(const juce::Array<juce::File>&)> onEditTags = {});
 
     // Defined in the .cpp: the ListBoxModels below are forward-declared
     // here, and destroying a unique_ptr needs the complete type.
@@ -59,6 +66,11 @@ public:
 
     void resized() override;
     void paintOverChildren(juce::Graphics& g) override;
+
+    // Starts the drag of selected tracks onto the Playlist window. Fired
+    // for the track table's rows because this panel listens on the table
+    // and its children - see the .cpp for why the table can't do it.
+    void mouseDrag(const juce::MouseEvent& e) override;
 
     // juce::FileDragAndDropTarget
     bool isInterestedInFileDrag(const juce::StringArray& files) override;
@@ -79,6 +91,10 @@ public:
     // background tag scan fills in rows that are already on screen.
     void repaintTrackList();
 
+    // Which track is being previewed, {} for none. Drives the button and
+    // the caption; the app is the one that knows.
+    void setPreviewFile(const juce::File& file);
+
 private:
     class PlaylistListModel;
     class LibraryTrackTableModel;
@@ -88,6 +104,13 @@ private:
     void selectPlaylist(int row);
     void activateSelected();
     void refreshLibraryTracks();
+    void togglePreview();
+
+    // The right-click menu for tracks, shared by the table and the
+    // folder tree. rowForVolume is -1 when there is no row to anchor the
+    // volume callout to (the tree), which drops that one item.
+    void showTracksContextMenu(const juce::Array<juce::File>& tracks, int rowForVolume);
+    void updateTrackCaption();
     void sortLibraryTracks();
     void setFolderView(bool shouldShowFolders, bool notify);
     void updateButtonEnablement();
@@ -160,9 +183,19 @@ private:
     juce::TextButton addFilesButton { "Add files..." };
     juce::TextButton addFolderButton { "Add folder..." };
     juce::TextButton addToPlaylistButton { "Add to playlist" };
+    juce::TextButton previewButton { "Preview" };
     juce::TextButton removeFromLibraryButton { "Remove" };
+
+    std::function<void(const juce::File&)> onPreviewTrack;
+    std::function<void()> onStopPreview;
+    std::function<void(const juce::Array<juce::File>&)> onEditTags;
+    juce::File previewFile;
 
     std::unique_ptr<juce::FileChooser> activeChooser;
 
     bool dragActive = false;
+
+    // An OS drag runs its own modal loop; without this a second drag can
+    // start from inside the first one's event.
+    bool dragInProgress = false;
 };

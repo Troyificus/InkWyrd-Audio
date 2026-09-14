@@ -23,7 +23,9 @@ public:
                     PlaylistLibrary& library,
                     PlaylistEngine& playlist,
                     std::function<void(const juce::Uuid&)> onPlaylistEdited,
-                    std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack);
+                    std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack,
+                    std::function<void(const juce::File&)> onPreviewTrack = {},
+                    std::function<void(const juce::Array<juce::File>&)> onEditTags = {});
 
     PlaylistTrackListComponent& getTrackList() { return *trackList; }
 

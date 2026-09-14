@@ -2,9 +2,10 @@
 
 Every dependency below is permissive (no copyleft, no royalty, no
 redistribution restriction that conflicts with closed-source or
-donation-supported distribution). This list matches
-`docs/design-brief.md` section 10, expanded with what's actually been
-integrated since.
+donation-supported distribution) **except TagLib**, which is weak
+copyleft and has its own section below - read it before changing how
+that one is linked. This list matches `docs/design-brief.md` section 10,
+expanded with what's actually been integrated since.
 
 | Component | License | Used for |
 |---|---|---|
@@ -18,10 +19,38 @@ integrated since.
 | [Cisco mlspp](https://github.com/cisco/mlspp) (bundled inside libdave) | BSD-2-Clause | MLS protocol implementation, underlies DAVE |
 | [BoringSSL](https://boringssl.googlesource.com/boringssl/) (bundled inside libdave) | OpenSSL-style / ISC (mixed, all permissive) | Cryptography, underlies DAVE |
 | [nlohmann/json](https://github.com/nlohmann/json) (bundled inside libdave) | MIT | JSON parsing, underlies DAVE |
+| [TagLib](https://taglib.org/) | LGPL-2.1-only **OR** MPL-1.1 (see note below) | Reading and WRITING track tags, including artwork |
 | Windows Media Foundation | Part of Windows itself | AAC/M4A and WMA decoding (OS-provided, no bundled codec) |
 | WASAPI | Part of Windows itself | Audio device I/O (chosen over ASIO - see below) |
 | [Elgato Stream Deck SDK](https://docs.elgato.com/streamdeck) (`@elgato/streamdeck`, `@elgato/cli`) | Standard free plugin-distribution terms | Stream Deck integration |
 | [ws](https://github.com/websockets/ws) | MIT | Stream Deck plugin's connection to the app's control server |
+
+## TagLib - the one copyleft dependency
+
+TagLib is dual-licensed **LGPL-2.1-only OR MPL-1.1**. Either is workable
+here, and the way it is used satisfies both:
+
+- **It is used UNMODIFIED**, straight from vcpkg (`taglib` 2.3.1). No
+  patches, no vendored copy in this repo.
+- **It is linked as a DLL** (`tag.dll`, from vcpkg's `x64-windows`
+  dynamic triplet), which is the route LGPL-2.1 allows for software that
+  isn't itself LGPL. Under MPL-1.1, the file-level copyleft covers
+  TagLib's own source files only, which nothing here touches.
+- **The obligation** is to keep shipping the licence text (this file, and
+  the vcpkg copy installed beside the binary), and to say where the
+  source is: https://taglib.org/ and
+  https://github.com/taglib/taglib.
+
+**Before switching to a static build of TagLib**, revisit this: static
+linking removes the LGPL route, leaving only MPL-1.1, which is defensible
+but a different argument. The dynamic link is deliberate, not incidental.
+
+Why it's worth the one exception: nothing permissive covers reading AND
+writing tags across MP3, FLAC, Ogg, MP4, WMA, WAV and AIFF. The Windows
+property system, which this app used before, can read tags but is no use
+for writing them, and hand-rolling an ID3v2 writer to avoid a licence
+note would be a worse trade - a bug in that code corrupts someone's
+music.
 
 ## Explicitly avoided
 

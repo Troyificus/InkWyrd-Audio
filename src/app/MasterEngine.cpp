@@ -1,10 +1,45 @@
 #include "MasterEngine.h"
 
-MasterEngine::MasterEngine(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse, PluginChain& voiceChainToUse)
-    : playlist(playlistToUse), soundboard(soundboardToUse), voiceChain(voiceChainToUse)
+MasterEngine::MasterEngine(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse,
+                            PluginChain& voiceChainToUse, juce::AudioFormatManager& formatManagerToUse)
+    : playlist(playlistToUse), soundboard(soundboardToUse), voiceChain(voiceChainToUse),
+      formatManager(formatManagerToUse)
 {
     musicMixer.addInputSource(&playlist, false);
     musicMixer.addInputSource(&soundboard, false);
+}
+
+bool MasterEngine::startPreview(const juce::File& file, float linearGain)
+{
+    stopPreview();
+
+    std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
+    if (reader == nullptr)
+        return false;
+
+    previewReader = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
+    previewTransport.setSource(previewReader.get(), 0, nullptr,
+                                previewReader->getAudioFormatReader()->sampleRate);
+    previewTransport.setGain(linearGain);
+    previewFile = file;
+    previewActive.store(true);
+    previewTransport.start();
+
+    return true;
+}
+
+void MasterEngine::stopPreview()
+{
+    previewTransport.stop();
+
+    // Ordered: the transport lets go of the source before the source is
+    // destroyed, and destroying it closes the file - which is what lets
+    // the tag editor write to a track that was just previewed.
+    previewTransport.setSource(nullptr);
+    previewReader.reset();
+
+    previewActive.store(false);
+    previewFile = juce::File();
 }
 
 void MasterEngine::setDiscordSender(DiscordAudioSender* sender)
@@ -26,6 +61,7 @@ void MasterEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
     auto blockSize = device->getCurrentBufferSizeSamples();
 
     musicMixer.prepareToPlay(blockSize, currentSampleRate);
+    previewTransport.prepareToPlay(blockSize, currentSampleRate);
     noiseSuppressor.prepare(currentSampleRate, blockSize);
     voiceChain.prepareToPlay(currentSampleRate, blockSize);
 
@@ -35,6 +71,8 @@ void MasterEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 
 void MasterEngine::audioDeviceStopped()
 {
+    previewTransport.releaseResources();
+
     musicMixer.releaseResources();
     voiceChain.releaseResources();
 }
@@ -104,6 +142,21 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
             juce::FloatVectorOperations::copy(outputChannelData[ch], masterBuffer.getReadPointer(ch), numSamples);
         else
             juce::FloatVectorOperations::clear(outputChannelData[ch], numSamples);
+    }
+
+    // 4b. The preview, local output ONLY: after the monitor copy above so
+    // it is heard even with Monitor off, and before the Discord send
+    // below so it never leaves this machine.
+    if (previewActive.load())
+    {
+        previewBuffer.setSize(2, numSamples, false, false, true);
+        juce::AudioSourceChannelInfo previewInfo(&previewBuffer, 0, numSamples);
+        previewTransport.getNextAudioBlock(previewInfo);
+
+        for (int ch = 0; ch < juce::jmin(2, numOutputChannels); ++ch)
+            if (outputChannelData[ch] != nullptr)
+                juce::FloatVectorOperations::add(outputChannelData[ch],
+                                                  previewBuffer.getReadPointer(ch), numSamples);
     }
 
     // Tapped here, after the fader and before the send, so the display

@@ -27,6 +27,7 @@
 #include "PlaylistPanel.h"
 #include "LibraryFolderTree.h"
 #include "SkinLoader.h"
+#include "TagEditor.h"
 #include "PlaylistTrackListComponent.h"
 #include "TrackLibrary.h"
 #include "TrackMetadataStore.h"
@@ -1461,6 +1462,174 @@ namespace
     // tags out of the formats real libraries are made of. This one
     // reports coverage per format and fails only if it can read NOTHING
     // - a library of genuinely untagged files is a legitimate result.
+    // Decodes the first stretch of a file so a before/after comparison
+    // can prove that tagging didn't touch a single audio sample. This is
+    // the check that matters: a tagger that corrupts files is worse than
+    // no tagger at all.
+    bool decodeToBuffer(const juce::File& file, juce::AudioFormatManager& formats,
+                         juce::AudioBuffer<float>& destination)
+    {
+        std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+        if (reader == nullptr)
+            return false;
+
+        auto samples = (int) juce::jmin((juce::int64) (reader->sampleRate * 20.0),
+                                         reader->lengthInSamples);
+        if (samples <= 0)
+            return false;
+
+        destination.setSize((int) reader->numChannels, samples);
+        reader->read(&destination, 0, samples, 0, true, true);
+        return true;
+    }
+
+    juce::MemoryBlock makeTestPng()
+    {
+        juce::Image image(juce::Image::RGB, 8, 8, true);
+        juce::Graphics g(image);
+        g.fillAll(juce::Colours::rebeccapurple);
+
+        juce::MemoryBlock bytes;
+        juce::MemoryOutputStream stream(bytes, false);
+        juce::PNGImageFormat().writeImageToStream(image, stream);
+        stream.flush();
+
+        return bytes;
+    }
+
+    // Writing tags means rewriting someone's music files, so these run
+    // against real files of the formats people actually have - copied
+    // into a scratch folder first. The user's own library is never
+    // written to.
+    void runTagWriteChecks(const juce::Array<juce::File>& tracks, juce::AudioFormatManager& formats)
+    {
+        auto scratch = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                            .getChildFile("inkwyrd-tag-write-test");
+        scratch.deleteRecursively();
+        scratch.createDirectory();
+
+        juce::File sourceMp3, sourceFlac;
+        for (const auto& file : tracks)
+        {
+            if (! file.existsAsFile())
+                continue;
+
+            auto extension = file.getFileExtension().toLowerCase();
+            if (sourceMp3 == juce::File() && extension == ".mp3")
+                sourceMp3 = file;
+            if (sourceFlac == juce::File() && extension == ".flac")
+                sourceFlac = file;
+        }
+
+        juce::Array<juce::File> sources;
+        if (sourceMp3 != juce::File()) sources.add(sourceMp3);
+        if (sourceFlac != juce::File()) sources.add(sourceFlac);
+
+        check(! sources.isEmpty(), "found a real file to test tag WRITING against");
+
+        for (const auto& source : sources)
+        {
+            auto label = source.getFileExtension().toLowerCase();
+            auto copy = scratch.getChildFile("subject" + label);
+            source.copyFileTo(copy);
+
+            juce::AudioBuffer<float> before, after;
+            auto decodedBefore = decodeToBuffer(copy, formats, before);
+            check(decodedBefore, label + ": the copy decodes before tagging");
+
+            inkwyrd::TagChanges changes;
+            changes.title = inkwyrd::TagField::setTo("Inkwyrd Test Title");
+            changes.artist = inkwyrd::TagField::setTo("Inkwyrd Test Artist");
+            changes.album = inkwyrd::TagField::setTo("Inkwyrd Test Album");
+            changes.albumArtist = inkwyrd::TagField::setTo("Inkwyrd Album Artist");
+            changes.genre = inkwyrd::TagField::setTo("Ambient");
+            changes.comment = inkwyrd::TagField::setTo("written by the self-test");
+            changes.composer = inkwyrd::TagField::setTo("A Composer");
+            changes.publisher = inkwyrd::TagField::setTo("A Label");
+            changes.year = inkwyrd::TagField::setTo("1979");
+            changes.trackNumber = inkwyrd::TagField::setTo("3");
+            changes.trackTotal = inkwyrd::TagField::setTo("12");
+            changes.discNumber = inkwyrd::TagField::setTo("1");
+            changes.discTotal = inkwyrd::TagField::setTo("2");
+            changes.bpm = inkwyrd::TagField::setTo("120");
+            changes.artworkAction = inkwyrd::TagChanges::ArtworkAction::set;
+            changes.artwork = makeTestPng();
+            changes.artworkMimeType = "image/png";
+
+            juce::String error;
+            check(inkwyrd::TagEditor::write(copy, changes, error),
+                   label + ": every field writes (" + error + ")");
+
+            auto written = inkwyrd::TagEditor::read(copy);
+            check(written.title == "Inkwyrd Test Title" && written.artist == "Inkwyrd Test Artist"
+                   && written.album == "Inkwyrd Test Album" && written.albumArtist == "Inkwyrd Album Artist"
+                   && written.genre == "Ambient" && written.composer == "A Composer"
+                   && written.publisher == "A Label" && written.year == "1979"
+                   && written.bpm == "120",
+                   label + ": every field reads back as written");
+            check(written.trackNumber == "3" && written.trackTotal == "12"
+                   && written.discNumber == "1" && written.discTotal == "2",
+                   label + ": track and disc keep their number AND total");
+            check(written.artwork.getSize() == changes.artwork.getSize(),
+                   label + ": artwork round-trips");
+
+            auto decodedAfter = decodeToBuffer(copy, formats, after);
+            check(decodedAfter, label + ": the file still decodes after tagging");
+
+            auto sameAudio = decodedBefore && decodedAfter
+                              && before.getNumChannels() == after.getNumChannels()
+                              && before.getNumSamples() == after.getNumSamples();
+
+            if (sameAudio)
+                for (int channel = 0; channel < before.getNumChannels() && sameAudio; ++channel)
+                    for (int i = 0; i < before.getNumSamples(); ++i)
+                        if (before.getSample(channel, i) != after.getSample(channel, i))
+                        {
+                            sameAudio = false;
+                            break;
+                        }
+
+            check(sameAudio, label + ": TAGGING CHANGED NO AUDIO - every sample identical");
+
+            // One field at a time: the rest of the tags must survive
+            // untouched, which is what "leave" has to mean.
+            inkwyrd::TagChanges justTheTitle;
+            justTheTitle.title = inkwyrd::TagField::setTo("Second Pass");
+            check(inkwyrd::TagEditor::write(copy, justTheTitle, error),
+                   label + ": a single-field edit writes");
+
+            auto second = inkwyrd::TagEditor::read(copy);
+            check(second.title == "Second Pass", label + ": the edited field changed");
+            check(second.artist == "Inkwyrd Test Artist" && second.album == "Inkwyrd Test Album"
+                   && second.trackTotal == "12",
+                   label + ": and every field left alone is untouched");
+
+            inkwyrd::TagChanges clearComment;
+            clearComment.comment = inkwyrd::TagField::cleared();
+            clearComment.artworkAction = inkwyrd::TagChanges::ArtworkAction::clear;
+            check(inkwyrd::TagEditor::write(copy, clearComment, error),
+                   label + ": clearing writes");
+
+            auto cleared = inkwyrd::TagEditor::read(copy);
+            check(cleared.comment.isEmpty(), label + ": a cleared field is really gone");
+            check(cleared.artwork.getSize() == 0, label + ": cleared artwork is really gone");
+            check(cleared.title == "Second Pass", label + ": clearing one field leaves the others");
+        }
+
+        // A file nothing can tag is refused with a message rather than
+        // half-written or silently ignored.
+        auto notAudio = scratch.getChildFile("notes.txt");
+        notAudio.replaceWithText("not audio");
+        inkwyrd::TagChanges anything;
+        anything.title = inkwyrd::TagField::setTo("nope");
+        juce::String refusal;
+        check(! inkwyrd::TagEditor::write(notAudio, anything, refusal) && refusal.isNotEmpty(),
+               "a file that can't carry tags is refused, with a reason");
+        check(notAudio.loadFileAsString() == "not audio", "and that file is left exactly as it was");
+
+        scratch.deleteRecursively();
+    }
+
     int runTagTest()
     {
         TrackLibrary library;
@@ -1530,6 +1699,8 @@ namespace
         if (mp3 != byExtension.end() && mp3->second.second > 0)
             check(mp3->second.first > 0,
                    "read tags from MP3s, which JUCE's reader cannot do on its own");
+
+        runTagWriteChecks(tracks, formats);
 
         std::cout << (failures == 0 ? "TAG-TEST PASSED" : "TAG-TEST FAILED")
                    << " (" << failures << " failure(s))" << std::endl;

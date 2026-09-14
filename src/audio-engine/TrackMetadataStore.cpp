@@ -1,6 +1,7 @@
 #include "TrackMetadataStore.h"
 
 #include "MediaFoundationAudioFormat.h"
+#include "TagEditor.h"
 #include "Mp3AudioFormat.h"
 
 #if JUCE_WINDOWS
@@ -280,8 +281,26 @@ TrackMetadata TrackMetadataStore::readFromFile(const juce::File& file,
 {
     TrackMetadata metadata;
 
-    // In-process first - no COM, and it's the only path that works for
-    // formats Windows has no handler for.
+    // TagLib FIRST, because it is what the tag editor WRITES with. Two
+    // different readers would mean the lists and the editor disagreeing
+    // about a file the moment someone saved a change to it - and it
+    // needs no COM, unlike the property store below.
+    auto tags = inkwyrd::TagEditor::read(file);
+    if (tags.ok && (tags.title.isNotEmpty() || tags.artist.isNotEmpty() || tags.album.isNotEmpty()))
+    {
+        metadata.title       = tags.title;
+        metadata.artist      = tags.artist;
+        metadata.album       = tags.album;
+        metadata.albumArtist = tags.albumArtist;
+        metadata.genre       = tags.genre;
+        metadata.year        = tags.year.getIntValue();
+        metadata.trackNumber = tags.trackNumber.getIntValue();
+        return metadata;
+    }
+
+    // Then JUCE's own readers, then Windows. Both stay as fallbacks for
+    // anything TagLib declines to open - dropping them would trade a
+    // working path for a tidier one.
     if (readWithJuce(file, formatManager, metadata))
         return metadata;
 

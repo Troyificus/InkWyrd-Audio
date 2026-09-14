@@ -185,6 +185,21 @@ public:
             owner.onSelectionChanged();
     }
 
+    void itemClicked(const juce::MouseEvent& e) override
+    {
+        if (! e.mods.isPopupMenu())
+            return;
+
+        // Right-clicking a row that isn't selected acts on THAT row, the
+        // way every file manager behaves - without this the menu would
+        // quietly apply to whatever was selected before.
+        if (! isSelected())
+            setSelected(true, true);
+
+        if (owner.onContextMenuRequested != nullptr)
+            owner.onContextMenuRequested();
+    }
+
 protected:
     LibraryFolderTree& owner;
 };
@@ -329,6 +344,10 @@ LibraryFolderTree::LibraryFolderTree(TrackMetadataStore& trackMetadataToUse, Pla
     tree.setRootItemVisible(false);
     tree.setMultiSelectEnabled(true);
     tree.setIndentSize(14);
+
+    // true: the item components' own drags too, which is the only way to
+    // see a drag that starts on a row - see mouseDrag().
+    tree.addMouseListener(this, true);
     addAndMakeVisible(tree);
 
     setTracks({});
@@ -344,6 +363,33 @@ LibraryFolderTree::~LibraryFolderTree()
 void LibraryFolderTree::resized()
 {
     tree.setBounds(getLocalBounds());
+}
+
+void LibraryFolderTree::mouseDrag(const juce::MouseEvent& e)
+{
+    // The same reason the Library table's drag lives in PlaylistPanel: a
+    // TreeView's item components handle their own drags and start
+    // JUCE's INTERNAL one, which can't cross to another desktop window.
+    // Dragging a FOLDER drags everything under it, matching what
+    // selecting a folder already means everywhere else here.
+    if (dragInProgress || e.getDistanceFromDragStart() <= 8)
+        return;
+
+    juce::StringArray paths;
+    for (const auto& file : getSelectedTracks())
+        paths.add(file.getFullPathName());
+
+    if (paths.isEmpty())
+        return;
+
+    dragInProgress = true;
+    juce::DragAndDropContainer::performExternalDragDropOfFiles(
+        paths, false, &tree,
+        [safeThis = juce::Component::SafePointer<LibraryFolderTree>(this)]
+        {
+            if (safeThis != nullptr)
+                safeThis->dragInProgress = false;
+        });
 }
 
 void LibraryFolderTree::setTracks(const juce::Array<juce::File>& tracks)

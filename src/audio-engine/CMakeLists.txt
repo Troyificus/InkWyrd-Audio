@@ -6,6 +6,7 @@ add_library(AudioEngine STATIC
     TrackSettingsStore.cpp
     TrackLibrary.cpp
     TrackMetadataStore.cpp
+    TagEditor.cpp
     NoiseSuppressor.cpp
     SpectrumTap.cpp
     Mp3AudioFormat.cpp
@@ -17,6 +18,7 @@ add_library(AudioEngine STATIC
     TrackSettingsStore.h
     TrackLibrary.h
     TrackMetadataStore.h
+    TagEditor.h
     NoiseSuppressor.h
     SpectrumTap.h
     Mp3AudioFormat.h
@@ -37,7 +39,15 @@ target_compile_definitions(AudioEngine PUBLIC
     JUCE_WASAPI=1
 )
 
+# TagLib reads AND writes tags for every format this app plays, which is
+# what makes the tag editor possible - the Windows property system can
+# read them but is no use for writing. Dual-licensed LGPL-2.1 / MPL-1.1
+# and linked as a DLL from vcpkg's dynamic triplet; see
+# docs/THIRD_PARTY_LICENSES.md.
+find_package(taglib CONFIG REQUIRED)
+
 target_link_libraries(AudioEngine PUBLIC
+    TagLib::tag
     juce::juce_core
     juce::juce_events
     juce::juce_audio_basics

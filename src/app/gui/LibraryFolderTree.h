@@ -63,6 +63,11 @@ public:
 
     void resized() override;
 
+    // Drags the selection out as an OS file drag, for dropping onto the
+    // Playlist window. Fired for the tree's own item components because
+    // this listens on the TreeView and its children - see the .cpp.
+    void mouseDrag(const juce::MouseEvent& e) override;
+
     // Rebuilds from this set of tracks, keeping which folders were open
     // and which tracks were selected.
     void setTracks(const juce::Array<juce::File>& tracks);
@@ -76,6 +81,10 @@ public:
     juce::Array<juce::File> getSelectedTracks() const;
 
     std::function<void()> onSelectionChanged;
+
+    // A right-click on a row, once that row is selected. The panel shows
+    // the same menu the table does.
+    std::function<void()> onContextMenuRequested;
     std::function<void()> onTracksDoubleClicked;
 
 private:
@@ -91,6 +100,11 @@ private:
     PlaylistEngine& engine;
 
     juce::TreeView tree;
+
+    // An OS drag runs its own modal loop, so a second must not start
+    // from inside the first one's event.
+    bool dragInProgress = false;
+
     std::unique_ptr<inkwyrd::FolderNode> model;
     std::unique_ptr<FolderItem> rootItem;
 

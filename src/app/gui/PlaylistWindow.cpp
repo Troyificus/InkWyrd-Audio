@@ -16,12 +16,16 @@ PlaylistWindow::PlaylistWindow(AppSettings& settingsToUse,
                                 PlaylistLibrary& library,
                                 PlaylistEngine& playlist,
                                 std::function<void(const juce::Uuid&)> onPlaylistEdited,
-                                std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack)
+                                std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrack,
+                                std::function<void(const juce::File&)> onPreviewTrack,
+                                std::function<void(const juce::Array<juce::File>&)> onEditTags)
     : DetachableWindow("Playlist", "playlist", "Playlists", settingsToUse, defaultPlaylistBounds())
 {
     auto* component = new PlaylistTrackListComponent(library, trackMetadata, playlist,
                                                       std::move(onPlaylistEdited),
-                                                      std::move(onPlayTrack));
+                                                      std::move(onPlayTrack),
+                                                      std::move(onPreviewTrack),
+                                                      std::move(onEditTags));
     component->setSize(320, 480);
     trackList = component;
 

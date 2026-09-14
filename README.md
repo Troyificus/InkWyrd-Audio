@@ -253,7 +253,17 @@ show up automatically) or takes a one-time copy of what's in it. You can
 also **drag files and folders straight in from Windows Explorer**.
 
 To get tracks into a playlist, select them here and click
-**Add to playlist**, or **drag them onto the Playlist window**.
+**Add to playlist**, or **drag them onto the Playlist window** - from
+either view, and dragging a folder in the Folders view takes everything
+in it.
+
+**Preview** auditions the selected track. Only you hear it: it never
+reaches Discord, and it plays even with Monitor off, which is the point.
+The playlist pauses while a preview plays and picks up again when it
+finishes or you press Stop.
+
+**Right-click a track** for Preview, Edit tags..., Add to playlist,
+Volume and fade..., and Remove from library.
 
 **Remove** takes a track out of the library. It does *not* touch any
 playlist already using it - a track can disappear from All Tracks and
@@ -289,6 +299,27 @@ and **Remove from playlist** (or the Delete key) takes one out.
 Adding tracks to the playlist you're currently listening to never
 interrupts it: the track playing carries on, and the new tracks join the
 running order without it jumping back to the top.
+
+### Editing tags
+
+**Right-click a track in the Library or the Playlist window and choose
+Edit tags...** to change what the file itself says it is: title, artist,
+album, album artist, year, genre, track and disc numbers, BPM, comment,
+composer and publisher, plus the cover art. Changes are written into the
+file, so every other music program sees them too.
+
+**Select several tracks first** to edit them together. Fields that differ
+across the selection show `<keep>` and are left alone unless you type in
+them - so you can fix an album's artist without flattening thirteen
+different titles. Only the fields you actually edit are written.
+
+Your files are handled carefully: Inkwyrd never edits a file in place. It
+copies it, tags the copy, checks the copy still reads, and only then puts
+it in place of the original. If anything fails, the original is untouched.
+
+A track that's **loaded in the player can't be tagged** - Windows won't
+let a file being played be replaced. Press Stop and save again. A track
+being previewed is fine: the preview stops itself.
 
 ### The Soundboard window
 

@@ -19,6 +19,7 @@
 #include "PlaylistLibrary.h"
 #include "PlaylistWindow.h"
 #include "SoundboardWindow.h"
+#include "TagEditorWindow.h"
 #include "VoiceFxWindow.h"
 #include "TrackLibrary.h"
 #include "TrackSettingsStore.h"
@@ -38,7 +39,8 @@
 // own real message loop for a GUI app, so PlaylistEngine's juce::Timer-
 // based crossfade (message-thread-only, see PlaylistEngine.h) works
 // automatically, no special driving required.
-class InkwyrdAudioApplication : public juce::JUCEApplication
+class InkwyrdAudioApplication : public juce::JUCEApplication,
+                                 private juce::ChangeListener
 {
 public:
     const juce::String getApplicationName() override { return JUCE_APPLICATION_NAME_STRING; }
@@ -104,6 +106,34 @@ private:
     // check per file.
     void rescanTrackMetadata();
 
+    // Auditioning a track from the Library: local output only, and the
+    // playlist pauses while it plays. See MasterEngine::startPreview.
+    void startPreview(const juce::File& file);
+    void stopPreview();
+
+    // The tag editor, opened from either window's right-click menu. One
+    // at a time: a second window editing the same file would be two
+    // truths about one set of tags.
+    void openTagEditor(const juce::Array<juce::File>& files);
+
+    // Run immediately before any file is written. Stops a preview of
+    // those files - a file open for reading can't be replaced - and
+    // returns a message if one of them is loaded in the player, which
+    // only the user can clear.
+    juce::String prepareForTagWrite(const juce::Array<juce::File>& files);
+
+    // Re-read what was just written, so the lists show it at once.
+    void handleTagsSaved(const juce::Array<juce::File>& files);
+
+    // The preview transport telling us it started or stopped - including
+    // reaching the end of the file by itself, which is the case a poll
+    // would have had to catch.
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+
+    // Whether WE paused the playlist for a preview. A playlist the user
+    // had already paused must not start playing when a preview ends.
+    bool previewPausedPlaylist = false;
+
     // Applies a skin by folder name ({} = the built-in look) and returns
     // what to tell the user: empty when it loaded cleanly, otherwise the
     // warnings, or why it couldn't be used.
@@ -140,7 +170,7 @@ private:
     SoundboardEngine soundboard { formatManager };
     PluginScanner scanner;
     PluginChain voiceChain;
-    MasterEngine masterEngine { playlist, soundboard, voiceChain };
+    MasterEngine masterEngine { playlist, soundboard, voiceChain, formatManager };
     ControlServer controlServer { playlist, soundboard, masterEngine };
     juce::AudioDeviceManager deviceManager;
 
@@ -163,6 +193,8 @@ private:
     // a FILE not an index - shuffle reshuffles the order on wrap, so a
     // saved index would point at an unrelated track. Session-only for now.
     std::map<juce::String, juce::File> lastPlayedByPlaylistId;
+
+    std::unique_ptr<TagEditorWindow> tagEditorWindow;
 
     DiscordConnector discordConnector;
     std::unique_ptr<DiscordAudioSender> sender;
