@@ -188,6 +188,10 @@ Library and Playlist windows show. A file with no tags falls back to its
 filename: `Artist - Title` splits into both, and anything else shows the
 whole name as the title.
 
+**Keyboard shortcuts** work whenever the Player window is focused:
+**Space** play/pause, **S** stop, **M** mic on/off, **Right arrow** skip,
+**Up/Down** master volume.
+
 **The transport row:** **Pause** (keeps your place), **Stop** (silences
 everything and starts the list from the top next time), **Fade out**
 (rides the music down to silence and then stops. Useful for ending a scene, for exmaple),
@@ -257,13 +261,15 @@ To get tracks into a playlist, select them here and click
 either view, and dragging a folder in the Folders view takes everything
 in it.
 
-**Preview** auditions the selected track. Only you hear it: it never
-reaches Discord, and it plays even with Monitor off, which is the point.
-The playlist pauses while a preview plays and picks up again when it
-finishes or you press Stop.
+**To preview a track**, select it: a small play symbol appears at the
+left of its row. Click that to audition it, and the symbol becomes a stop
+button inside a pulsing ring so it's obvious what's playing. Click it
+again to stop. Only you hear a preview - it never reaches Discord, and it
+plays even with Monitor off. The playlist pauses while it runs and picks
+up again afterwards.
 
-**Right-click a track** for Preview, Edit tags..., Add to playlist,
-Volume and fade..., and Remove from library.
+**Right-click a track** for Edit tags..., Add to playlist, Volume and
+fade..., and Remove from library.
 
 **Remove** takes a track out of the library. It does *not* touch any
 playlist already using it - a track can disappear from All Tracks and

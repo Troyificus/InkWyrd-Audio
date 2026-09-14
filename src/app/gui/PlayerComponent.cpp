@@ -187,6 +187,10 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     addAndMakeVisible(settingsButton);
     settingsButton.onClick = [onSettingsClickedToUse] { if (onSettingsClickedToUse) onSettingsClickedToUse(); };
 
+    // So the keyboard shortcuts work as soon as the window is focused,
+    // without having to click something first.
+    setWantsKeyboardFocus(true);
+
     startTimer(500);
 
     // The label colours this component owns. Also re-applied on a
@@ -198,6 +202,46 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     // Tall enough for every row PLUS the warning banner and monitor hint
     // both showing at once - the worst case, not just the common one.
     setSize(640, 596);
+}
+
+bool PlayerComponent::keyPressed(const juce::KeyPress& key)
+{
+    // Deliberately the same set every media player and video site uses,
+    // rather than anything clever nobody would guess.
+    if (key == juce::KeyPress::spaceKey)
+    {
+        playButton.triggerClick();
+        return true;
+    }
+
+    if (key.getTextCharacter() == 's' || key.getTextCharacter() == 'S')
+    {
+        stopButton.triggerClick();
+        return true;
+    }
+
+    if (key.getTextCharacter() == 'm' || key.getTextCharacter() == 'M')
+    {
+        muteButton.triggerClick();
+        return true;
+    }
+
+    if (key == juce::KeyPress::rightKey)
+    {
+        skipButton.triggerClick();
+        return true;
+    }
+
+    // Volume in steps of 5, which is a usable nudge on a 0-100 fader.
+    if (key == juce::KeyPress::upKey || key == juce::KeyPress::downKey)
+    {
+        auto step = key == juce::KeyPress::upKey ? 5.0 : -5.0;
+        masterVolumeSlider.setValue(masterVolumeSlider.getValue() + step,
+                                     juce::sendNotificationSync);
+        return true;
+    }
+
+    return false;
 }
 
 void PlayerComponent::setDiscordStatus(const juce::String& text)

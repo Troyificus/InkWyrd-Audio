@@ -78,7 +78,18 @@ public:
     // again (slightly later) via the bot's stream, which sounds like a
     // delay/echo. Left on when there's no Discord connection, so the
     // app is still usable/testable standalone. Safe from any thread.
-    void setLocalMonitoring(bool shouldMonitor) { localMonitoring.store(shouldMonitor); }
+    void setLocalMonitoring(bool shouldMonitor)
+    {
+        // exchange, like the mic: fires on a real change, not on every
+        // click of a button that was already in that state.
+        if (localMonitoring.exchange(shouldMonitor) != shouldMonitor && onLocalMonitoringChanged != nullptr)
+            onLocalMonitoringChanged(shouldMonitor);
+    }
+
+    // Fires when monitoring actually changes, on whatever thread changed
+    // it - the button, the Stream Deck socket, and connecting to Discord
+    // are all real callers. Assigned once at startup.
+    std::function<void(bool)> onLocalMonitoringChanged;
     bool isLocalMonitoring() const { return localMonitoring.load(); }
 
     // The master fader: 0 = silence, 1 = unity. Applied to the finished

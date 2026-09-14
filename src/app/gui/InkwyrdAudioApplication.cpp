@@ -149,7 +149,21 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
         // Inverted deliberately: a LIVE mic here (not muted) is what
         // should mute the user in Discord.
         discordRpc.setSelfMuted(! micMutedNow);
+
+        // Remembered for next launch. Hung off the engine rather than the
+        // button so the Stream Deck's mic toggle is remembered too.
+        settings.setMicMuted(micMutedNow);
+        settings.save();
     };
+
+    masterEngine.onLocalMonitoringChanged = [this](bool monitoring)
+    {
+        settings.setLocalMonitoringEnabled(monitoring);
+        settings.save();
+    };
+
+    // Restore both before anything can be heard.
+    masterEngine.setMicMuted(settings.isMicMuted());
 
     applyDiscordRpcSettings();
 
@@ -647,36 +661,11 @@ void InkwyrdAudioApplication::showSetup()
     // player view has ever been shown this session.
     auto isFirstRun = playerWindow == nullptr && !hasShownPlayer;
 
-    // Hide every window in the Player-side layout before Setup takes
-    // over. They're independent windows now, not children of one
-    // PlayerComponent that Setup's content-swap would delete - "hide" is
-    // all that's needed, nothing is destroyed and nothing dangles.
-    if (playerWindow != nullptr)
-        playerWindow->setVisible(false);
-
-    // Every satellite is user-hideable now, so each one's state has to be
-    // remembered rather than assumed - coming back from Settings must
-    // not reopen a window the user had deliberately closed.
-    if (playlistWindow != nullptr)
-    {
-        playlistWasVisibleBeforeSetup = playlistWindow->isVisible();
-        playlistWindow->setVisible(false);
-    }
-    if (libraryWindow != nullptr)
-    {
-        libraryWasVisibleBeforeSetup = libraryWindow->isVisible();
-        libraryWindow->setVisible(false);
-    }
-    if (voiceFxWindow != nullptr)
-    {
-        voiceFxWasVisibleBeforeSetup = voiceFxWindow->isVisible();
-        voiceFxWindow->setVisible(false);
-    }
-    if (soundboardWindow != nullptr)
-    {
-        soundboardWasVisibleBeforeSetup = soundboardWindow->isVisible();
-        soundboardWindow->setVisible(false);
-    }
+    // The Player-side windows STAY VISIBLE: Settings floats over them.
+    // They used to be hidden, which made the whole app appear to vanish
+    // when you opened Settings. They are independent windows, so there is
+    // nothing to protect against here - Setup's content swap only ever
+    // touched MainWindow's own content.
 
     mainWindow->showSetupView(settings, isFirstRun,
                                [this](SetupComponent::Result result) { completeSetupAndLaunch(result); },
@@ -709,6 +698,11 @@ void InkwyrdAudioApplication::showSetup()
                                },
                                [this](const juce::String& skinName) { return applySkin(skinName); });
     mainWindow->setVisible(true);
+
+    // Above the rest of the app while it's open - it is a settings
+    // window, and hunting for it behind five others would be worse than
+    // the old behaviour of hiding them.
+    mainWindow->setAlwaysOnTop(true);
     mainWindow->toFront(true);
 }
 
@@ -726,6 +720,13 @@ void InkwyrdAudioApplication::saveVoicePlugins()
 
 void InkwyrdAudioApplication::applyDefaultLocalMonitoring()
 {
+    // Whatever it was when the app last closed, defaulting to OFF for
+    // the reasons below. It used to be forced off on every launch, which
+    // meant someone running without a Discord bot had to switch it on
+    // every single session.
+    masterEngine.setLocalMonitoring(settings.isLocalMonitoringEnabled());
+    return;
+
     // ALWAYS off at startup. The host is normally already in the call
     // when they open the app, so playing locally as well means hearing
     // every track twice, slightly offset. Waiting until the connection
@@ -747,6 +748,7 @@ void InkwyrdAudioApplication::showPlayer()
 {
     hasShownPlayer = true;
 
+    mainWindow->setAlwaysOnTop(false);
     mainWindow->setVisible(false);
 
     if (playerWindow == nullptr)
@@ -803,19 +805,11 @@ void InkwyrdAudioApplication::showPlayer()
     }
     else
     {
-        // Returning from Settings. The Player window always comes back -
-        // it's the master, and there'd be no way to reach anything
-        // without it. Every satellite restores to exactly what it was
-        // right before Settings hid it, rather than being forced open.
+        // Returning from Settings. Nothing to restore any more - the
+        // layout stayed on screen the whole time - so this only makes
+        // sure the Player is up and in front.
         playerWindow->setVisible(true);
-        if (playlistWindow != nullptr)
-            playlistWindow->setVisible(playlistWasVisibleBeforeSetup);
-        if (libraryWindow != nullptr)
-            libraryWindow->setVisible(libraryWasVisibleBeforeSetup);
-        if (voiceFxWindow != nullptr)
-            voiceFxWindow->setVisible(voiceFxWasVisibleBeforeSetup);
-        if (soundboardWindow != nullptr)
-            soundboardWindow->setVisible(soundboardWasVisibleBeforeSetup);
+        playerWindow->toFront(true);
     }
 
     // Once, now that every window in the layout exists and has a native
@@ -946,10 +940,14 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
 
     applyDiscordRpcSettings();
 
-    // The Setup screen's music folder now seeds a playlist rather than
-    // being the one and only source. Idempotent: re-saving Settings
-    // without changing the folder must not pile up duplicate playlists.
-    if (result.playlistFolder.isDirectory())
+    // The Setup screen's music folder seeds a playlist ONLY on a first
+    // run, when there are no playlists at all.
+    //
+    // It used to run on every save, which is why going into Settings and
+    // back kept resurrecting a playlist named after that folder - and,
+    // because it activated it too, started PLAYING it. Someone who
+    // deleted that playlist meant to delete it.
+    if (result.playlistFolder.isDirectory() && library.isEmpty())
     {
         Playlist* existing = nullptr;
         for (int i = 0; i < library.getNumPlaylists() && existing == nullptr; ++i)
@@ -964,6 +962,15 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
             existing = &library.createFromLegacyFolder(result.playlistFolder);
 
         activatePlaylist(existing->id);
+    }
+    else if (result.playlistFolder.isDirectory())
+    {
+        // Saving Settings on a running app is not a request to start
+        // playing something. Just make sure the list is up to date.
+        library.loadAll();
+
+        if (libraryWindow != nullptr)
+            libraryWindow->getPanel().refresh();
     }
 
     // Non-destructive: the board is the source of truth now, so changing
@@ -1085,13 +1092,27 @@ void InkwyrdAudioApplication::offerRestart()
         // The app refuses to run twice at once (one audio device, one bot
         // token, one control-server port), so the replacement can't just
         // be started here - it would find this instance still alive and
-        // quit immediately. Hand the relaunch to a detached shell that
-        // waits for this process to go away first.
+        // quit immediately. Something has to wait for this process to go
+        // away first.
+        //
+        // This used to hand that to a juce::ChildProcess, and it only
+        // ever closed: the ChildProcess was a local that went out of
+        // scope immediately, and the command it ran died with it. A
+        // script started through the shell is genuinely detached from
+        // this process, so it survives the quit below.
         auto exe = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        auto script = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                           .getChildFile("inkwyrd-restart.cmd");
 
-        juce::ChildProcess relauncher;
-        relauncher.start("cmd.exe /c ping -n 4 127.0.0.1 > nul & start \"\" \""
-                          + exe.getFullPathName() + "\"");
+        // Waits for this process to exit, starts the app again, then
+        // deletes itself.
+        script.replaceWithText(juce::String("@echo off\r\n")
+                                + "ping -n 4 127.0.0.1 >nul\r\n"
+                                + "start \"\" \"" + exe.getFullPathName() + "\"\r\n"
+                                + "del \"%~f0\"\r\n");
+
+        if (! script.startAsProcess())
+            logLine("[App] Couldn't start the relauncher - closing without restarting.");
 
         quit();
     });

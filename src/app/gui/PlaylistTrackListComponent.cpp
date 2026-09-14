@@ -190,24 +190,23 @@ void PlaylistTrackListComponent::showContextMenuForRow(int row)
 
     auto file = resolvedTracks.files[row];
 
-    enum MenuId { previewItem = 1, editTagsItem, removeItem };
+    // No Preview here: previewing lives in the Library window, on the
+    // row itself, so there is one obvious way to start one and to stop it.
+    enum MenuId { editTagsItem = 1, removeItem };
 
     juce::PopupMenu menu;
-    menu.addItem(previewItem, "Preview", onPreviewTrack != nullptr);
     menu.addItem(editTagsItem, "Edit tags...", onEditTags != nullptr);
     menu.addSeparator();
     menu.addItem(removeItem, "Remove from playlist", library.findById(shownId) != nullptr);
 
-    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+    menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition(),
                         [this, safeThis = juce::Component::SafePointer<PlaylistTrackListComponent>(this),
                          file](int result)
     {
         if (safeThis == nullptr)
             return;
 
-        if (result == previewItem && onPreviewTrack)
-            onPreviewTrack(file);
-        else if (result == editTagsItem && onEditTags)
+        if (result == editTagsItem && onEditTags)
             onEditTags({ file });
         else if (result == removeItem)
             removeSelectedTrack();

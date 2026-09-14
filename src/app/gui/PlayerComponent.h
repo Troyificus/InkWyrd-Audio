@@ -38,6 +38,12 @@ public:
 
     void resized() override;
 
+    // Space play/pause, S stop, arrows skip and volume, M mic. The
+    // shortcuts people expect from every player, on the window that owns
+    // playback.
+    bool keyPressed(const juce::KeyPress& key) override;
+    void mouseDown(const juce::MouseEvent&) override { grabKeyboardFocus(); }
+
     // Re-applies the label colours this component sets for itself,
     // so it follows a skin change like everything drawn from the
     // palette at paint time does.

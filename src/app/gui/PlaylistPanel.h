@@ -29,7 +29,8 @@
 // Also a file drop target for Windows Explorer: audio files and folders
 // dropped anywhere on this panel are added to the library.
 class PlaylistPanel : public juce::Component,
-                       public juce::FileDragAndDropTarget
+                       public juce::FileDragAndDropTarget,
+                       private juce::Timer
 {
 public:
     PlaylistPanel(PlaylistLibrary& libraryToUse,
@@ -104,7 +105,14 @@ private:
     void selectPlaylist(int row);
     void activateSelected();
     void refreshLibraryTracks();
-    void togglePreview();
+    void togglePreviewFor(const juce::File& file);
+
+    // Drives the ring pulsing around the stop symbol while a preview
+    // plays. Only runs while something is previewing.
+    void timerCallback() override;
+
+    // Where the play/stop symbol sits inside a Title cell.
+    static juce::Rectangle<int> previewGlyphBounds(int cellHeight);
 
     // The right-click menu for tracks, shared by the table and the
     // folder tree. rowForVolume is -1 when there is no row to anchor the
@@ -183,13 +191,15 @@ private:
     juce::TextButton addFilesButton { "Add files..." };
     juce::TextButton addFolderButton { "Add folder..." };
     juce::TextButton addToPlaylistButton { "Add to playlist" };
-    juce::TextButton previewButton { "Preview" };
     juce::TextButton removeFromLibraryButton { "Remove" };
 
     std::function<void(const juce::File&)> onPreviewTrack;
     std::function<void()> onStopPreview;
     std::function<void(const juce::Array<juce::File>&)> onEditTags;
     juce::File previewFile;
+
+    // 0..1 and cycling, for the pulse around the stop symbol.
+    float previewPulse = 0.0f;
 
     std::unique_ptr<juce::FileChooser> activeChooser;
 

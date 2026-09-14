@@ -167,6 +167,41 @@ public:
 
         if (columnId == title)
         {
+            // The preview control lives at the left of the Title cell: a
+            // play symbol on the single selected row, a stop symbol in a
+            // pulsing ring on the one that is previewing. The space is
+            // always reserved so text doesn't shift as rows are selected.
+            auto glyph = previewGlyphBounds(height);
+            auto previewing = file == owner.previewFile;
+            auto onlySelection = owner.trackTable->getNumSelectedRows() == 1
+                                  && owner.trackTable->isRowSelected(row);
+
+            if (previewing)
+            {
+                auto centre = glyph.toFloat().getCentre();
+                auto pulse = 0.5f + 0.5f * std::sin(owner.previewPulse * juce::MathConstants<float>::twoPi);
+                auto radius = (float) glyph.getWidth() * (0.52f + 0.16f * pulse);
+
+                g.setColour(inkwyrd::theme::accent.withAlpha(0.25f + 0.35f * pulse));
+                g.drawEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre), 1.6f);
+
+                g.setColour(inkwyrd::theme::accent);
+                g.fillRect(juce::Rectangle<float>(7.0f, 7.0f).withCentre(centre));
+            }
+            else if (onlySelection)
+            {
+                juce::Path play;
+                auto bounds = glyph.toFloat().reduced(2.0f);
+                play.addTriangle(bounds.getX(), bounds.getY(),
+                                  bounds.getX(), bounds.getBottom(),
+                                  bounds.getRight(), bounds.getCentreY());
+
+                g.setColour(inkwyrd::theme::accent.withAlpha(0.85f));
+                g.fillPath(play);
+            }
+
+            area.removeFromLeft(glyph.getRight() - area.getX() + 2);
+
             if (missing)
                 text += "   (missing)";
 
@@ -217,7 +252,22 @@ public:
         }
 
         if (columnId == volume)
+        {
             owner.showTrackVolumeCallout(row);
+            return;
+        }
+
+        // A click on the play/stop symbol starts or stops the preview.
+        // Checked against the CELL's own position, since the event
+        // arrives in the table's coordinates.
+        if (columnId == title && juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
+        {
+            auto cell = owner.trackTable->getCellPosition(columnId, row, true);
+            auto glyph = previewGlyphBounds(cell.getHeight()).translated(cell.getX(), cell.getY());
+
+            if (glyph.expanded(4).contains(event.getPosition()))
+                owner.togglePreviewFor(owner.libraryTracks[row]);
+        }
     }
 
     void cellDoubleClicked(int, int, const juce::MouseEvent&) override
@@ -278,7 +328,7 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     for (auto* button : { &newButton, &playButton, &renameButton, &deleteButton,
                            &refreshButton,
                            &addFilesButton, &addFolderButton,
-                           &addToPlaylistButton, &previewButton, &removeFromLibraryButton })
+                           &addToPlaylistButton, &removeFromLibraryButton })
         addAndMakeVisible(button);
 
     newButton.onClick = [this] { createNewPlaylist(); };
@@ -299,7 +349,6 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     addFolderButton.onClick = [this] { addFolderToLibrary(); };
     addToPlaylistButton.onClick = [this] { addSelectedTracksToPlaylist(); };
     removeFromLibraryButton.onClick = [this] { removeSelectedTracksFromLibrary(); };
-    previewButton.onClick = [this] { togglePreview(); };
 
     addAndMakeVisible(trackCaption);
     trackTable->setModel(trackModel.get());
@@ -617,10 +666,9 @@ void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks,
     if (tracks.isEmpty())
         return;
 
-    enum MenuId { previewItem = 1, editTagsItem, addToPlaylistItem, volumeItem, removeItem };
+    enum MenuId { editTagsItem = 1, addToPlaylistItem, volumeItem, removeItem };
 
     juce::PopupMenu menu;
-    menu.addItem(previewItem, "Preview", tracks.size() == 1 && onPreviewTrack != nullptr);
     menu.addItem(editTagsItem,
                   tracks.size() == 1 ? "Edit tags..."
                                      : "Edit tags for " + juce::String(tracks.size()) + " tracks...",
@@ -640,7 +688,7 @@ void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks,
     menu.addItem(removeItem, tracks.size() == 1 ? "Remove from library"
                                                 : "Remove " + juce::String(tracks.size()) + " from library");
 
-    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+    menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition(),
                         [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this),
                          tracks, rowForVolume](int result)
     {
@@ -649,11 +697,6 @@ void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks,
 
         switch (result)
         {
-            case previewItem:
-                if (onPreviewTrack)
-                    onPreviewTrack(tracks[0]);
-                break;
-
             case editTagsItem:
                 if (onEditTags)
                     onEditTags(tracks);
@@ -677,11 +720,18 @@ void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks,
     });
 }
 
-void PlaylistPanel::togglePreview()
+juce::Rectangle<int> PlaylistPanel::previewGlyphBounds(int cellHeight)
 {
-    // The button is a toggle: while something is previewing it means
-    // Stop, whatever happens to be selected now.
-    if (previewFile != juce::File())
+    // A square at the left of the Title cell. Always reserved, whether or
+    // not a symbol is drawn there, so the text doesn't jump sideways as
+    // rows are selected.
+    constexpr int kSize = 14;
+    return { 4, (cellHeight - kSize) / 2, kSize, kSize };
+}
+
+void PlaylistPanel::togglePreviewFor(const juce::File& file)
+{
+    if (file == previewFile)
     {
         if (onStopPreview)
             onStopPreview();
@@ -689,20 +739,34 @@ void PlaylistPanel::togglePreview()
         return;
     }
 
-    auto selected = getSelectedLibraryTracks();
-    if (selected.isEmpty() || onPreviewTrack == nullptr)
-        return;
+    if (onPreviewTrack)
+        onPreviewTrack(file);
+}
 
-    onPreviewTrack(selected[0]);
+void PlaylistPanel::timerCallback()
+{
+    // A slow cycle - it should read as "this is playing", not blink for
+    // attention.
+    previewPulse += 0.06f;
+    if (previewPulse > 1.0f)
+        previewPulse -= 1.0f;
+
+    trackTable->repaint();
 }
 
 void PlaylistPanel::setPreviewFile(const juce::File& file)
 {
     previewFile = file;
 
-    previewButton.setButtonText(file != juce::File() ? "Stop" : "Preview");
+    if (file != juce::File())
+        startTimerHz(20);
+    else
+        stopTimer();
+
+    previewPulse = 0.0f;
     updateTrackCaption();
     updateButtonEnablement();
+    trackTable->repaint();
 }
 
 void PlaylistPanel::updateTrackCaption()
@@ -771,10 +835,6 @@ void PlaylistPanel::updateButtonEnablement()
     auto hasTracks = ! getSelectedLibraryTracks().isEmpty();
     addToPlaylistButton.setEnabled(hasTracks && hasPlaylist);
     removeFromLibraryButton.setEnabled(hasTracks);
-
-    // Stop stays live with nothing selected, or clicking away would
-    // strand a preview with no way to stop it.
-    previewButton.setEnabled(previewFile != juce::File() || hasTracks);
 }
 
 void PlaylistPanel::activateSelected()
@@ -792,6 +852,10 @@ void PlaylistPanel::createNewPlaylist()
 
     if (onPlaylistSelected)
         onPlaylistSelected(selectedId);
+
+    // Straight into naming it. A playlist called "New playlist" that you
+    // then have to find Rename for is two steps where one will do.
+    renameSelected();
 }
 
 void PlaylistPanel::addFilesToLibrary()
@@ -924,6 +988,15 @@ void PlaylistPanel::renameSelected()
     window->addTextEditor("name", playlist->name);
     window->addButton("Rename", 1);
     window->addButton("Cancel", 0);
+
+    if (auto* editor = window->getTextEditor("name"))
+    {
+        // Enter commits, which is what everyone expects of a one-field
+        // dialog, and the existing name starts selected so typing simply
+        // replaces it.
+        editor->onReturnKey = [window] { window->exitModalState(1); };
+        editor->selectAll();
+    }
 
     window->enterModalState(true, juce::ModalCallbackFunction::create(
         [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this), id, window](int result)
@@ -1093,10 +1166,8 @@ void PlaylistPanel::resized()
     rowOne.removeFromLeft(kButtonGap);
     addFolderButton.setBounds(rowOne);
 
-    auto thirdWidth = (bottom.getWidth() - kButtonGap * 2) / 3;
-    addToPlaylistButton.setBounds(bottom.removeFromLeft(thirdWidth));
-    bottom.removeFromLeft(kButtonGap);
-    previewButton.setBounds(bottom.removeFromLeft(thirdWidth));
+    auto halfTwo = (bottom.getWidth() - kButtonGap) / 2;
+    addToPlaylistButton.setBounds(bottom.removeFromLeft(halfTwo));
     bottom.removeFromLeft(kButtonGap);
     removeFromLibraryButton.setBounds(bottom);
 }

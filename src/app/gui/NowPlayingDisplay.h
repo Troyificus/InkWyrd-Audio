@@ -48,6 +48,13 @@ private:
 
     juce::Rectangle<int> artArea, infoArea, spectrumArea, seekArea;
 
+    // The playing track's embedded cover art, read once when the track
+    // changes rather than on every paint - reading tags is a file read,
+    // and this paints 30 times a second.
+    juce::File artworkFile;
+    juce::Image artwork;
+    void refreshArtworkIfTrackChanged();
+
     std::array<float, SpectrumTap::numBands> bands {};
     bool haveBands = false;
 

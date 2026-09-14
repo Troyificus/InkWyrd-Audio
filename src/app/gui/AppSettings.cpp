@@ -20,6 +20,8 @@ namespace
     constexpr const char* kTrackLibraryMigratedKey = "trackLibraryMigrated";
     constexpr const char* kLibraryFolderViewKey = "libraryFolderView";
     constexpr const char* kSkinNameKey = "skinName";
+    constexpr const char* kLocalMonitoringKey = "localMonitoring";
+    constexpr const char* kMicMutedKey = "micMuted";
     constexpr const char* kExampleSkinsWrittenKey = "exampleSkinsWritten";
     constexpr const char* kNoiseSuppressionKey = "noiseSuppressionEnabled";
     constexpr const char* kDiscordAutoMuteKey = "discordAutoMuteEnabled";
@@ -201,6 +203,28 @@ bool AppSettings::isTrackLibraryMigrated() const
 void AppSettings::setTrackLibraryMigrated(bool migrated)
 {
     settings()->setValue(kTrackLibraryMigratedKey, migrated);
+}
+
+bool AppSettings::isLocalMonitoringEnabled() const
+{
+    // Off by default, which is what it has always come up as: the host
+    // is usually in the call and would otherwise hear everything twice.
+    return settings()->getBoolValue(kLocalMonitoringKey, false);
+}
+
+void AppSettings::setLocalMonitoringEnabled(bool enabled)
+{
+    settings()->setValue(kLocalMonitoringKey, enabled);
+}
+
+bool AppSettings::isMicMuted() const
+{
+    return settings()->getBoolValue(kMicMutedKey, false);
+}
+
+void AppSettings::setMicMuted(bool muted)
+{
+    settings()->setValue(kMicMutedKey, muted);
 }
 
 juce::String AppSettings::getSkinName() const

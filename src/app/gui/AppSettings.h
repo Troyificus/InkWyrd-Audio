@@ -86,6 +86,16 @@ public:
     // Whether the one-time "union every existing playlist's tracks into
     // the new master Track Library" migration has run. Same explicit-flag
     // reasoning as the other two migration flags above.
+    // Monitor and mic, as they were when the app last closed. Both are
+    // switches the user sets deliberately for how they work, so coming
+    // back up on someone else's defaults is a small annoyance every
+    // session.
+    bool isLocalMonitoringEnabled() const;
+    void setLocalMonitoringEnabled(bool enabled);
+
+    bool isMicMuted() const;
+    void setMicMuted(bool muted);
+
     // The folder name of the skin in use, under
     // %APPDATA%\Inkwyrd Audio\skins. Empty means the built-in look.
     juce::String getSkinName() const;

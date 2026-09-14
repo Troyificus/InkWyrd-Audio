@@ -2,6 +2,7 @@
 
 #include "InkwyrdLookAndFeel.h"
 #include "InkwyrdTheme.h"
+#include "TagEditor.h"
 
 using namespace inkwyrd::theme;
 
@@ -73,8 +74,27 @@ NowPlayingDisplay::NowPlayingDisplay(PlaylistEngine& engineToUse, SpectrumTap& s
     startTimerHz(kRefreshHz);
 }
 
+void NowPlayingDisplay::refreshArtworkIfTrackChanged()
+{
+    auto file = engine.getCurrentTrackFile();
+    if (file == artworkFile)
+        return;
+
+    artworkFile = file;
+    artwork = {};
+
+    if (file == juce::File())
+        return;
+
+    auto tags = inkwyrd::TagEditor::read(file);
+    if (tags.artwork.getSize() > 0)
+        artwork = juce::ImageFileFormat::loadFrom(tags.artwork.getData(), tags.artwork.getSize());
+}
+
 void NowPlayingDisplay::timerCallback()
 {
+    refreshArtworkIfTrackChanged();
+
     haveBands = spectrum.readBands(bands);
 
     if (haveBands)
@@ -148,9 +168,24 @@ void NowPlayingDisplay::paintArtSlot(juce::Graphics& g, juce::Rectangle<int> are
         g.fillEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre));
     }
 
-    InkwyrdLookAndFeel::drawLogo(g, slot.reduced(slot.getWidth() * 0.22f),
-                                  accent.withMultipliedBrightness(0.9f + 0.3f * glow),
-                                  accentSoft.withAlpha(0.35f + 0.25f * glow));
+    if (artwork.isValid())
+    {
+        // The track's own cover art, clipped to the slot's rounded
+        // corners so it sits in the panel rather than on top of it.
+        juce::Path rounded;
+        rounded.addRoundedRectangle(slot.reduced(1.0f), cornerRadius);
+
+        juce::Graphics::ScopedSaveState state(g);
+        g.reduceClipRegion(rounded);
+        g.drawImage(artwork, slot.reduced(1.0f), juce::RectanglePlacement::centred
+                                                   | juce::RectanglePlacement::fillDestination);
+    }
+    else
+    {
+        InkwyrdLookAndFeel::drawLogo(g, slot.reduced(slot.getWidth() * 0.22f),
+                                      accent.withMultipliedBrightness(0.9f + 0.3f * glow),
+                                      accentSoft.withAlpha(0.35f + 0.25f * glow));
+    }
 
     g.setColour(outline.withAlpha(0.7f));
     g.drawRoundedRectangle(slot.reduced(0.5f), cornerRadius, 1.0f);
@@ -176,8 +211,12 @@ void NowPlayingDisplay::paintTrackInfo(juce::Graphics& g, juce::Rectangle<int> a
     constexpr int kTimeRow = 28;
 
     drawCaption(g, area.removeFromTop(kCaptionRow), "Artist");
-    g.setColour(text);
-    g.setFont(InkwyrdLookAndFeel::labelFont(15.0f));
+
+    // Same family and colour as the title below, a size down: they are
+    // two halves of one readout, and two fonts made it look like two
+    // unrelated pieces of text.
+    g.setColour(accent);
+    g.setFont(InkwyrdLookAndFeel::titleFont(15.0f));
     g.drawText(name.artist.isNotEmpty() ? name.artist : juce::String("--"),
                 area.removeFromTop(kArtistRow), juce::Justification::centredLeft, true);
 
