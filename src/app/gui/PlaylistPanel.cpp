@@ -235,12 +235,16 @@ public:
         }
 
         // A click on the play/stop symbol starts or stops the preview.
-        // Checked against the CELL's own position, since the event
-        // arrives in the table's coordinates.
+        // The event arrives relative to the ROW component (see
+        // performSelection in juce_TableListBox.cpp), not the table - so
+        // the symbol is placed by the column's x within the row, y 0.
+        // Measuring from the table's top-left only ever matched the
+        // first row, which is why beta.22.1's table symbol did nothing.
         if (columnId == title && juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
         {
-            auto cell = owner.trackTable->getCellPosition(columnId, row, true);
-            auto glyph = inkwyrd::previewGlyphBounds(cell.getHeight()).translated(cell.getX(), cell.getY());
+            auto& header = owner.trackTable->getHeader();
+            auto column = header.getColumnPosition(header.getIndexOfColumnId(columnId, true));
+            auto glyph = inkwyrd::previewGlyphBounds(owner.trackTable->getRowHeight()).translated(column.getX(), 0);
 
             if (glyph.expanded(4).contains(event.getPosition()))
                 owner.togglePreviewFor(owner.libraryTracks[row]);

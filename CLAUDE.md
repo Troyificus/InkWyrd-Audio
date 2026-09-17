@@ -1895,6 +1895,10 @@ finishes, which is how the end of a preview is noticed without polling.
   LibraryFolderTree so the test harness still links. Hover is recomputed
   from the current mouse position on move AND exit, because mouseExit
   also fires when crossing from one row's component to the next.
+- **`TableListBoxModel::cellClicked` positions are relative to the ROW
+  component, not the table** (beta.22.2). The table's play symbol was
+  hit-tested against `getCellPosition(..., true)`, so it never matched
+  below the first row. Use the header's column x and y 0.
 - **One right-click menu for both Library views**: no Volume and fade
   (the Vol column already is that control).
 
