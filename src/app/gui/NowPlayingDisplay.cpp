@@ -160,7 +160,8 @@ void NowPlayingDisplay::paintArtSlot(juce::Graphics& g, juce::Rectangle<int> are
     auto centre = slot.getCentre();
     auto maxRadius = slot.getWidth() * 0.46f;
 
-    for (int ring = 5; ring >= 1; --ring)
+    // Only behind the ink-bottle mark: cover art fills the whole slot.
+    for (int ring = 5; ring >= 1 && ! artwork.isValid(); --ring)
     {
         auto t = (float) ring / 5.0f;
         auto radius = maxRadius * (0.55f + 0.45f * t) * (0.85f + 0.3f * glow);
@@ -177,6 +178,11 @@ void NowPlayingDisplay::paintArtSlot(juce::Graphics& g, juce::Rectangle<int> are
 
         juce::Graphics::ScopedSaveState state(g);
         g.reduceClipRegion(rounded);
+
+        // drawImage takes its opacity from the current colour, and the
+        // last colour set was a near-transparent glow ring - which is
+        // what left the art barely visible.
+        g.setOpacity(1.0f);
         g.drawImage(artwork, slot.reduced(1.0f), juce::RectanglePlacement::centred
                                                    | juce::RectanglePlacement::fillDestination);
     }

@@ -168,6 +168,38 @@ namespace
     constexpr int kItemHeight = 22;
 }
 
+void inkwyrd::drawPreviewGlyph(juce::Graphics& g, juce::Rectangle<int> bounds, bool previewing, float pulse)
+{
+    if (previewing)
+    {
+        auto centre = bounds.toFloat().getCentre();
+        auto wave = 0.5f + 0.5f * std::sin(pulse * juce::MathConstants<float>::twoPi);
+        auto radius = (float) bounds.getWidth() * (0.52f + 0.16f * wave);
+
+        g.setColour(inkwyrd::theme::accent.withAlpha(0.25f + 0.35f * wave));
+        g.drawEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre), 1.6f);
+
+        g.setColour(inkwyrd::theme::accent);
+        g.fillRect(juce::Rectangle<float>(7.0f, 7.0f).withCentre(centre));
+        return;
+    }
+
+    juce::Path play;
+    auto area = bounds.toFloat().reduced(2.0f);
+    play.addTriangle(area.getX(), area.getY(),
+                      area.getX(), area.getBottom(),
+                      area.getRight(), area.getCentreY());
+
+    g.setColour(inkwyrd::theme::accent.withAlpha(0.85f));
+    g.fillPath(play);
+}
+
+juce::Rectangle<int> inkwyrd::previewGlyphBounds(int rowHeight)
+{
+    constexpr int kSize = 14;
+    return { 4, (rowHeight - kSize) / 2, kSize, kSize };
+}
+
 // Common ground for both kinds of row: "what tracks does this row stand
 // for", which is what makes selecting a folder mean selecting an album.
 class LibraryFolderTree::ItemBase : public juce::TreeViewItem
@@ -221,8 +253,30 @@ public:
 
     void collectTracks(juce::Array<juce::File>& into) const override { into.addIfNotAlreadyThere(file); }
 
+    void itemClicked(const juce::MouseEvent& e) override
+    {
+        // The play/stop symbol. Positions here are in the same space
+        // paintItem draws in - TreeView subtracts the item's own origin.
+        if (! e.mods.isPopupMenu()
+            && inkwyrd::previewGlyphBounds(getItemHeight()).expanded(4).contains(e.getPosition()))
+        {
+            if (owner.onPreviewGlyphClicked != nullptr)
+                owner.onPreviewGlyphClicked(file);
+
+            return;
+        }
+
+        ItemBase::itemClicked(e);
+    }
+
     void paintItem(juce::Graphics& g, int width, int height) override
     {
+        auto glyph = inkwyrd::previewGlyphBounds(height);
+        auto previewing = file == owner.previewFile;
+
+        if (previewing || file == owner.hoveredFile)
+            inkwyrd::drawPreviewGlyph(g, glyph, previewing, owner.previewPulse);
+
         auto playing = file == owner.engine.getCurrentTrackFile();
         auto missing = ! file.existsAsFile();
 
@@ -239,7 +293,8 @@ public:
         g.setColour(missing ? inkwyrd::theme::warning
                             : (playing ? inkwyrd::theme::accent : inkwyrd::theme::text));
         g.setFont(juce::Font(juce::FontOptions(14.0f)));
-        g.drawText(text, juce::Rectangle<int>(6, 0, width - 12, height),
+        auto textLeft = glyph.getRight() + 4;
+        g.drawText(text, juce::Rectangle<int>(textLeft, 0, width - textLeft - 6, height),
                     juce::Justification::centredLeft, true);
     }
 
@@ -390,6 +445,35 @@ void LibraryFolderTree::mouseDrag(const juce::MouseEvent& e)
             if (safeThis != nullptr)
                 safeThis->dragInProgress = false;
         });
+}
+
+void LibraryFolderTree::mouseMove(const juce::MouseEvent&) { updateHover(); }
+void LibraryFolderTree::mouseExit(const juce::MouseEvent&) { updateHover(); }
+
+void LibraryFolderTree::updateHover()
+{
+    // Asked of the tree rather than read off the event: mouseExit also
+    // fires moving from one row's component to the next, and only the
+    // current mouse position says which row that ended on.
+    juce::File file;
+    auto position = tree.getMouseXYRelative();
+
+    if (tree.isMouseOver(true))
+        if (auto* track = dynamic_cast<TrackItem*>(tree.getItemAt(position.y)))
+            file = track->getFile();
+
+    if (file != hoveredFile)
+    {
+        hoveredFile = file;
+        tree.repaint();
+    }
+}
+
+void LibraryFolderTree::setPreview(const juce::File& file, float pulse)
+{
+    previewFile = file;
+    previewPulse = pulse;
+    tree.repaint();
 }
 
 void LibraryFolderTree::setTracks(const juce::Array<juce::File>& tracks)

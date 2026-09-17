@@ -1880,6 +1880,24 @@ playlist the user had already paused doesn't start playing when a preview
 ends. `AudioTransportSource` broadcasts a change when the stream
 finishes, which is how the end of a preview is noticed without polling.
 
+**beta.22.1 corrections, worth knowing before touching either again:**
+
+- **`Graphics::drawImage` takes its opacity from the current colour.**
+  The now-playing art was drawn straight after the glow rings, whose
+  last colour was ~2% alpha, so the cover art came out nearly invisible
+  and looked like the glow was on top of it. `g.setOpacity(1.0f)` before
+  drawing an image that follows translucent fills. The rings are also
+  skipped when there is art.
+- **The preview symbol shows on HOVER, in both views** (the user's actual
+  ask; beta.22 showed it only on the single selected row, and only in the
+  table, so in Folders view it looked like preview had gone).
+  `inkwyrd::drawPreviewGlyph` / `previewGlyphBounds` live in
+  LibraryFolderTree so the test harness still links. Hover is recomputed
+  from the current mouse position on move AND exit, because mouseExit
+  also fires when crossing from one row's component to the next.
+- **One right-click menu for both Library views**: no Volume and fade
+  (the Vol column already is that control).
+
 **The tag editor** writes through **TagLib** (vcpkg, dual LGPL-2.1 /
 MPL-1.1, linked as a DLL and unmodified - see
 docs/THIRD_PARTY_LICENSES.md, which now has a section on it as the one

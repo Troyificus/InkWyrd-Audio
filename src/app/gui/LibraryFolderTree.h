@@ -45,6 +45,17 @@ namespace inkwyrd
     // Folders are matched case-insensitively, since Windows paths are -
     // the same folder reached as "G:\Music" and "g:\music" is one row.
     std::unique_ptr<FolderNode> buildFolderTree(const juce::Array<juce::File>& tracks);
+
+    // The Library's preview control, shared by the table and the tree so
+    // both views look the same: a play symbol, or - on the track that is
+    // previewing - a stop symbol in a ring that pulses with `pulse`
+    // (0..1, cycling).
+    void drawPreviewGlyph(juce::Graphics& g, juce::Rectangle<int> bounds, bool previewing, float pulse);
+
+    // Where that control sits in a row: a square at the left edge.
+    // Always reserved, drawn or not, so text doesn't jump sideways as the
+    // mouse moves down the list.
+    juce::Rectangle<int> previewGlyphBounds(int rowHeight);
 }
 
 // The Library window's second view of the master track list: the same
@@ -67,6 +78,16 @@ public:
     // Playlist window. Fired for the tree's own item components because
     // this listens on the TreeView and its children - see the .cpp.
     void mouseDrag(const juce::MouseEvent& e) override;
+
+    // Tracks which track row the mouse is over, for the play symbol.
+    void mouseMove(const juce::MouseEvent& e) override;
+    void mouseExit(const juce::MouseEvent& e) override;
+
+    // What is previewing, and the pulse phase for its ring. Repaints.
+    void setPreview(const juce::File& file, float pulse);
+
+    // A click on a row's play/stop symbol.
+    std::function<void(const juce::File&)> onPreviewGlyphClicked;
 
     // Rebuilds from this set of tracks, keeping which folders were open
     // and which tracks were selected.
@@ -100,6 +121,10 @@ private:
     PlaylistEngine& engine;
 
     juce::TreeView tree;
+
+    juce::File hoveredFile, previewFile;
+    float previewPulse = 0.0f;
+    void updateHover();
 
     // An OS drag runs its own modal loop, so a second must not start
     // from inside the first one's event.

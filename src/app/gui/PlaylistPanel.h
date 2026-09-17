@@ -73,6 +73,11 @@ public:
     // and its children - see the .cpp for why the table can't do it.
     void mouseDrag(const juce::MouseEvent& e) override;
 
+    // The Library table's hovered row, for its play symbol. Heard from
+    // the row components too, through the same listener as mouseDrag.
+    void mouseMove(const juce::MouseEvent& e) override;
+    void mouseExit(const juce::MouseEvent& e) override;
+
     // juce::FileDragAndDropTarget
     bool isInterestedInFileDrag(const juce::StringArray& files) override;
     void fileDragEnter(const juce::StringArray& files, int x, int y) override;
@@ -111,13 +116,11 @@ private:
     // plays. Only runs while something is previewing.
     void timerCallback() override;
 
-    // Where the play/stop symbol sits inside a Title cell.
-    static juce::Rectangle<int> previewGlyphBounds(int cellHeight);
 
     // The right-click menu for tracks, shared by the table and the
     // folder tree. rowForVolume is -1 when there is no row to anchor the
     // volume callout to (the tree), which drops that one item.
-    void showTracksContextMenu(const juce::Array<juce::File>& tracks, int rowForVolume);
+    void showTracksContextMenu(const juce::Array<juce::File>& tracks);
     void updateTrackCaption();
     void sortLibraryTracks();
     void setFolderView(bool shouldShowFolders, bool notify);
@@ -200,6 +203,10 @@ private:
 
     // 0..1 and cycling, for the pulse around the stop symbol.
     float previewPulse = 0.0f;
+
+    // The table row under the mouse, -1 for none.
+    int hoveredRow = -1;
+    void updateHoveredRow();
 
     std::unique_ptr<juce::FileChooser> activeChooser;
 

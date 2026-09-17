@@ -261,15 +261,16 @@ To get tracks into a playlist, select them here and click
 either view, and dragging a folder in the Folders view takes everything
 in it.
 
-**To preview a track**, select it: a small play symbol appears at the
-left of its row. Click that to audition it, and the symbol becomes a stop
+**To preview a track**, hover over it: a small play symbol appears at the
+left of its row, in both the Table and Folders views. Click that to audition it, and the symbol becomes a stop
 button inside a pulsing ring so it's obvious what's playing. Click it
 again to stop. Only you hear a preview - it never reaches Discord, and it
 plays even with Monitor off. The playlist pauses while it runs and picks
 up again afterwards.
 
-**Right-click a track** for Edit tags..., Add to playlist, Volume and
-fade..., and Remove from library.
+**Right-click a track** for Edit tags..., Add to playlist and Remove
+from library - the same menu in both views. A track's volume and fade
+are set by clicking its **Vol** column in the Table view.
 
 **Remove** takes a track out of the library. It does *not* touch any
 playlist already using it - a track can disappear from All Tracks and

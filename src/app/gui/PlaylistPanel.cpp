@@ -168,37 +168,14 @@ public:
         if (columnId == title)
         {
             // The preview control lives at the left of the Title cell: a
-            // play symbol on the single selected row, a stop symbol in a
-            // pulsing ring on the one that is previewing. The space is
-            // always reserved so text doesn't shift as rows are selected.
-            auto glyph = previewGlyphBounds(height);
+            // play symbol on the row under the mouse, a stop symbol in a
+            // pulsing ring on the one that is previewing. The same
+            // control the folder view draws - see drawPreviewGlyph.
+            auto glyph = inkwyrd::previewGlyphBounds(height);
             auto previewing = file == owner.previewFile;
-            auto onlySelection = owner.trackTable->getNumSelectedRows() == 1
-                                  && owner.trackTable->isRowSelected(row);
 
-            if (previewing)
-            {
-                auto centre = glyph.toFloat().getCentre();
-                auto pulse = 0.5f + 0.5f * std::sin(owner.previewPulse * juce::MathConstants<float>::twoPi);
-                auto radius = (float) glyph.getWidth() * (0.52f + 0.16f * pulse);
-
-                g.setColour(inkwyrd::theme::accent.withAlpha(0.25f + 0.35f * pulse));
-                g.drawEllipse(juce::Rectangle<float>(radius * 2.0f, radius * 2.0f).withCentre(centre), 1.6f);
-
-                g.setColour(inkwyrd::theme::accent);
-                g.fillRect(juce::Rectangle<float>(7.0f, 7.0f).withCentre(centre));
-            }
-            else if (onlySelection)
-            {
-                juce::Path play;
-                auto bounds = glyph.toFloat().reduced(2.0f);
-                play.addTriangle(bounds.getX(), bounds.getY(),
-                                  bounds.getX(), bounds.getBottom(),
-                                  bounds.getRight(), bounds.getCentreY());
-
-                g.setColour(inkwyrd::theme::accent.withAlpha(0.85f));
-                g.fillPath(play);
-            }
+            if (previewing || row == owner.hoveredRow)
+                inkwyrd::drawPreviewGlyph(g, glyph, previewing, owner.previewPulse);
 
             area.removeFromLeft(glyph.getRight() - area.getX() + 2);
 
@@ -247,7 +224,7 @@ public:
             if (tracks.isEmpty() && juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
                 tracks.add(owner.libraryTracks[row]);
 
-            owner.showTracksContextMenu(tracks, row);
+            owner.showTracksContextMenu(tracks);
             return;
         }
 
@@ -263,7 +240,7 @@ public:
         if (columnId == title && juce::isPositiveAndBelow(row, owner.libraryTracks.size()))
         {
             auto cell = owner.trackTable->getCellPosition(columnId, row, true);
-            auto glyph = previewGlyphBounds(cell.getHeight()).translated(cell.getX(), cell.getY());
+            auto glyph = inkwyrd::previewGlyphBounds(cell.getHeight()).translated(cell.getX(), cell.getY());
 
             if (glyph.expanded(4).contains(event.getPosition()))
                 owner.togglePreviewFor(owner.libraryTracks[row]);
@@ -386,11 +363,8 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     folderTree = std::make_unique<LibraryFolderTree>(trackMetadata, engine);
     folderTree->onSelectionChanged = [this] { updateButtonEnablement(); };
     folderTree->onTracksDoubleClicked = [this] { addSelectedTracksToPlaylist(); };
-    folderTree->onContextMenuRequested = [this]
-    {
-        // -1: no row to anchor a volume callout to in the tree.
-        showTracksContextMenu(folderTree->getSelectedTracks(), -1);
-    };
+    folderTree->onContextMenuRequested = [this] { showTracksContextMenu(folderTree->getSelectedTracks()); };
+    folderTree->onPreviewGlyphClicked = [this](const juce::File& file) { togglePreviewFor(file); };
     addChildComponent(folderTree.get());
 
     for (auto* button : { &tableViewButton, &folderViewButton })
@@ -439,6 +413,29 @@ void PlaylistPanel::selectPlaylist(int row)
     // never touches playback.
     if (onPlaylistSelected)
         onPlaylistSelected(selectedId);
+}
+
+void PlaylistPanel::mouseMove(const juce::MouseEvent&) { updateHoveredRow(); }
+void PlaylistPanel::mouseExit(const juce::MouseEvent&) { updateHoveredRow(); }
+
+void PlaylistPanel::updateHoveredRow()
+{
+    // From the current mouse position rather than the event: mouseExit
+    // also fires moving between two rows' components, and only where the
+    // mouse is now says which row that ended on.
+    auto row = -1;
+
+    if (trackTable != nullptr && trackTable->isMouseOver(true))
+    {
+        auto position = trackTable->getMouseXYRelative();
+        row = trackTable->getRowContainingPosition(position.x, position.y);
+    }
+
+    if (row != hoveredRow)
+    {
+        hoveredRow = row;
+        trackTable->repaint();
+    }
 }
 
 void PlaylistPanel::mouseDrag(const juce::MouseEvent& e)
@@ -661,12 +658,14 @@ void PlaylistPanel::sortLibraryTracks()
     trackTable->repaint();
 }
 
-void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks, int rowForVolume)
+void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks)
 {
     if (tracks.isEmpty())
         return;
 
-    enum MenuId { editTagsItem = 1, addToPlaylistItem, volumeItem, removeItem };
+    // The same menu from both views. Volume and fade stays on the table's
+    // Vol column, which already is that control.
+    enum MenuId { editTagsItem = 1, addToPlaylistItem, removeItem };
 
     juce::PopupMenu menu;
     menu.addItem(editTagsItem,
@@ -679,18 +678,13 @@ void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks,
                                      : "Add " + juce::String(tracks.size()) + " to playlist",
                   getSelectedPlaylist() != nullptr);
 
-    // Only from the table: the callout points at a row, and the folder
-    // tree has none to point at.
-    if (rowForVolume >= 0 && tracks.size() == 1)
-        menu.addItem(volumeItem, "Volume and fade...");
-
     menu.addSeparator();
     menu.addItem(removeItem, tracks.size() == 1 ? "Remove from library"
                                                 : "Remove " + juce::String(tracks.size()) + " from library");
 
     menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition(),
                         [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this),
-                         tracks, rowForVolume](int result)
+                         tracks](int result)
     {
         if (safeThis == nullptr)
             return;
@@ -706,10 +700,6 @@ void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks,
                 addSelectedTracksToPlaylist();
                 break;
 
-            case volumeItem:
-                showTrackVolumeCallout(rowForVolume);
-                break;
-
             case removeItem:
                 removeSelectedTracksFromLibrary();
                 break;
@@ -718,15 +708,6 @@ void PlaylistPanel::showTracksContextMenu(const juce::Array<juce::File>& tracks,
                 break;
         }
     });
-}
-
-juce::Rectangle<int> PlaylistPanel::previewGlyphBounds(int cellHeight)
-{
-    // A square at the left of the Title cell. Always reserved, whether or
-    // not a symbol is drawn there, so the text doesn't jump sideways as
-    // rows are selected.
-    constexpr int kSize = 14;
-    return { 4, (cellHeight - kSize) / 2, kSize, kSize };
 }
 
 void PlaylistPanel::togglePreviewFor(const juce::File& file)
@@ -752,6 +733,7 @@ void PlaylistPanel::timerCallback()
         previewPulse -= 1.0f;
 
     trackTable->repaint();
+    folderTree->setPreview(previewFile, previewPulse);
 }
 
 void PlaylistPanel::setPreviewFile(const juce::File& file)
@@ -764,6 +746,7 @@ void PlaylistPanel::setPreviewFile(const juce::File& file)
         stopTimer();
 
     previewPulse = 0.0f;
+    folderTree->setPreview(previewFile, previewPulse);
     updateTrackCaption();
     updateButtonEnablement();
     trackTable->repaint();
