@@ -36,5 +36,15 @@ void MainWindow::showSetupView(AppSettings& settings, bool isFirstRun,
 
 void MainWindow::closeButtonPressed()
 {
+    // Quitting is only right on FIRST RUN, when this window is the whole
+    // app. Once the player is up, Settings merely floats over it, and
+    // this unconditional quit meant closing Settings with the X took the
+    // whole program down with it - see onCloseRequested.
+    if (onCloseRequested != nullptr)
+    {
+        onCloseRequested();
+        return;
+    }
+
     juce::JUCEApplication::getInstance()->systemRequestedQuit();
 }

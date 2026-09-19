@@ -1899,6 +1899,11 @@ finishes, which is how the end of a preview is noticed without polling.
   component, not the table** (beta.22.2). The table's play symbol was
   hit-tested against `getCellPosition(..., true)`, so it never matched
   below the first row. Use the header's column x and y 0.
+- **MainWindow's X quits the app only on first run** (beta.22.3). It
+  called systemRequestedQuit unconditionally, which was correct when
+  Setup was the entire app but took the whole program down once Settings
+  started floating over a running session. `MainWindow::onCloseRequested`
+  now carries what the X means; showSetup leaves it unset on first run.
 - **One right-click menu for both Library views**: no Volume and fade
   (the Vol column already is that control).
 

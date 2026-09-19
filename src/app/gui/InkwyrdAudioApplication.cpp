@@ -667,6 +667,20 @@ void InkwyrdAudioApplication::showSetup()
     // nothing to protect against here - Setup's content swap only ever
     // touched MainWindow's own content.
 
+    // Closing Settings with the X is "never mind": put the window away
+    // and leave the app running, exactly as it was. Only on first run,
+    // where there is no app behind it yet, does the X still mean quit -
+    // and that is what leaving this unset does.
+    mainWindow->onCloseRequested = isFirstRun ? std::function<void()>()
+                                              : std::function<void()>([this]
+    {
+        mainWindow->setAlwaysOnTop(false);
+        mainWindow->setVisible(false);
+
+        if (playerWindow != nullptr)
+            playerWindow->toFront(true);
+    });
+
     mainWindow->showSetupView(settings, isFirstRun,
                                [this](SetupComponent::Result result) { completeSetupAndLaunch(result); },
                                [this](juce::String secret, SetupComponent::AuthoriseCallback callback)

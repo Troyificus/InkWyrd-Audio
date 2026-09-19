@@ -27,4 +27,8 @@ public:
                         SetupComponent::ApplySkinCallback onApplySkin = {});
 
     void closeButtonPressed() override;
+
+    // What the title bar's X does. Left unset it quits the app, which is
+    // what it has to mean on first run, when this window IS the app.
+    std::function<void()> onCloseRequested;
 };
