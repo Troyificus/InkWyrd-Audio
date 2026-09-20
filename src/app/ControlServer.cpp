@@ -73,6 +73,10 @@ void ControlServer::handleCommand(const juce::var& parsed)
         if (name.isNotEmpty())
             soundboard.trigger(name);
     }
+    else if (command == "stopAllSounds")
+    {
+        soundboard.stopAllVoices();
+    }
     else if (command == "toggleMute")
     {
         masterEngine.setMicMuted(!masterEngine.isMicMuted());

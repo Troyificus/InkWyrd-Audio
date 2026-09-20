@@ -226,6 +226,16 @@ bool PlayerComponent::keyPressed(const juce::KeyPress& key)
         return true;
     }
 
+    // Escape is the panic key: silence every soundboard voice, and
+    // deliberately NOT the music - "I fired the wrong effect" and "end
+    // the session" are different emergencies, and Stop already covers
+    // the second one.
+    if (key == juce::KeyPress::escapeKey)
+    {
+        masterEngine.getSoundboard().stopAllVoices();
+        return true;
+    }
+
     if (key == juce::KeyPress::rightKey)
     {
         skipButton.triggerClick();

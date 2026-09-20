@@ -2,6 +2,7 @@
 
 #include "Dialogs.h"
 #include "InkwyrdTheme.h"
+#include "TrackSearch.h"
 #include "VolumeCallout.h"
 
 namespace
@@ -371,6 +372,28 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     folderTree->onPreviewGlyphClicked = [this](const juce::File& file) { togglePreviewFor(file); };
     addChildComponent(folderTree.get());
 
+    searchBox.setTextToShowWhenEmpty("Search title, artist, album...", inkwyrd::theme::textDim);
+    searchBox.setEscapeAndReturnKeysConsumed(false);
+    searchBox.onTextChange = [this]
+    {
+        auto typed = searchBox.getText().trim();
+        if (typed == searchText)
+            return;
+
+        searchText = typed;
+        clearSearchButton.setEnabled(searchText.isNotEmpty());
+        refreshLibraryTracks();
+    };
+
+    // Escape clears rather than only unfocusing: it is the key people
+    // already press to abandon a search.
+    searchBox.onEscapeKey = [this] { searchBox.setText({}, juce::sendNotificationSync); };
+    addAndMakeVisible(searchBox);
+
+    clearSearchButton.setEnabled(false);
+    clearSearchButton.onClick = [this] { searchBox.setText({}, juce::sendNotificationSync); };
+    addAndMakeVisible(clearSearchButton);
+
     for (auto* button : { &tableViewButton, &folderViewButton })
     {
         button->setClickingTogglesState(false);
@@ -589,9 +612,35 @@ void PlaylistPanel::refresh()
     updateButtonEnablement();
 }
 
+bool PlaylistPanel::matchesSearch(const juce::File& file) const
+{
+    if (searchText.isEmpty())
+        return true;
+
+    auto metadata = trackMetadata.get(file);
+
+    // The filename is in there alongside the tags because plenty of
+    // libraries have tracks that were never tagged, and searching those
+    // by what they're called on disk is the only way to find them.
+    auto haystack = (metadata.displayTitle(file) + " " + metadata.artist + " "
+                      + metadata.album + " " + metadata.genre + " "
+                      + file.getFileNameWithoutExtension());
+
+    // The rule itself lives in TrackSearch.h so the self-test can check
+    // it without a window.
+    return inkwyrd::matchesSearchTerms(haystack, searchText);
+}
+
 void PlaylistPanel::refreshLibraryTracks()
 {
     libraryTracks = trackLibrary.getAllTracks();
+    unfilteredTrackCount = libraryTracks.size();
+
+    if (searchText.isNotEmpty())
+        for (int i = libraryTracks.size(); --i >= 0;)
+            if (! matchesSearch(libraryTracks[i]))
+                libraryTracks.remove(i);
+
     updateTrackCaption();
     sortLibraryTracks();
 
@@ -758,7 +807,11 @@ void PlaylistPanel::setPreviewFile(const juce::File& file)
 
 void PlaylistPanel::updateTrackCaption()
 {
-    auto caption = "All Tracks (" + juce::String(libraryTracks.size()) + ")";
+    // "12 of 84" while filtering, so a short list reads as a search
+    // result rather than as a library that lost most of its music.
+    auto caption = "All Tracks (" + juce::String(libraryTracks.size())
+                    + (searchText.isNotEmpty() ? " of " + juce::String(unfilteredTrackCount) : juce::String())
+                    + ")";
 
     // On the caption rather than a label of its own: previewing is a
     // passing state, and a permanently empty line would cost the list
@@ -1140,6 +1193,14 @@ void PlaylistPanel::resized()
     // The master list's own buttons sit directly under it, so they read
     // as belonging to that list rather than to the playlists above.
     auto bottom = area.removeFromBottom(kButtonHeight * 2 + kButtonGap);
+
+    // Directly above both views, because it filters whichever one is
+    // showing.
+    auto searchRow = area.removeFromTop(kButtonHeight);
+    clearSearchButton.setBounds(searchRow.removeFromRight(kButtonHeight));
+    searchRow.removeFromRight(kButtonGap);
+    searchBox.setBounds(searchRow);
+    area.removeFromTop(kButtonGap);
 
     // Both views get the same bounds; only one is visible at a time.
     trackTable->setBounds(area);

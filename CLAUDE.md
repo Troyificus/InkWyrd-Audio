@@ -1852,6 +1852,42 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### The panic button and the Library search box (beta.23)
+
+Both came out of a "what would improve this for its actual use" review -
+running a game night, not editing audio.
+
+**The panic button** is wiring, not new audio code:
+`SoundboardEngine::stopAllVoices()` had existed since the soundboard
+landed and nothing had ever called it. Now four things do - a Stop all
+button on the Soundboard window, **Esc** in `PlayerComponent::keyPressed`,
+a `stopAllSounds` command in `ControlServer`, and a Stream Deck action.
+
+- **It deliberately does NOT stop the music.** "I fired the wrong
+  effect" and "end the session" are different emergencies, and Stop
+  already covers the second. With 16 voices able to overlap, the first
+  one had no undo at all before this.
+- `MasterEngine::getSoundboard()` exists so anything already holding the
+  master engine (the Player window) can reach the panic without also
+  being handed the soundboard separately.
+
+**The search box** filters `libraryTracks` in `refreshLibraryTracks()`,
+which both views already rebuild from, so the folder tree follows for
+free - folders whose tracks all filter out simply stop existing in the
+rebuilt tree.
+
+- **The matching rule lives in `TrackSearch.h`, not in PlaylistPanel**,
+  purely so the self-test can check it without a window. It is worth
+  testing because a filter that silently drops a track is
+  indistinguishable, to the user, from a library that lost it. 14 checks.
+- Every WORD must match somewhere, in any order ("drake blue" finds
+  "Blue Drake"), rather than the query matching as one run of text.
+- The haystack includes the FILENAME as well as the tags: plenty of
+  libraries have untagged tracks, and that is the only way to find them.
+- **Not persisted**, deliberately. A library that opened with a filter
+  still applied would look exactly like one that had lost most of its
+  music.
+
 ### Preview, a drag source that actually works, and the tag editor (beta.21)
 
 **The drag from the Library to the Playlist window had NEVER worked**,

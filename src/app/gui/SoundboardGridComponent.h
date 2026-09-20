@@ -87,6 +87,10 @@ private:
 
     juce::Label caption { {}, "Soundboard" };
     juce::TextButton importButton { "Import folder..." };
+
+    // Silences every sound playing right now. Up to 16 can overlap, and
+    // one wrong press mid-session had no undo before this.
+    juce::TextButton stopAllButton { "Stop all" };
     juce::TextButton addSlotsButton { "+" };
     juce::TextButton removeSlotsButton { "-" };
     juce::Label hint;

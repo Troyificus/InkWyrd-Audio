@@ -191,6 +191,22 @@ private:
     bool folderView = false;
     std::function<void(bool)> onTrackViewChanged;
 
+    // Narrows BOTH views to tracks matching what's typed. Deliberately
+    // not persisted: a library that opened with a filter still applied
+    // would look like music had gone missing.
+    juce::TextEditor searchBox;
+    juce::TextButton clearSearchButton { "x" };
+    juce::String searchText;
+
+    // Every track in the library, before the search box narrows it -
+    // kept so the caption can say "12 of 84" and so clearing the box
+    // doesn't need a disk-touching rescan.
+    int unfilteredTrackCount = 0;
+
+    // Whether this track survives the current search. Empty search
+    // matches everything.
+    bool matchesSearch(const juce::File& file) const;
+
     juce::TextButton addFilesButton { "Add files..." };
     juce::TextButton addFolderButton { "Add folder..." };
     juce::TextButton addToPlaylistButton { "Add to playlist" };

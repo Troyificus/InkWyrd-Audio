@@ -216,14 +216,16 @@ SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToU
     addAndMakeVisible(caption);
 
     importButton.onClick = [this] { importFolderIntoBoard(); };
+    stopAllButton.onClick = [this] { soundboard.stopAllVoices(); };
     addSlotsButton.onClick = [this] { changeSlotCount(kSlotStep); };
     removeSlotsButton.onClick = [this] { changeSlotCount(-kSlotStep); };
 
-    for (auto* button : { &importButton, &addSlotsButton, &removeSlotsButton })
+    for (auto* button : { &stopAllButton, &importButton, &addSlotsButton, &removeSlotsButton })
         addAndMakeVisible(button);
 
     hint.setText("Click an empty button to assign a sound, or drag files in. Click a button's volume "
-                  "bar to adjust it. Right-click to rename, recolour, add a picture or clear.",
+                  "bar to adjust it. Right-click to rename, recolour, add a picture or clear. "
+                  "Stop all (or Esc on the Player) silences every sound playing.",
                   juce::dontSendNotification);
     hint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(hint);
@@ -714,6 +716,8 @@ void SoundboardGridComponent::resized()
     addSlotsButton.setBounds(captionRow.removeFromRight(30).reduced(0, 2));
     captionRow.removeFromRight(4);
     importButton.setBounds(captionRow.removeFromRight(120).reduced(0, 2));
+    captionRow.removeFromRight(4);
+    stopAllButton.setBounds(captionRow.removeFromRight(80).reduced(0, 2));
     caption.setBounds(captionRow);
 
     hint.setBounds(area.removeFromTop(kHintHeight));

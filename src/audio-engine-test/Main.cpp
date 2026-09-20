@@ -26,6 +26,7 @@
 #include "PlaylistLibrary.h"
 #include "PlaylistPanel.h"
 #include "LibraryFolderTree.h"
+#include "TrackSearch.h"
 #include "SkinLoader.h"
 #include "TagEditor.h"
 #include "PlaylistTrackListComponent.h"
@@ -567,6 +568,36 @@ namespace
 
             check(inkwyrd::buildFolderTree({})->children.isEmpty(),
                    "an empty library gives an empty tree rather than a phantom row");
+        }
+
+        {
+            // The Library search box's matching rule. Worth testing
+            // headlessly because it decides what a user can FIND - a
+            // filter that silently drops a track looks exactly like a
+            // library that lost it.
+            using inkwyrd::matchesSearchTerms;
+
+            // What the panel builds: tags plus the filename, so untagged
+            // tracks are still findable by what they're called on disk.
+            const juce::String row = "Blue Drake Troyificus Sentinel Ambient 03 blue-drake-final";
+
+            check(matchesSearchTerms(row, {}), "an empty search matches everything");
+            check(matchesSearchTerms(row, "   "), "a search of only spaces matches everything");
+            check(matchesSearchTerms(row, "blue"), "a title word matches");
+            check(matchesSearchTerms(row, "BLUE"), "matching ignores case");
+            check(matchesSearchTerms(row, "troyificus"), "an artist matches");
+            check(matchesSearchTerms(row, "sentinel"), "an album matches");
+            check(matchesSearchTerms(row, "ambient"), "a genre matches");
+            check(matchesSearchTerms(row, "final"), "the filename matches when the tags do not");
+            check(matchesSearchTerms(row, "drake blue"),
+                   "words match in any order, not as one run of text");
+            check(matchesSearchTerms(row, "blue   drake"), "repeated spaces between words are ignored");
+            check(matchesSearchTerms(row, "blue sentinel"),
+                   "words from different fields match together");
+            check(! matchesSearchTerms(row, "blue tavern"),
+                   "every word has to match - one hit is not enough");
+            check(! matchesSearchTerms(row, "tavern"), "a track that matches nothing is filtered out");
+            check(matchesSearchTerms(row, "rak"), "a partial word matches, so typing narrows as you go");
         }
 
         {

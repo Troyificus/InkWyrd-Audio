@@ -79,6 +79,7 @@ node test-control-client.mjs mute
 node test-control-client.mjs skip
 node test-control-client.mjs shuffle
 node test-control-client.mjs soundboard <soundName>
+node test-control-client.mjs stopall
 ```
 
 Run `InkwyrdAudioApp` first, then run these against it. This is exactly

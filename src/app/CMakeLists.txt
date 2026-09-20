@@ -73,6 +73,7 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/AppSettings.h
     gui/SkinLoader.cpp
     gui/SkinLoader.h
+    gui/TrackSearch.h
     gui/TagEditorWindow.cpp
     gui/TagEditorWindow.h
     gui/Dialogs.cpp

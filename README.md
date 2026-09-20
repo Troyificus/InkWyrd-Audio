@@ -190,7 +190,7 @@ whole name as the title.
 
 **Keyboard shortcuts** work whenever the Player window is focused:
 **Space** play/pause, **S** stop, **M** mic on/off, **Right arrow** skip,
-**Up/Down** master volume.
+**Up/Down** master volume, **Esc** stop every soundboard sound.
 
 **The transport row:** **Pause** (keeps your place), **Stop** (silences
 everything and starts the list from the top next time), **Fade out**
@@ -228,6 +228,14 @@ window; **double-click, or hit Play, to switch to it.** The music
 crossfades across rather than cutting. **New**, **Rename** and
 **Delete** manage the list. To see where they're stored (readable JSON
 files), use **Open playlists folder** in Settings.
+
+**The search box** above the list narrows it as you type, matching on
+title, artist, album, genre and filename - so untagged tracks are still
+findable by what they're called on disk. Words match in any order, so
+"drake blue" finds "Blue Drake". The caption says how many of how many
+you're looking at, **Esc** or the **x** clears it, and the filter is
+never remembered between sessions. It narrows the Folders view too:
+folders with nothing matching in them drop out.
 
 The bottom half is **All Tracks**: every track Inkwyrd knows about,
 independent of which playlists happen to use it. It stays put while you
@@ -333,6 +341,11 @@ being previewed is fine: the preview stops itself.
 A grid of programmable buttons, like a Stream Deck. Click an empty one to
 pick a sound for it, or **drag sound files straight onto a button** from
 Explorer. Click a filled button to fire it, sounds can overlap.
+**Stop all** silences every sound playing right now, without touching the
+music - for when the wrong effect goes out to the table. **Esc** does the
+same thing from the Player window, and there's a Stream Deck action for
+it too. Use **Stop** on the Player if you want the music to stop as well.
+
 **Right-click** any button to rename it, give it a colour or a picture,
 swap its sound or clear it. Buttons stay where you put them, so adding a
 new sound never shuffles the board around. **+** and **-** change how
@@ -493,6 +506,11 @@ understand keeps that one colour and uses the rest of your file. "Inkwyrd
   layered independently of the music (up to 16 sounds can overlap at
   once). Assign by drag and drop, by picking a file, or by importing a
   whole folder at once.
+- A search box over the whole library, matching tags or filename in any
+  word order, filtering both the table and the folder tree.
+- A panic control - one button, one key, or one Stream Deck press -
+  that silences every soundboard sound at once without stopping the
+  music.
 - Volume control at every level: a master fader over everything, a trim
   per soundboard button, and a trim per track so one loud export can't
   ambush the table when shuffle reaches it.

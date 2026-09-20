@@ -100,6 +100,11 @@ public:
     void setMasterGain(float gain) { masterGain.store(juce::jlimit(0.0f, 1.0f, gain)); }
     float getMasterGain() const { return masterGain.load(); }
 
+    // The soundboard this engine mixes. Exposed so anything holding the
+    // master engine can silence every playing effect at once - the panic
+    // button - without also having to be handed the soundboard.
+    SoundboardEngine& getSoundboard() { return soundboard; }
+
     // RNNoise on the mic, ahead of the VST chain. Off by default and
     // owned here rather than by the caller so the audio thread always
     // has a valid object whatever the UI is doing. See NoiseSuppressor.h
