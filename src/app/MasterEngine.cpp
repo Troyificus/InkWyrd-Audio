@@ -57,6 +57,8 @@ void MasterEngine::setMicMuted(bool muted)
 
 void MasterEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
+    duck.prepare(device->getCurrentSampleRate());
+
     currentSampleRate = device->getCurrentSampleRate();
     auto blockSize = device->getCurrentBufferSizeSamples();
 
@@ -110,6 +112,27 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
     masterBuffer.setSize(2, numSamples, false, false, true);
     juce::AudioSourceChannelInfo info(&masterBuffer, 0, numSamples);
     musicMixer.getNextAudioBlock(info);
+
+    // 2b. Ducking: pull the MUSIC down while the mic is live, before
+    // the voice is summed in below - ducking the finished mix would
+    // duck the voice along with it, which is the opposite of the point.
+    //
+    // The level is read after the gate/suppressor and the VST chain, so
+    // whatever the user already uses to decide what counts as their
+    // voice decides this too. A muted mic was cleared in step 1, so it
+    // can never hold the music down.
+    {
+        auto micPeak = juce::jmax(micBuffer.getMagnitude(0, 0, numSamples),
+                                   micBuffer.getMagnitude(1, 0, numSamples));
+        auto duckGain = duck.processBlock(micPeak, numSamples);
+
+        if (! juce::approximatelyEqual(duckGain, lastDuckGain))
+            masterBuffer.applyGainRamp(0, numSamples, lastDuckGain, duckGain);
+        else if (duckGain < 1.0f)
+            masterBuffer.applyGain(duckGain);
+
+        lastDuckGain = duckGain;
+    }
 
     // 3. Sum processed voice into the same buffer - this is now the
     // final master mix, used for both local output and the Discord send.

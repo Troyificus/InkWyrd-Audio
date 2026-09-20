@@ -30,12 +30,16 @@ target_sources(AudioEngineTest PRIVATE
     # and the one part of the Discord auto-mute path that can be checked
     # without a running Discord client.
     ../app/DiscordRpcClient.cpp
+    # parseReleasesJson() and isNewerRelease() are pure over a string;
+    # the network half of this file is never called from the test.
+    ../app/UpdateCheck.cpp
 )
 
 target_include_directories(AudioEngineTest PRIVATE ../app/gui ../app)
 
 target_compile_definitions(AudioEngineTest PRIVATE
     JUCE_STANDALONE_APPLICATION=1
+    INKWYRD_VERSION_STRING="${INKWYRD_VERSION_STRING}"
     # Test target only. runDispatchLoopUntil() is what lets a check let a
     # crossfade actually RUN to completion - juce::Timer needs a pumped
     # message loop - and without it every test can only observe a fade

@@ -1852,6 +1852,65 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Ducking, the update check, and revealing search matches (beta.24)
+
+**Ducking** (`src/audio-engine/DuckEnvelope.h`, applied at step 2b of
+`MasterEngine::audioDeviceIOCallbackWithContext`).
+
+- **It ducks the MUSIC buffer before the voice is summed in.** Ducking
+  the finished mix would duck the speaking voice along with it, which is
+  the opposite of the point. That ordering is the whole reason this sits
+  between steps 2 and 3 rather than anywhere more convenient.
+- **The mic level is read AFTER the suppressor and the VST chain**, so
+  whatever gate the user already runs decides what counts as their
+  voice. A muted mic was cleared in step 1, so it can never hold the
+  music down - worth keeping true if that ordering is ever revisited.
+- **The envelope is a separate class purely so it can be tested.** All
+  the behaviour worth checking (drops on speech, STAYS down through a
+  pause, comes back after, inert when off, never overshoots, releases
+  when switched off mid-duck) runs on made-up mic levels with no audio
+  device at all. 6 checks.
+- **Three test failures on the first run were the TEST being wrong, not
+  the engine**: the move is exponential, so 100 ms against a 30 ms
+  attack is still 3% short, and 3 s against a 600 ms release is still
+  0.5% short. Confirmed by working the maths out separately before
+  touching either side. If these fail again, check the expected TIMES
+  before suspecting the envelope.
+- Attack/hold/release are fixed rather than exposed. They are the
+  numbers nobody tunes well by ear, and a badly tuned one is what makes
+  ducking sound like a fault. Only amount and threshold are settings.
+
+**The update check** (`src/app/UpdateCheck.{h,cpp}`).
+
+- **It reports and never downloads.** An app that fetched and ran an
+  executable would be doing exactly what this project's Defender history
+  says not to do (see above).
+- Reads `/releases`, NOT `/releases/latest`: GitHub's "latest"
+  deliberately skips pre-releases, and every release of this app so far
+  is one.
+- GitHub rejects requests with no `User-Agent`. Failure of any kind -
+  offline, rate-limited, captive portal, an error body - is silent by
+  design; the parse simply returns invalid.
+- **`isNewerRelease` compares numbers as numbers**, which is the whole
+  reason it exists: a string comparison puts beta.9 above beta.23. A
+  version with a qualifier is EARLIER than the same version without one
+  (0.1.0 beats 0.1.0-beta.24), and an unparseable tag is never an
+  update. 17 checks, including real GitHub JSON shapes.
+- **`INKWYRD_UPDATECHECK=<version>` on the test harness poses as an
+  older build** and hits the real API. Without that, a run on the newest
+  release prints the same "nothing newer" as a run with no network,
+  so the request itself would never actually be proven. Verified both
+  ways: posing as beta.1 reported beta.23 with its real URL.
+- `INKWYRD_VERSION_STRING` moved from `src/app/CMakeLists.txt` to the
+  ROOT CMakeLists so the harness compiles against the same string the
+  app does.
+
+**Revealing search matches**: `LibraryFolderTree::setTracks` takes
+`revealEverything`, and opens every folder when a search is running.
+The openness from BEFORE revealing started is kept and restored when the
+search clears - otherwise clearing a search would leave a whole library
+hanging open, which is not the state the user left it in.
+
 ### The panic button and the Library search box (beta.23)
 
 Both came out of a "what would improve this for its actual use" review -

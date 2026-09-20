@@ -27,6 +27,8 @@
 #include "PlaylistPanel.h"
 #include "LibraryFolderTree.h"
 #include "TrackSearch.h"
+#include "DuckEnvelope.h"
+#include "UpdateCheck.h"
 #include "SkinLoader.h"
 #include "TagEditor.h"
 #include "PlaylistTrackListComponent.h"
@@ -598,6 +600,149 @@ namespace
                    "every word has to match - one hit is not enough");
             check(! matchesSearchTerms(row, "tavern"), "a track that matches nothing is filtered out");
             check(matchesSearchTerms(row, "rak"), "a partial word matches, so typing narrows as you go");
+        }
+
+        {
+            // Ducking the music under the mic. All of the behaviour worth
+            // checking is in the envelope, and none of it needs an audio
+            // device: made-up mic levels, real time passing in blocks.
+            constexpr double sampleRate = 48000.0;
+            constexpr int blockSamples = 480; // 10 ms, so a block count IS a time
+
+            auto loud = juce::Decibels::decibelsToGain(-6.0f);
+            auto quiet = juce::Decibels::decibelsToGain(-60.0f);
+
+            auto runBlocks = [&](inkwyrd::DuckEnvelope& envelope, float micPeak, int blocks)
+            {
+                float gain = envelope.getCurrentGain();
+                for (int i = 0; i < blocks; ++i)
+                    gain = envelope.processBlock(micPeak, blockSamples);
+
+                return gain;
+            };
+
+            inkwyrd::DuckSettings settings;
+            settings.enabled = true;
+            settings.amountDb = -12.0f;
+            settings.thresholdDb = -40.0f;
+
+            auto duckedGain = juce::Decibels::decibelsToGain(settings.amountDb);
+
+            {
+                // Off: a loud mic must not move the music at all. This is
+                // the check that matters most - the feature is opt-in,
+                // and it must be genuinely inert until someone asks.
+                inkwyrd::DuckEnvelope envelope;
+                envelope.prepare(sampleRate);
+
+                check(juce::approximatelyEqual(runBlocks(envelope, loud, 50), 1.0f),
+                       "ducking switched off leaves the music at full level");
+            }
+
+            {
+                inkwyrd::DuckEnvelope envelope;
+                envelope.prepare(sampleRate);
+                envelope.setSettings(settings);
+
+                check(juce::approximatelyEqual(runBlocks(envelope, quiet, 50), 1.0f),
+                       "a mic below the threshold never ducks");
+
+                // 150 ms of speech against a 30 ms attack. The move is
+                // exponential, so "reached" means five time constants,
+                // not one: at 100 ms it is still 3% short, which is
+                // correct behaviour rather than a slow attack.
+                auto afterAttack = runBlocks(envelope, loud, 15);
+                check(std::abs(afterAttack - duckedGain) < 0.02f,
+                       "speech pulls the music down to the set amount");
+
+                // The hold is what stops the music surging between words.
+                auto duringPause = runBlocks(envelope, quiet, 20); // 200 ms < 400 ms hold
+                check(std::abs(duringPause - duckedGain) < 0.02f,
+                       "the music stays down through a pause between words");
+
+                // Hold then release, with enough time for the same
+                // exponential to actually arrive: 400 ms of hold plus a
+                // 600 ms time constant means a few seconds, not one.
+                auto afterRelease = runBlocks(envelope, quiet, 800);
+                check(juce::approximatelyEqual(afterRelease, 1.0f),
+                       "the music comes all the way back when speaking stops");
+            }
+
+            {
+                // The gain has to stay inside its own range the whole way
+                // down: a duck that overshoots is a dip, which is worse
+                // than no ducking at all.
+                inkwyrd::DuckEnvelope envelope;
+                envelope.prepare(sampleRate);
+                envelope.setSettings(settings);
+
+                auto withinRange = true;
+                for (int i = 0; i < 100; ++i)
+                {
+                    auto gain = envelope.processBlock(loud, blockSamples);
+                    withinRange = withinRange && gain <= 1.0f && gain >= duckedGain - 0.001f;
+                }
+
+                check(withinRange, "the ducked gain never overshoots past the set amount");
+            }
+
+            {
+                // Switching it off mid-duck has to let go, not leave the
+                // music quietly pinned down for the rest of the session.
+                inkwyrd::DuckEnvelope envelope;
+                envelope.prepare(sampleRate);
+                envelope.setSettings(settings);
+                runBlocks(envelope, loud, 20);
+
+                auto off = settings;
+                off.enabled = false;
+                envelope.setSettings(off);
+
+                check(juce::approximatelyEqual(runBlocks(envelope, loud, 800), 1.0f),
+                       "turning ducking off releases the music even with the mic still live");
+            }
+        }
+
+        {
+            // Which release is newer. Worth testing because the whole
+            // point is a notice that only appears when it should: a
+            // wrong answer either nags about an update that doesn't
+            // exist, or silently never mentions one that does.
+            using inkwyrd::isNewerRelease;
+
+            check(isNewerRelease("0.1.0-beta.23", "0.1.0-beta.24"), "a later beta is newer");
+            check(! isNewerRelease("0.1.0-beta.24", "0.1.0-beta.23"), "an earlier beta is not newer");
+            check(! isNewerRelease("0.1.0-beta.24", "0.1.0-beta.24"), "the same version is not newer");
+            check(isNewerRelease("0.1.0-beta.9", "0.1.0-beta.23"),
+                   "betas compare as numbers, not text - beta.23 beats beta.9");
+            check(isNewerRelease("0.1.0-beta.22", "0.1.0-beta.22.1"), "a hotfix on a beta is newer");
+            check(! isNewerRelease("0.1.0-beta.22.1", "0.1.0-beta.22"), "and the beta it fixed is not");
+            check(isNewerRelease("0.1.0-beta.24", "0.1.0"), "a finished release beats its own betas");
+            check(! isNewerRelease("0.1.0", "0.1.0-beta.24"), "and a beta of it does not beat the release");
+            check(isNewerRelease("0.1.0-beta.24", "0.2.0-beta.1"), "a later base version wins outright");
+            check(isNewerRelease("v0.1.0-beta.23", "v0.1.0-beta.24"), "a leading v on either side is ignored");
+            check(! isNewerRelease("0.1.0-beta.24", "nonsense"),
+                   "an unparseable tag is never treated as an update");
+
+            // What GitHub actually sends back, rather than a shape we
+            // hope it sends.
+            auto parsed = inkwyrd::parseReleasesJson(
+                R"([{"tag_name":"v0.1.0-beta.24","draft":false,)"
+                R"("html_url":"https://github.com/Troyificus/InkWyrd-Audio/releases/tag/v0.1.0-beta.24"}])");
+
+            check(parsed.valid && parsed.version == "0.1.0-beta.24",
+                   "the newest release's version is read from the releases JSON");
+            check(parsed.url.contains("releases/tag"), "so is the link to it");
+
+            // Rate-limit replies and error bodies are objects, not
+            // arrays, and must simply say nothing.
+            check(! inkwyrd::parseReleasesJson(R"({"message":"API rate limit exceeded"})").valid,
+                   "a rate-limit reply is not mistaken for a release");
+            check(! inkwyrd::parseReleasesJson("<html>captive portal</html>").valid,
+                   "a page that isn't JSON at all is not mistaken for a release");
+            check(! inkwyrd::parseReleasesJson("[]").valid, "no releases at all is not a release");
+            check(! inkwyrd::parseReleasesJson(R"([{"tag_name":"v9.9.9","draft":true}])").valid,
+                   "a draft release is skipped - nobody else can download it");
         }
 
         {
@@ -2119,6 +2264,45 @@ namespace
     }
 }
 
+// See the INKWYRD_UPDATECHECK branch in main().
+static int runUpdateCheck()
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    // Whatever this harness was built alongside. Printed too, because
+    // "no update" is only meaningful next to what it compared against.
+    //
+    // Set INKWYRD_UPDATECHECK to a VERSION rather than 1 to pose as an
+    // older build ("0.1.0-beta.1"). Without that, a run on the newest
+    // release prints the same "nothing newer" as a run with no network
+    // at all, and the request itself would never actually be proven.
+    auto requested = juce::SystemStats::getEnvironmentVariable("INKWYRD_UPDATECHECK", "");
+    const juce::String currentVersion = requested == "1" ? juce::String(INKWYRD_VERSION_STRING)
+                                                          : requested;
+    std::cout << "This build: " << currentVersion.toStdString() << std::endl;
+
+    std::atomic<bool> answered { false };
+
+    inkwyrd::checkForNewerRelease(currentVersion, [&answered](inkwyrd::ReleaseInfo release)
+    {
+        std::cout << "NEWER RELEASE: " << release.version.toStdString()
+                   << "  " << release.url.toStdString() << std::endl;
+        answered = true;
+    });
+
+    // The check is deliberately silent when there is nothing to say, so
+    // this waits a fixed time rather than for an answer that may never
+    // come.
+    auto deadline = juce::Time::getMillisecondCounter() + 10000;
+    while (juce::Time::getMillisecondCounter() < deadline && ! answered)
+        juce::MessageManager::getInstance()->runDispatchLoopUntil(100);
+
+    if (! answered)
+        std::cout << "No newer release reported (up to date, offline, or rate-limited)." << std::endl;
+
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
     juce::ignoreUnused(argc, argv);
@@ -2140,6 +2324,15 @@ int main(int argc, char* argv[])
 
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RPCTEST", "").isNotEmpty())
         return runRpcTest();
+
+    // INKWYRD_UPDATECHECK=1: asks the REAL GitHub API, once, and prints
+    // what it makes of the answer. Kept out of the default suite - the
+    // self-test must not depend on being online, or on someone else's
+    // rate limit - but this is the only way to check that the request
+    // itself works: the User-Agent GitHub demands, the JSON shape it
+    // really sends, and the verdict against this build's own version.
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_UPDATECHECK", "").isNotEmpty())
+        return runUpdateCheck();
 
     // Reads the user's REAL library, so it needs no fixture folder and
     // goes above the PLAYLIST_FOLDER guard like the others.

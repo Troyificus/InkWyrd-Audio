@@ -7,6 +7,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include "DiscordAudioSender.h"
+#include "DuckEnvelope.h"
 #include "NoiseSuppressor.h"
 #include "SpectrumTap.h"
 #include "PlaylistEngine.h"
@@ -100,6 +101,11 @@ public:
     void setMasterGain(float gain) { masterGain.store(juce::jlimit(0.0f, 1.0f, gain)); }
     float getMasterGain() const { return masterGain.load(); }
 
+    // Ducking: how far the music drops while the mic is live, and what
+    // counts as live. Safe from any thread - the envelope holds its
+    // parameters as atomics.
+    void setDuckSettings(const inkwyrd::DuckSettings& settings) { duck.setSettings(settings); }
+
     // The soundboard this engine mixes. Exposed so anything holding the
     // master engine can silence every playing effect at once - the panic
     // button - without also having to be handed the soundboard.
@@ -153,6 +159,9 @@ private:
 
     // Audio thread only - where the gain ramp got to last block.
     float lastMasterGain = 1.0f;
+
+    inkwyrd::DuckEnvelope duck;
+    float lastDuckGain = 1.0f;
 
     juce::AudioBuffer<float> micBuffer, masterBuffer;
     juce::MidiBuffer scratchMidi;

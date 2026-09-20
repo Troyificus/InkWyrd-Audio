@@ -646,7 +646,10 @@ void PlaylistPanel::refreshLibraryTracks()
 
     // The tree does its own grouping and ordering from the same set - it
     // is about where tracks live, not how the table happens to be sorted.
-    folderTree->setTracks(libraryTracks);
+    // Revealed while searching: the matches are the point of the list,
+    // and leaving them inside closed folders makes the tree answer
+    // "where is this" with more clicking.
+    folderTree->setTracks(libraryTracks, searchText.isNotEmpty());
 }
 
 void PlaylistPanel::sortLibraryTracks()

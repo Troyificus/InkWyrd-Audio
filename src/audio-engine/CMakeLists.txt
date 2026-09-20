@@ -19,6 +19,7 @@ add_library(AudioEngine STATIC
     TrackLibrary.h
     TrackMetadataStore.h
     TagEditor.h
+    DuckEnvelope.h
     NoiseSuppressor.h
     SpectrumTap.h
     Mp3AudioFormat.h

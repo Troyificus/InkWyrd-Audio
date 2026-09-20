@@ -23,6 +23,12 @@ public:
         juce::String botToken, guildId, channelId;
         juce::String discordClientSecret;
         bool discordAutoMuteEnabled = false;
+
+        bool duckingEnabled = false;
+        double duckAmountDb = -12.0;
+        double duckThresholdDb = -40.0;
+
+        bool checkForUpdates = true;
     };
 
     // isFirstRun distinguishes the initial setup screen (where the
@@ -57,6 +63,7 @@ public:
 private:
     void browseForFolder(juce::Label& targetLabel, juce::File& targetValue, const juce::String& chooserTitle);
     void updateSaveButtonEnablement();
+    void updateDuckEnablement();
 
     void refreshSkinList(const juce::String& nameToSelect);
     void applySelectedSkin();
@@ -102,6 +109,19 @@ private:
     juce::TextEditor clientSecretEditor;
     juce::TextButton authoriseButton { "Authorise..." };
     juce::Label autoMuteStatusLabel;
+
+    // Ducking. Two numbers only: how far the music drops and what counts
+    // as speaking. The timings that make a duck sound right are fixed in
+    // DuckSettings rather than being four more sliders to get wrong.
+    juce::Label duckSectionCaption { {}, "Duck the music while my mic is live (optional)" };
+    juce::ToggleButton duckToggle { "Enable" };
+    juce::Label duckAmountCaption { {}, "Drop the music by" };
+    juce::Slider duckAmountSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::Label duckThresholdCaption { {}, "Speaking is louder than" };
+    juce::Slider duckThresholdSlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+
+    // Reports only - it never downloads anything. See UpdateCheck.h.
+    juce::ToggleButton updateCheckToggle { "Tell me when a newer release exists" };
 
     // Moved here from under the playlist list in the Library window. It
     // opens the folder the playlist JSON files live in - useful once in

@@ -93,6 +93,23 @@ public:
     bool isLocalMonitoringEnabled() const;
     void setLocalMonitoringEnabled(bool enabled);
 
+    // Ducking the music under the mic. Amount is how far down it goes,
+    // threshold is what counts as speaking; the timings are fixed - see
+    // DuckSettings.
+    bool isDuckingEnabled() const;
+    void setDuckingEnabled(bool enabled);
+
+    double getDuckAmountDb() const;
+    void setDuckAmountDb(double amountDb);
+
+    double getDuckThresholdDb() const;
+    void setDuckThresholdDb(double thresholdDb);
+
+    // Whether to ask GitHub, once per launch, if there's a newer
+    // release. On by default; it only ever reports.
+    bool shouldCheckForUpdates() const;
+    void setCheckForUpdates(bool shouldCheck);
+
     bool isMicMuted() const;
     void setMicMuted(bool muted);
 

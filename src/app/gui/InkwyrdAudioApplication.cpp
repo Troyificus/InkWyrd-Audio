@@ -1,4 +1,6 @@
 #include "InkwyrdAudioApplication.h"
+
+#include "UpdateCheck.h"
 #include "Mp3AudioFormat.h"
 #include "MediaFoundationAudioFormat.h"
 #include "Log.h"
@@ -164,6 +166,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
 
     // Restore both before anything can be heard.
     masterEngine.setMicMuted(settings.isMicMuted());
+    applyDuckSettings();
 
     applyDiscordRpcSettings();
 
@@ -189,6 +192,40 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     {
         showSetup();
     }
+
+    // Last, and on its own thread: nothing about starting up waits for
+    // the network.
+    startUpdateCheckIfEnabled();
+}
+
+void InkwyrdAudioApplication::applyDuckSettings()
+{
+    inkwyrd::DuckSettings duckSettings;
+    duckSettings.enabled = settings.isDuckingEnabled();
+    duckSettings.amountDb = (float) settings.getDuckAmountDb();
+    duckSettings.thresholdDb = (float) settings.getDuckThresholdDb();
+
+    masterEngine.setDuckSettings(duckSettings);
+}
+
+void InkwyrdAudioApplication::startUpdateCheckIfEnabled()
+{
+    if (! settings.shouldCheckForUpdates())
+        return;
+
+    inkwyrd::checkForNewerRelease(INKWYRD_VERSION_STRING,
+                                   [this](inkwyrd::ReleaseInfo release)
+    {
+        // The banner rather than a dialog: a box in the way at startup
+        // is worse than the news is good, and this is news, not a
+        // problem. The link is spelled out because the banner is text.
+        updateNotice = "Inkwyrd Audio " + release.version + " is available - "
+                        + (release.url.isNotEmpty() ? release.url
+                                                     : juce::String("see the GitHub releases page"));
+
+        logLine("[Update] newer release available: " + release.version);
+        updateWarningBanner();
+    });
 }
 
 void InkwyrdAudioApplication::migratePlaylistLibraryIfNeeded()
@@ -909,6 +946,11 @@ void InkwyrdAudioApplication::updateWarningBanner()
 
     warnings.addArray(library.getLoadWarnings());
 
+    // Last: it is the one line here that isn't a problem, and it should
+    // not push a real warning out of sight.
+    if (updateNotice.isNotEmpty())
+        warnings.add(updateNotice);
+
     player->setWarningBanner(warnings.joinIntoString("  |  "));
 }
 
@@ -950,7 +992,15 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
     settings.setChannelId(result.channelId);
     settings.setDiscordClientSecret(result.discordClientSecret);
     settings.setDiscordAutoMuteEnabled(result.discordAutoMuteEnabled);
+    settings.setDuckingEnabled(result.duckingEnabled);
+    settings.setDuckAmountDb(result.duckAmountDb);
+    settings.setDuckThresholdDb(result.duckThresholdDb);
+    settings.setCheckForUpdates(result.checkForUpdates);
     settings.save();
+
+    // Ducking applies to the session already running - it is a mix
+    // setting, not a connection one, so there is nothing to restart for.
+    applyDuckSettings();
 
     applyDiscordRpcSettings();
 

@@ -104,6 +104,40 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     else
         updateAutoMuteStatus("Not authorised yet. Paste the client secret, then click Authorise.", false);
 
+    addAndMakeVisible(duckSectionCaption);
+    duckToggle.setToggleState(settings.isDuckingEnabled(), juce::dontSendNotification);
+    duckToggle.onClick = [this] { updateDuckEnablement(); };
+    addAndMakeVisible(duckToggle);
+
+    // dB, so the numbers mean the same thing they do on every other
+    // level control in the app.
+    duckAmountSlider.setRange(-40.0, -1.0, 1.0);
+    duckAmountSlider.setValue(settings.getDuckAmountDb(), juce::dontSendNotification);
+    duckAmountSlider.setTextValueSuffix(" dB");
+    duckAmountSlider.setTooltip("How far the music drops while you are speaking.");
+
+    duckThresholdSlider.setRange(-70.0, -10.0, 1.0);
+    duckThresholdSlider.setValue(settings.getDuckThresholdDb(), juce::dontSendNotification);
+    duckThresholdSlider.setTextValueSuffix(" dB");
+    duckThresholdSlider.setTooltip("Mic level that counts as speaking. Raise it if a noisy room "
+                                    "holds the music down.");
+
+    for (auto* slider : { &duckAmountSlider, &duckThresholdSlider })
+        addAndMakeVisible(slider);
+
+    for (auto* label : { &duckAmountCaption, &duckThresholdCaption })
+    {
+        label->setFont(juce::Font(juce::FontOptions(13.0f)));
+        addAndMakeVisible(label);
+    }
+
+    updateDuckEnablement();
+
+    updateCheckToggle.setToggleState(settings.shouldCheckForUpdates(), juce::dontSendNotification);
+    updateCheckToggle.setTooltip("Asks GitHub once at startup whether a newer release exists. "
+                                  "It never downloads anything.");
+    addAndMakeVisible(updateCheckToggle);
+
     addAndMakeVisible(playlistFilesCaption);
     openPlaylistFolderButton.onClick = [this]
     {
@@ -167,6 +201,10 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
         result.channelId = channelIdEditor.getText().trim();
         result.discordClientSecret = clientSecretEditor.getText().trim();
         result.discordAutoMuteEnabled = autoMuteToggle.getToggleState();
+        result.duckingEnabled = duckToggle.getToggleState();
+        result.duckAmountDb = duckAmountSlider.getValue();
+        result.duckThresholdDb = duckThresholdSlider.getValue();
+        result.checkForUpdates = updateCheckToggle.getToggleState();
 
         if (onSaveAndLaunch)
             onSaveAndLaunch(result);
@@ -178,7 +216,7 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     // component's own size, so an explicit size here IS the window size.
     // Taller than it was: the auto-mute section adds three rows, and
     // leaving the height alone would have pushed Save off the bottom.
-    setSize(640, 760); // the skin section added ~90px
+    setSize(640, 890); // ducking and the update toggle added ~130px
 }
 
 void SetupComponent::browseForFolder(juce::Label& targetLabel, juce::File& targetValue, const juce::String& chooserTitle)
@@ -305,6 +343,18 @@ void SetupComponent::exportCurrentSkin()
     }));
 }
 
+void SetupComponent::updateDuckEnablement()
+{
+    // Greyed rather than hidden when it's off: the two numbers are how
+    // someone decides whether they want it at all.
+    auto on = duckToggle.getToggleState();
+
+    duckAmountSlider.setEnabled(on);
+    duckThresholdSlider.setEnabled(on);
+    duckAmountCaption.setEnabled(on);
+    duckThresholdCaption.setEnabled(on);
+}
+
 void SetupComponent::lookAndFeelChanged()
 {
     versionLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
@@ -376,6 +426,24 @@ void SetupComponent::resized()
 
     autoMuteStatusLabel.setBounds(area.removeFromTop(20));
     area.removeFromTop(20);
+
+    auto duckCaptionRow = area.removeFromTop(24);
+    duckToggle.setBounds(duckCaptionRow.removeFromRight(90));
+    duckSectionCaption.setBounds(duckCaptionRow);
+    area.removeFromTop(6);
+
+    auto duckAmountRow = area.removeFromTop(26);
+    duckAmountCaption.setBounds(duckAmountRow.removeFromLeft(160));
+    duckAmountSlider.setBounds(duckAmountRow);
+    area.removeFromTop(4);
+
+    auto duckThresholdRow = area.removeFromTop(26);
+    duckThresholdCaption.setBounds(duckThresholdRow.removeFromLeft(160));
+    duckThresholdSlider.setBounds(duckThresholdRow);
+    area.removeFromTop(20);
+
+    updateCheckToggle.setBounds(area.removeFromTop(24));
+    area.removeFromTop(16);
 
     auto playlistFilesRow = area.removeFromTop(28);
     playlistFilesCaption.setBounds(playlistFilesRow.removeFromLeft(140));

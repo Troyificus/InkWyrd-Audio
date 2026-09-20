@@ -22,6 +22,8 @@ target_sources(InkwyrdAudioApp PRIVATE
     DiscordAudioSender.cpp
     DiscordRpcClient.cpp
     ControlServer.cpp
+    UpdateCheck.cpp
+    UpdateCheck.h
     MessageThreadWatchdog.cpp
     MessageThreadWatchdog.h
     MasterEngine.h
@@ -82,24 +84,6 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/DiscordConnector.cpp
     gui/DiscordConnector.h
 )
-
-# The beta-qualified version string, read from the installer script so
-# there is still ONE place to bump per release (see CLAUDE.md's release
-# process). JUCE's own version can't carry it - Windows' version fields
-# hold four numbers, not "beta.20.1" - so it comes through as a define
-# and is shown on the Settings screen.
-file(READ "${CMAKE_SOURCE_DIR}/installer/InkwyrdAudio.iss" inkwyrd_iss_contents)
-string(REGEX MATCH "#define MyAppVersion \"([^\"]+)\"" inkwyrd_version_match "${inkwyrd_iss_contents}")
-set(INKWYRD_VERSION_STRING "${CMAKE_MATCH_1}")
-
-if(NOT INKWYRD_VERSION_STRING)
-    message(WARNING "Couldn't read MyAppVersion from installer/InkwyrdAudio.iss - falling back")
-    set(INKWYRD_VERSION_STRING "0.1.0")
-endif()
-
-# Otherwise editing the .iss alone leaves a stale version compiled in.
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/installer/InkwyrdAudio.iss")
 
 # So gui/*.cpp (in a subdirectory) can #include "MasterEngine.h" etc.
 # unqualified, same as Main.cpp always could when everything lived

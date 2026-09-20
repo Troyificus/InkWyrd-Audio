@@ -235,7 +235,9 @@ findable by what they're called on disk. Words match in any order, so
 "drake blue" finds "Blue Drake". The caption says how many of how many
 you're looking at, **Esc** or the **x** clears it, and the filter is
 never remembered between sessions. It narrows the Folders view too:
-folders with nothing matching in them drop out.
+folders with nothing matching in them drop out, and the ones left
+**open themselves so you can see where the matches live**. Clearing the
+search puts the tree back the way you had it.
 
 The bottom half is **All Tracks**: every track Inkwyrd knows about,
 independent of which playlists happen to use it. It stays put while you
@@ -364,6 +366,29 @@ readable. PNG, JPEG, GIF, BMP and WebP.
 
 Button names are what a Stream Deck sends to trigger a sound, so
 renaming one means updating that button in the Stream Deck app to match.
+
+### Ducking the music while you talk
+
+Settings has **Duck the music while my mic is live**, off until you turn
+it on. With it on, the music and sound effects drop while you're
+speaking and come back when you stop, so you can narrate over a bed
+without riding the master fader.
+
+Two numbers, both in dB like every other level here:
+
+- **Drop the music by** - how far down it goes. -12 dB is a good
+  starting point: clearly under your voice, not gone.
+- **Speaking is louder than** - what counts as speech. Raise it if a
+  noisy room holds the music down when you're not talking.
+
+The timing is fixed and deliberately not adjustable: it ducks quickly
+enough not to clip your first word, and waits a moment before coming
+back, so the music doesn't surge up between sentences.
+
+**It reads your mic after noise suppression and your plugin chain**, so
+whatever you already use to clean up your voice decides what counts as
+speech. A muted mic never ducks anything. Your voice itself is never
+ducked, only the music under it.
 
 ### The Voice FX window
 
@@ -507,7 +532,12 @@ understand keeps that one colour and uses the rest of your file. "Inkwyrd
   once). Assign by drag and drop, by picking a file, or by importing a
   whole folder at once.
 - A search box over the whole library, matching tags or filename in any
-  word order, filtering both the table and the folder tree.
+  word order, filtering both the table and the folder tree - and
+  opening the tree to show where matches live.
+- Optional ducking: the music drops while your mic is live and comes
+  back when you stop talking, so you can narrate over it.
+- An optional check for newer releases at startup. It only ever tells
+  you; it never downloads anything.
 - A panic control - one button, one key, or one Stream Deck press -
   that silences every soundboard sound at once without stopping the
   music.

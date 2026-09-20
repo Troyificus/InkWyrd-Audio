@@ -68,6 +68,15 @@ private:
     void startDiscordConnectIfConfigured();
     void applyDefaultLocalMonitoring();
 
+    // Pushes the saved ducking settings into the engine. Called at
+    // startup and again whenever Settings is saved.
+    void applyDuckSettings();
+
+    // Asks GitHub whether there's a newer release, if the user hasn't
+    // turned that off. Reports into the warning banner and never
+    // downloads anything - see UpdateCheck.h.
+    void startUpdateCheckIfEnabled();
+
     // Relaunch the app. Only offered when Discord settings genuinely
     // can't be applied to the running session (a connection has already
     // been made this run).
@@ -183,6 +192,10 @@ private:
     // background and cached to disk. Read by the Library and Playlist
     // windows to show real titles instead of filenames.
     TrackMetadataStore trackMetadata;
+
+    // Set when the update check finds something newer, so the banner can
+    // say so alongside whatever else it has to report.
+    juce::String updateNotice;
 
     juce::String audioDeviceError; // non-empty if initialiseWithDefaultDevices() failed - see initialise()
 

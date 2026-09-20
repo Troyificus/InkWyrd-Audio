@@ -60,6 +60,28 @@ function(inkwyrd_copy_dave_dll target)
     )
 endfunction()
 
+# The beta-qualified version string, read from the installer script so
+# there is still ONE place to bump per release (see CLAUDE.md's release
+# process). JUCE's own version can't carry it - Windows' version fields
+# hold four numbers, not "beta.20.1" - so it comes through as a define.
+#
+# At the ROOT rather than in src/app, because the test harness compiles
+# against it too: INKWYRD_UPDATECHECK compares this build against what
+# GitHub reports, and a harness with its own idea of the version would
+# be checking the wrong thing.
+file(READ "${CMAKE_SOURCE_DIR}/installer/InkwyrdAudio.iss" inkwyrd_iss_contents)
+string(REGEX MATCH "#define MyAppVersion \"([^\"]+)\"" inkwyrd_version_match "${inkwyrd_iss_contents}")
+set(INKWYRD_VERSION_STRING "${CMAKE_MATCH_1}")
+
+if(NOT INKWYRD_VERSION_STRING)
+    message(WARNING "Couldn't read MyAppVersion from installer/InkwyrdAudio.iss - falling back")
+    set(INKWYRD_VERSION_STRING "0.1.0")
+endif()
+
+# Otherwise editing the .iss alone leaves a stale version compiled in.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/installer/InkwyrdAudio.iss")
+
 add_subdirectory(third_party/rnnoise)
 
 add_subdirectory(src/discord-voice)

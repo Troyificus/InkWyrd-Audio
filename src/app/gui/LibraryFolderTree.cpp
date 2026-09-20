@@ -476,7 +476,26 @@ void LibraryFolderTree::setPreview(const juce::File& file, float pulse)
     tree.repaint();
 }
 
-void LibraryFolderTree::setTracks(const juce::Array<juce::File>& tracks)
+namespace
+{
+    // Opens this item and everything under it. Sub-items are created
+    // lazily when a folder opens (see FolderItem::itemOpennessChanged),
+    // so each level has to be opened before its children can be walked.
+    void openEveryFolder(juce::TreeViewItem& item)
+    {
+        for (int i = 0; i < item.getNumSubItems(); ++i)
+        {
+            auto* sub = item.getSubItem(i);
+            if (sub == nullptr || ! sub->mightContainSubItems())
+                continue;
+
+            sub->setOpen(true);
+            openEveryFolder(*sub);
+        }
+    }
+}
+
+void LibraryFolderTree::setTracks(const juce::Array<juce::File>& tracks, bool revealEverything)
 {
     // Which folders were open, and which tracks were selected: a rebuild
     // (a track added, or the tag scan finishing) must not collapse the
@@ -484,6 +503,24 @@ void LibraryFolderTree::setTracks(const juce::Array<juce::File>& tracks)
     std::unique_ptr<juce::XmlElement> openness;
     if (rootItem != nullptr)
         openness = tree.getOpennessState(true);
+
+    // Starting to reveal: remember the tree as the user had it, since
+    // every folder is about to be opened. Stopping: that remembered
+    // state is what to restore, not the all-open one we just read.
+    if (revealEverything && ! revealing)
+    {
+        opennessBeforeReveal = openness != nullptr ? std::make_unique<juce::XmlElement>(*openness)
+                                                    : nullptr;
+    }
+    else if (! revealEverything && revealing)
+    {
+        if (opennessBeforeReveal != nullptr)
+            openness = std::move(opennessBeforeReveal);
+
+        opennessBeforeReveal.reset();
+    }
+
+    revealing = revealEverything;
 
     auto previousSelection = getSelectedTracks();
 
@@ -496,6 +533,9 @@ void LibraryFolderTree::setTracks(const juce::Array<juce::File>& tracks)
 
     if (openness != nullptr)
         tree.restoreOpennessState(*openness, false);
+
+    if (revealEverything && rootItem != nullptr)
+        openEveryFolder(*rootItem);
 
     if (! previousSelection.isEmpty())
         reselect(previousSelection);

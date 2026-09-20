@@ -21,6 +21,10 @@ namespace
     constexpr const char* kLibraryFolderViewKey = "libraryFolderView";
     constexpr const char* kSkinNameKey = "skinName";
     constexpr const char* kLocalMonitoringKey = "localMonitoring";
+    constexpr const char* kDuckEnabledKey = "duckMusicUnderMic";
+    constexpr const char* kDuckAmountKey = "duckAmountDb";
+    constexpr const char* kDuckThresholdKey = "duckThresholdDb";
+    constexpr const char* kCheckForUpdatesKey = "checkForUpdates";
     constexpr const char* kMicMutedKey = "micMuted";
     constexpr const char* kExampleSkinsWrittenKey = "exampleSkinsWritten";
     constexpr const char* kNoiseSuppressionKey = "noiseSuppressionEnabled";
@@ -215,6 +219,48 @@ bool AppSettings::isLocalMonitoringEnabled() const
 void AppSettings::setLocalMonitoringEnabled(bool enabled)
 {
     settings()->setValue(kLocalMonitoringKey, enabled);
+}
+
+bool AppSettings::isDuckingEnabled() const
+{
+    // Off by default: it changes how the mix behaves, and a new user
+    // hearing their music dip on its own would read it as a fault.
+    return settings()->getBoolValue(kDuckEnabledKey, false);
+}
+
+void AppSettings::setDuckingEnabled(bool enabled)
+{
+    settings()->setValue(kDuckEnabledKey, enabled);
+}
+
+double AppSettings::getDuckAmountDb() const
+{
+    return juce::jlimit(-40.0, -1.0, settings()->getDoubleValue(kDuckAmountKey, -12.0));
+}
+
+void AppSettings::setDuckAmountDb(double amountDb)
+{
+    settings()->setValue(kDuckAmountKey, amountDb);
+}
+
+double AppSettings::getDuckThresholdDb() const
+{
+    return juce::jlimit(-70.0, -10.0, settings()->getDoubleValue(kDuckThresholdKey, -40.0));
+}
+
+void AppSettings::setDuckThresholdDb(double thresholdDb)
+{
+    settings()->setValue(kDuckThresholdKey, thresholdDb);
+}
+
+bool AppSettings::shouldCheckForUpdates() const
+{
+    return settings()->getBoolValue(kCheckForUpdatesKey, true);
+}
+
+void AppSettings::setCheckForUpdates(bool shouldCheck)
+{
+    settings()->setValue(kCheckForUpdatesKey, shouldCheck);
 }
 
 bool AppSettings::isMicMuted() const

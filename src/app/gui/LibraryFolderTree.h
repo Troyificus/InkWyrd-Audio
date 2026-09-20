@@ -91,7 +91,14 @@ public:
 
     // Rebuilds from this set of tracks, keeping which folders were open
     // and which tracks were selected.
-    void setTracks(const juce::Array<juce::File>& tracks);
+    //
+    // revealEverything opens every folder, for showing search results:
+    // a filtered tree whose matches are all inside collapsed folders
+    // answers "where is that track" with a row you still have to go
+    // hunting through. The openness from BEFORE the first revealed
+    // rebuild is put back when revealing stops, so clearing a search
+    // doesn't leave a whole library hanging open.
+    void setTracks(const juce::Array<juce::File>& tracks, bool revealEverything = false);
 
     // Repaint only - for tags arriving, which change what rows say but
     // not which rows exist.
@@ -121,6 +128,11 @@ private:
     PlaylistEngine& engine;
 
     juce::TreeView tree;
+
+    // Whether the last rebuild was a revealed one, and what the tree
+    // looked like before revealing started.
+    bool revealing = false;
+    std::unique_ptr<juce::XmlElement> opennessBeforeReveal;
 
     juce::File hoveredFile, previewFile;
     float previewPulse = 0.0f;
