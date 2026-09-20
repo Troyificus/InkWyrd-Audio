@@ -22,9 +22,10 @@ SoundboardEngine::~SoundboardEngine()
     readAheadThread.stopThread(2000);
 }
 
-void SoundboardEngine::registerSound(const juce::String& name, const juce::File& file, float linearGain)
+void SoundboardEngine::registerSound(const juce::String& name, const juce::File& file, float linearGain,
+                                     bool looping)
 {
-    registeredSounds[name] = { file, linearGain };
+    registeredSounds[name] = { file, linearGain, looping };
 }
 
 bool SoundboardEngine::hasSound(const juce::String& name) const
@@ -64,11 +65,46 @@ void SoundboardEngine::stopAllVoices()
         voice->transport.stop();
 }
 
+void SoundboardEngine::stop(const juce::String& name)
+{
+    for (auto* voice : voices)
+        if (voice->name == name)
+            voice->transport.stop();
+}
+
+bool SoundboardEngine::isPlaying(const juce::String& name) const
+{
+    for (auto* voice : voices)
+        if (voice->name == name && voice->transport.isPlaying())
+            return true;
+
+    return false;
+}
+
+juce::StringArray SoundboardEngine::getPlayingLoopNames() const
+{
+    juce::StringArray names;
+
+    for (auto* voice : voices)
+        if (voice->looping && voice->transport.isPlaying())
+            names.addIfNotAlreadyThere(voice->name);
+
+    return names;
+}
+
 void SoundboardEngine::trigger(const juce::String& name)
 {
     auto it = registeredSounds.find(name);
     if (it == registeredSounds.end())
         return; // unknown name is ordinary user error - see the header
+
+    // A loop that is already running: the same trigger stops it. Checked
+    // before a reader is created, so stopping costs nothing.
+    if (it->second.looping && isPlaying(name))
+    {
+        stop(name);
+        return;
+    }
 
     auto* reader = formatManager.createReaderFor(it->second.file);
     if (reader == nullptr)
@@ -92,14 +128,31 @@ void SoundboardEngine::trigger(const juce::String& name)
         mixer.addInputSource(&voice->transport, false); // prepares it if we're already playing
     }
 
-    // Pool exhausted and every voice is busy - steal the oldest one
-    // rather than dropping the trigger silently.
+    // Pool exhausted and every voice is busy - steal one rather than
+    // dropping the trigger silently, but never a running LOOP while a
+    // one-shot is available: pulling the rain out from under a battle to
+    // play a door creak is worse than losing the creak.
+    if (voice == nullptr)
+    {
+        for (auto* v : voices)
+        {
+            if (! v->looping)
+            {
+                voice = v;
+                break;
+            }
+        }
+    }
+
     if (voice == nullptr)
         voice = voices.getFirst();
 
     voice->transport.stop();
     voice->transport.setSource(nullptr);
+    voice->name = name;
+    voice->looping = it->second.looping;
     voice->readerSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
+    voice->readerSource->setLooping(it->second.looping);
     voice->transport.setSource(voice->readerSource.get(), kReadAheadBufferSamples, &readAheadThread, reader->sampleRate);
     voice->transport.setGain(gain);
     voice->transport.start();

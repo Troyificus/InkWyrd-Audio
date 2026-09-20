@@ -39,6 +39,10 @@ struct SoundboardSlot
     // Optional picture drawn as the button's background. {} for none.
     juce::File imageFile;
 
+    // Repeats until pressed again, instead of playing once - for an
+    // ambience bed rather than an effect. See SoundboardEngine::trigger.
+    bool loop = false;
+
     bool isEmpty() const { return file == juce::File(); }
 };
 
@@ -89,6 +93,18 @@ public:
 
     void setColour(int index, juce::uint32 colourArgb);
 
+    void setLoop(int index, bool shouldLoop);
+
+    // Swaps two slots, contents and all. Moving a button is a swap
+    // rather than an insert so nothing else on the board shifts - a
+    // board is arranged by where things ARE, and a rearranging insert
+    // would move buttons the user never touched.
+    //
+    // Everything travels with the slot, INCLUDING ITS NAME: the name is
+    // what the engine keys a sound by and what a Stream Deck button
+    // sends, so a move must never renumber or rename anything.
+    bool swapSlots(int a, int b);
+
     // A trim, like the per-track one: mostly "pull this clip down".
     static constexpr float kMinGainDb = -24.0f;
     static constexpr float kMaxGainDb = 6.0f;
@@ -116,10 +132,11 @@ public:
     // Slots with a sound in them, in board order.
     juce::Array<SoundboardSlot> getFilledSlots() const;
 
-    // 2 adds per-button gain and background images. An older build reads
-    // this as "newer version", leaves the file strictly alone and reports
-    // it, rather than rewriting it and silently dropping both.
-    static constexpr int kCurrentSchemaVersion = 2;
+    // 2 adds per-button gain and background images; 3 adds the loop
+    // flag. An older build reads this as "newer version", leaves the
+    // file strictly alone and reports it, rather than rewriting it and
+    // silently dropping what it doesn't understand.
+    static constexpr int kCurrentSchemaVersion = 3;
     static constexpr int kDefaultSlotCount = 24;
     static constexpr int kMaxSlotCount = 256;
 

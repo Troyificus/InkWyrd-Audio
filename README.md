@@ -343,6 +343,18 @@ being previewed is fine: the preview stops itself.
 A grid of programmable buttons, like a Stream Deck. Click an empty one to
 pick a sound for it, or **drag sound files straight onto a button** from
 Explorer. Click a filled button to fire it, sounds can overlap.
+**Drag a button onto another to swap them.** That's how you rearrange
+the board - drop one onto an empty button to move it there. Everything
+travels with the button, including its name, so Stream Deck buttons keep
+working afterwards.
+
+**A button can loop.** Right-click it and choose *Loop this sound*, and
+it repeats until you press it again instead of playing once - which is
+what you want for rain, a tavern, wind under a scene. A looping button
+is outlined while it's running and carries a small loop mark, so you can
+see at a glance what's still going. The same press stops it, from the
+board, from a Stream Deck, or via Stop all.
+
 **Stop all** silences every sound playing right now, without touching the
 music - for when the wrong effect goes out to the table. **Esc** does the
 same thing from the Player window, and there's a Stream Deck action for
@@ -527,7 +539,8 @@ understand keeps that one colour and uses the rest of your file. "Inkwyrd
 - A now-playing display with a live spectrum of the outgoing mix and a
   seek bar.
 - A programmable soundboard: a grid of assignable buttons you arrange
-  yourself, each with its own name, colour, volume and optional picture,
+  yourself by dragging, each able to loop as an ambience bed, and each
+  with its own name, colour, volume and optional picture,
   layered independently of the music (up to 16 sounds can overlap at
   once). Assign by drag and drop, by picking a file, or by importing a
   whole folder at once.
@@ -574,9 +587,6 @@ understand keeps that one colour and uses the rest of your file. "Inkwyrd
 - Because Inkwyrd draws its own window frames, Windows Snap Layouts (the
   hover-over-maximise flyout) and Win+arrow snapping don't work on its
   windows. Inkwyrd's own snapping does.
-- Soundboard buttons can't be dragged from one position to another yet -
-  to move a sound, assign it to the button you want and clear the old
-  one.
 
 If you hit a bug, please open an issue on this repo with what you were
 doing and (if possible) a screenshot of the status line/error.

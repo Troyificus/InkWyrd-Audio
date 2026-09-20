@@ -83,12 +83,24 @@ class SoundboardGridComponent::SlotButton final : public juce::Button
 public:
     SlotButton(int slotIndex,
                 std::function<void(int)> onRightClickToUse,
-                std::function<void(int)> onVolumeClickToUse)
+                std::function<void(int)> onVolumeClickToUse,
+                std::function<void(int)> onDragStartToUse)
         : juce::Button({}),
           index(slotIndex),
           onRightClick(std::move(onRightClickToUse)),
-          onVolumeClick(std::move(onVolumeClickToUse))
+          onVolumeClick(std::move(onVolumeClickToUse)),
+          onDragStart(std::move(onDragStartToUse))
     {
+    }
+
+    void setLoopState(bool slotLoops, bool loopIsPlaying)
+    {
+        if (loops == slotLoops && playing == loopIsPlaying)
+            return;
+
+        loops = slotLoops;
+        playing = loopIsPlaying;
+        repaint();
     }
 
     void setAppearance(const juce::String& text,
@@ -147,8 +159,29 @@ public:
             g.fillRoundedRectangle(bounds, corner);
         }
 
-        g.setColour(juce::Colours::white.withAlpha(0.25f));
-        g.drawRoundedRectangle(bounds.reduced(0.5f), corner, 1.0f);
+        // A running loop is outlined in the accent colour rather than
+        // merely marked: at a glance, the question is "what is playing
+        // right now", not "which buttons could loop".
+        if (playing)
+        {
+            g.setColour(inkwyrd::theme::accent);
+            g.drawRoundedRectangle(bounds.reduced(1.0f), corner, 2.0f);
+        }
+        else
+        {
+            g.setColour(juce::Colours::white.withAlpha(0.25f));
+            g.drawRoundedRectangle(bounds.reduced(0.5f), corner, 1.0f);
+        }
+
+        if (loops)
+        {
+            // The loop mark: two arrowheads on a ring, drawn small in
+            // the top-left where no label sits.
+            auto mark = juce::Rectangle<float>(6.0f, 5.0f, 10.0f, 10.0f);
+            g.setColour((playing ? inkwyrd::theme::accent : foreground).withAlpha(playing ? 1.0f : 0.6f));
+            g.drawEllipse(mark, 1.4f);
+            g.fillRect(mark.getCentreX() - 1.0f, mark.getY() - 1.0f, 4.0f, 2.2f);
+        }
 
         auto textArea = getLocalBounds().reduced(6);
         if (showVolume)
@@ -193,11 +226,42 @@ public:
         juce::Button::mouseDown(event);
     }
 
+    void mouseDrag(const juce::MouseEvent& event) override
+    {
+        // Past a threshold, so an ordinary press with a shaky hand still
+        // fires the sound instead of picking the button up.
+        if (dragged || event.getDistanceFromDragStart() <= 8 || onDragStart == nullptr)
+            return;
+
+        dragged = true;
+        onDragStart(index);
+    }
+
+    void mouseUp(const juce::MouseEvent& event) override
+    {
+        // A button that was just dragged must not ALSO fire its sound on
+        // the way down - rearranging a board mid-session would otherwise
+        // play half of it into the call.
+        if (dragged)
+        {
+            dragged = false;
+            setState(buttonNormal);
+            return;
+        }
+
+        juce::Button::mouseUp(event);
+    }
+
     int getSlotIndex() const { return index; }
 
 private:
     int index;
-    std::function<void(int)> onRightClick, onVolumeClick;
+    std::function<void(int)> onRightClick, onVolumeClick, onDragStart;
+    bool loops = false, playing = false;
+
+    // Whether this press turned into a drag, so mouseUp knows not to
+    // treat it as a click.
+    bool dragged = false;
 
     juce::Colour background { 0xff2a3a33 }, foreground { juce::Colours::white };
     bool showVolume = false;
@@ -223,12 +287,17 @@ SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToU
     for (auto* button : { &stopAllButton, &importButton, &addSlotsButton, &removeSlotsButton })
         addAndMakeVisible(button);
 
-    hint.setText("Click an empty button to assign a sound, or drag files in. Click a button's volume "
-                  "bar to adjust it. Right-click to rename, recolour, add a picture or clear. "
-                  "Stop all (or Esc on the Player) silences every sound playing.",
+    hint.setText("Click an empty button to assign a sound, or drag files in. Drag a button onto "
+                  "another to swap them. Click a button's volume bar to adjust it. Right-click to "
+                  "rename, recolour, loop, add a picture or clear. Stop all (or Esc on the Player) "
+                  "silences every sound playing.",
                   juce::dontSendNotification);
     hint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(hint);
+
+    // Slow on purpose: this only has to notice a loop starting or
+    // stopping, which is a thing a person did, not an audio-rate event.
+    startTimerHz(4);
 
     viewport.setViewedComponent(&gridPanel, false);
     lookAndFeelChanged();
@@ -284,6 +353,7 @@ void SoundboardGridComponent::applyAppearance(int index)
     }
 
     auto missing = !slot.file.existsAsFile();
+    button->setLoopState(slot.loop && ! missing, slot.loop && soundboard.isPlaying(slot.name));
 
     // Say so on the button itself. A sound that silently does nothing
     // when pressed mid-session is the worst outcome here.
@@ -303,7 +373,8 @@ void SoundboardGridComponent::rebuildButtons()
     {
         auto* button = buttons.add(new SlotButton(i,
                                                    [this](int index) { slotRightClicked(index); },
-                                                   [this](int index) { showVolumeCallout(index); }));
+                                                   [this](int index) { showVolumeCallout(index); },
+                                                   [this](int index) { startSlotDrag(index); }));
         gridPanel.addAndMakeVisible(button);
         button->onClick = [this, i] { slotClicked(i); };
         applyAppearance(i);
@@ -381,6 +452,7 @@ void SoundboardGridComponent::slotRightClicked(int index)
         menu.addItem(1, "Replace sound...");
         menu.addItem(2, "Rename...");
         menu.addItem(6, "Volume...");
+        menu.addItem(7, "Loop this sound", true, slot.loop);
 
         juce::PopupMenu colours;
         for (int i = 0; i < numPresets; ++i)
@@ -416,6 +488,10 @@ void SoundboardGridComponent::slotRightClicked(int index)
         else if (result == 6)
         {
             showVolumeCallout(index);
+        }
+        else if (result == 7)
+        {
+            toggleLoop(index);
         }
         else if (result >= 100 && result < 100 + numPresets)
         {
@@ -595,6 +671,104 @@ void SoundboardGridComponent::fileDragExit(const juce::StringArray&)
     dragActive = false;
     dragTargetSlot = -1;
     repaint();
+}
+
+void SoundboardGridComponent::startSlotDrag(int index)
+{
+    // An empty slot has nothing to move, and a drag already running must
+    // not start a second one.
+    if (! layout.isValidIndex(index) || layout.getSlot(index).isEmpty()
+        || isDragAndDropActive() || ! juce::isPositiveAndBelow(index, buttons.size()))
+        return;
+
+    // JUCE's own internal drag, not an OS file drag: this one never
+    // leaves the component, and the description is just which slot was
+    // picked up.
+    startDragging(juce::var(index), buttons[index]);
+}
+
+bool SoundboardGridComponent::isInterestedInDragSource(const SourceDetails& details)
+{
+    // Only this board's own buttons. Anything else dragged over the
+    // window is somebody else's business.
+    return details.sourceComponent != nullptr && isParentOf(details.sourceComponent.get())
+            && details.description.isInt();
+}
+
+void SoundboardGridComponent::itemDragEnter(const SourceDetails& details)
+{
+    dragActive = true;
+    dragTargetSlot = slotIndexAt(details.localPosition.x, details.localPosition.y);
+    repaint();
+}
+
+void SoundboardGridComponent::itemDragMove(const SourceDetails& details)
+{
+    auto slot = slotIndexAt(details.localPosition.x, details.localPosition.y);
+    if (slot == dragTargetSlot)
+        return;
+
+    dragTargetSlot = slot;
+    repaint();
+}
+
+void SoundboardGridComponent::itemDragExit(const SourceDetails&)
+{
+    dragActive = false;
+    dragTargetSlot = -1;
+    repaint();
+}
+
+void SoundboardGridComponent::itemDropped(const SourceDetails& details)
+{
+    auto from = (int) details.description;
+    auto to = slotIndexAt(details.localPosition.x, details.localPosition.y);
+
+    dragActive = false;
+    dragTargetSlot = -1;
+
+    // Dropped on itself, or on the gap between buttons: nothing to do,
+    // and silently putting it somewhere else would be worse.
+    if (to < 0 || to == from)
+    {
+        repaint();
+        return;
+    }
+
+    if (layout.swapSlots(from, to))
+        notifyChanged(); // names are unchanged, so nothing a Stream Deck sends breaks
+}
+
+void SoundboardGridComponent::toggleLoop(int index)
+{
+    if (! layout.isValidIndex(index))
+        return;
+
+    const auto& slot = layout.getSlot(index);
+    auto nowLooping = ! slot.loop;
+
+    // Stop it first if it is running: a sound that was started as a loop
+    // is playing a looping voice, and turning the flag off is a request
+    // for it to stop rather than for it to run on forever unmarked.
+    if (! nowLooping && soundboard.isPlaying(slot.name))
+        soundboard.stop(slot.name);
+
+    layout.setLoop(index, nowLooping);
+    notifyChanged(); // the engine keys looping per registered sound
+}
+
+void SoundboardGridComponent::timerCallback()
+{
+    // A loop can stop for reasons this component never sees: the panic
+    // button, a Stream Deck press, or the Voice FX window's own Stop.
+    auto playingNow = soundboard.getPlayingLoopNames();
+    if (playingNow == playingLoops)
+        return;
+
+    playingLoops = playingNow;
+
+    for (int i = 0; i < buttons.size() && layout.isValidIndex(i); ++i)
+        applyAppearance(i);
 }
 
 int SoundboardGridComponent::slotIndexAt(int x, int y) const

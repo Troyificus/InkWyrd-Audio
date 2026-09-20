@@ -1852,6 +1852,43 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Looping soundboard slots and drag-to-rearrange (beta.25)
+
+**A looping sound is a LATCH, not a one-shot.** `SoundboardEngine`'s
+voices were all one-shots; a loop sets `AudioFormatReaderSource::
+setLooping` and `trigger()` on an already-running loop STOPS it. That
+one decision is what makes the board, the keyboard and a Stream Deck
+button all behave the same with nothing extra wired up - a Stream Deck
+press already goes through `trigger`, so it started and stopped loops
+the moment the engine did.
+
+- `Voice` now remembers its `name` and whether it `looping`s, which is
+  the only way to find a running loop again and stop it.
+- **Voice stealing never takes a running loop while a one-shot is
+  available.** Pulling the rain out from under a battle to play a door
+  creak is worse than losing the creak. With 16 voices this is rare, but
+  a board with several ambience beds makes it reachable.
+- `stopAllVoices()` (the panic button) stops loops too, and there is a
+  check for exactly that - a loop would otherwise be the one thing Stop
+  all couldn't silence, which is the opposite of what a panic button is
+  for.
+- The board polls `getPlayingLoopNames()` at 4 Hz rather than being told,
+  because a loop can stop from places the grid never sees: the panic
+  button, a Stream Deck press, or stealing.
+
+**Drag-to-rearrange is a SWAP, not an insert** (`swapSlots`). An insert
+would shift every button after the target, moving buttons the user never
+touched; a board is arranged by where things physically are.
+
+- **Everything travels with the slot, name included.** The name is the
+  engine's key and the Stream Deck's payload, so a move that renamed or
+  renumbered anything would silently retarget real hardware. There is a
+  check for this specifically.
+- `SlotButton::mouseUp` swallows the click after a drag: without it,
+  rearranging a board mid-session would play half of it into the call.
+- Schema 3 adds the loop flag. Same convention as 2: an older build
+  refuses the file rather than rewriting it without what it can't see.
+
 ### Ducking, the update check, and revealing search matches (beta.24)
 
 **Ducking** (`src/audio-engine/DuckEnvelope.h`, applied at step 2b of

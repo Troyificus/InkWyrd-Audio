@@ -11,6 +11,7 @@ namespace
     constexpr const char* kKeyColour = "colour";
     constexpr const char* kKeyGainDb = "gainDb";
     constexpr const char* kKeyImage = "image";
+    constexpr const char* kKeyLoop = "loop";
 }
 
 SoundboardLayout::SoundboardLayout(juce::AudioFormatManager& formatManagerToUse)
@@ -92,6 +93,8 @@ void SoundboardLayout::load()
             slot.colourArgb = (juce::uint32) (juce::int64) slotVar.getProperty(kKeyColour, (juce::int64) 0xff3a4a5a);
             slot.gainDb = juce::jlimit(kMinGainDb, kMaxGainDb,
                                         (float) (double) slotVar.getProperty(kKeyGainDb, 0.0));
+
+            slot.loop = slotVar.getProperty(kKeyLoop, false);
 
             auto imagePath = slotVar.getProperty(kKeyImage, "").toString();
             if (imagePath.isNotEmpty())
@@ -288,6 +291,33 @@ void SoundboardLayout::setColour(int index, juce::uint32 colourArgb)
     save();
 }
 
+void SoundboardLayout::setLoop(int index, bool shouldLoop)
+{
+    if (!isValidIndex(index))
+        return;
+
+    auto slot = slots.getReference(index);
+    slot.loop = shouldLoop;
+    slots.set(index, slot);
+    save();
+}
+
+bool SoundboardLayout::swapSlots(int a, int b)
+{
+    if (!isValidIndex(a) || !isValidIndex(b) || a == b)
+        return false;
+
+    // Both slots whole, names included - see the header for why the name
+    // in particular must travel rather than being reassigned.
+    auto first = slots.getReference(a);
+    auto second = slots.getReference(b);
+    slots.set(a, second);
+    slots.set(b, first);
+
+    save();
+    return true;
+}
+
 int SoundboardLayout::setNumSlots(int count)
 {
     count = juce::jlimit(1, kMaxSlotCount, count);
@@ -407,6 +437,9 @@ void SoundboardLayout::save()
 
         if (slot.imageFile != juce::File())
             slotObject->setProperty(kKeyImage, slot.imageFile.getFullPathName());
+
+        if (slot.loop)
+            slotObject->setProperty(kKeyLoop, true);
 
         slotVars.add(juce::var(slotObject.get()));
     }

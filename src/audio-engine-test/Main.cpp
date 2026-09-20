@@ -1125,12 +1125,12 @@ namespace
                        "removing the picture leaves the trim alone");
             }
 
-            // Trims and pictures are why the schema went to 2: an older
-            // build must refuse the file rather than rewrite it without
-            // them.
-            check(SoundboardLayout::kCurrentSchemaVersion == 2,
+            // Trims and pictures took the schema to 2; the loop flag
+            // took it to 3. An older build must refuse the file rather
+            // than rewrite it without what it doesn't understand.
+            check(SoundboardLayout::kCurrentSchemaVersion == 3,
                    "the soundboard schema version was bumped for the new fields");
-            check(boardFile2.loadFileAsString().contains("\"schemaVersion\": 2"),
+            check(boardFile2.loadFileAsString().contains("\"schemaVersion\": 3"),
                    "the new schema version is what actually gets written");
         }
 
@@ -1291,6 +1291,102 @@ namespace
 
                 check(missingEngine.getRegisteredNames().isEmpty(),
                        "a button whose file has gone is not registered, so pressing it does nothing");
+            }
+
+            {
+                // Rearranging the board. The rule that matters is that a
+                // slot's NAME travels with it: the engine keys sounds by
+                // name and a Stream Deck button sends one, so a move that
+                // renamed anything would silently retarget real hardware.
+                SoundboardLayout board(formatManager);
+                board.setFile(scratch.getChildFile("swap-board.json"));
+                board.load();
+                board.assign(0, folderTracks[0], "Thunder");
+                board.assign(1, folderTracks[1], "Rain");
+                board.setGainDb(0, -6.0f);
+                board.setLoop(1, true);
+
+                check(board.swapSlots(0, 1), "two filled buttons swap");
+                check(board.getSlot(0).name == "Rain" && board.getSlot(1).name == "Thunder",
+                       "each button's NAME travels with it, so Stream Deck buttons keep working");
+                check(board.getSlot(1).gainDb == -6.0f,
+                       "so does its volume trim");
+                check(board.getSlot(0).loop,
+                       "so does whether it loops");
+
+                // Dragging onto an empty button is how a sound MOVES
+                // rather than swapping with something.
+                check(board.swapSlots(0, 5), "a button can be dragged onto an empty one");
+                check(board.getSlot(0).isEmpty() && board.getSlot(5).name == "Rain",
+                       "which moves it there and leaves the old place empty");
+
+                check(! board.swapSlots(3, 3), "dropping a button on itself does nothing");
+                check(! board.swapSlots(0, -1) && ! board.swapSlots(0, 9999),
+                       "a drop outside the board does nothing rather than throwing");
+
+                SoundboardLayout reloaded(formatManager);
+                reloaded.setFile(scratch.getChildFile("swap-board.json"));
+                reloaded.load();
+                check(reloaded.getSlot(5).name == "Rain" && reloaded.getSlot(5).loop,
+                       "a rearranged board, and its loop flags, survive a restart");
+            }
+
+            {
+                // Looping slots: the engine half. A looping sound is a
+                // LATCH - the same trigger that starts it stops it - so
+                // one button, one Stream Deck press and one keyboard key
+                // all behave the same way with nothing extra wired up.
+                SoundboardEngine engine(formatManager);
+                engine.prepareToPlay(512, 44100.0);
+
+                engine.registerSound("Rain", folderTracks[0], 1.0f, true);
+                engine.registerSound("Clang", folderTracks[1], 1.0f, false);
+
+                juce::AudioBuffer<float> buffer(2, 512);
+                juce::AudioSourceChannelInfo info(&buffer, 0, 512);
+                auto pump = [&](int blocks)
+                {
+                    for (int i = 0; i < blocks; ++i)
+                    {
+                        buffer.clear();
+                        engine.getNextAudioBlock(info);
+                    }
+                };
+
+                check(! engine.isPlaying("Rain"), "nothing is playing before anything is triggered");
+
+                engine.trigger("Rain");
+                pump(5);
+                check(engine.isPlaying("Rain"), "triggering a looping sound starts it");
+                check(engine.getPlayingLoopNames().contains("Rain"),
+                       "and the board can ask which loops are running");
+
+                engine.trigger("Rain");
+                pump(5);
+                check(! engine.isPlaying("Rain"), "triggering it again stops it");
+
+                // A one-shot must NOT have become a toggle: pressing a
+                // sword clash twice in a row is supposed to play it twice.
+                engine.trigger("Clang");
+                pump(2);
+                engine.trigger("Clang");
+                pump(2);
+                check(engine.getPlayingLoopNames().isEmpty(),
+                       "a one-shot is never reported as a running loop");
+
+                engine.trigger("Rain");
+                pump(5);
+                engine.stop("Rain");
+                pump(2);
+                check(! engine.isPlaying("Rain"), "and it can be stopped outright");
+
+                engine.trigger("Rain");
+                pump(5);
+                engine.stopAllVoices();
+                pump(2);
+                check(! engine.isPlaying("Rain"),
+                       "the panic button stops a running loop too - otherwise it would be the one "
+                       "thing Stop all couldn't silence");
             }
 
             {

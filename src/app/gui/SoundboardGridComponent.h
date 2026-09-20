@@ -27,7 +27,10 @@
 // component just drives it and calls onLayoutChanged() so the app can
 // re-register the sounds with the engine.
 class SoundboardGridComponent : public juce::Component,
-                                 public juce::FileDragAndDropTarget
+                                 public juce::FileDragAndDropTarget,
+                                 public juce::DragAndDropContainer,
+                                 public juce::DragAndDropTarget,
+                                 private juce::Timer
 {
 public:
     SoundboardGridComponent(SoundboardEngine& soundboardToUse,
@@ -57,6 +60,17 @@ public:
     void fileDragExit(const juce::StringArray& files) override;
     void filesDropped(const juce::StringArray& files, int x, int y) override;
 
+    // Dragging a button onto another SWAPS them - see
+    // SoundboardLayout::swapSlots for why a swap and not an insert.
+    // Both halves live on this component rather than on the buttons: a
+    // drag that starts on a child still has to be received by something
+    // that can see the whole grid.
+    bool isInterestedInDragSource(const SourceDetails& details) override;
+    void itemDragEnter(const SourceDetails& details) override;
+    void itemDragMove(const SourceDetails& details) override;
+    void itemDragExit(const SourceDetails& details) override;
+    void itemDropped(const SourceDetails& details) override;
+
 private:
     class SlotButton;
 
@@ -72,6 +86,13 @@ private:
     void renameSlot(int index);
     void clearSlot(int index);
     void importFolderIntoBoard();
+    void toggleLoop(int index);
+    void startSlotDrag(int index);
+
+    // Repaints buttons whose loop has started or stopped. A loop can end
+    // for reasons this component never sees - a Stream Deck press, the
+    // panic button - so the board asks rather than being told.
+    void timerCallback() override;
     void changeSlotCount(int delta);
 
     int slotIndexAt(int x, int y) const;
@@ -100,6 +121,11 @@ private:
     juce::OwnedArray<SlotButton> buttons;
 
     std::map<juce::String, juce::Image> imageCache;
+
+    // Which loops were playing at the last check, so a repaint only
+    // happens when something actually changed.
+    juce::StringArray playingLoops;
+
 
     std::unique_ptr<juce::FileChooser> activeChooser;
 

@@ -1198,6 +1198,7 @@ void InkwyrdAudioApplication::registerSoundboardLayout()
         // registered, so pressing it does nothing rather than throwing.
         if (slot.file.existsAsFile())
             soundboard.registerSound(slot.name, slot.file,
-                                      juce::Decibels::decibelsToGain(slot.gainDb));
+                                      juce::Decibels::decibelsToGain(slot.gainDb),
+                                      slot.loop);
     }
 }
