@@ -210,6 +210,10 @@ goes straight back round. With Crossfade on, it dissolves into itself
 and loops seamlessly. Skip still moves to the next track; looping only
 governs what happens when a track reaches its own end.
 
+Fade out is on the Stream Deck too, as **Music Fade Out**, and takes as
+long as the slider here says - change it here and the Stream Deck key
+follows.
+
 Fade out only takes the *music* down, not your microphone. Fading
 yourself out mid-sentence isn't what a button next to Stop should do. Use
 the Master fader if you want to take absolutely everything down.
@@ -353,12 +357,14 @@ it repeats until you press it again instead of playing once - which is
 what you want for rain, a tavern, wind under a scene. A looping button
 is outlined while it's running and carries a small loop mark, so you can
 see at a glance what's still going. The same press stops it, from the
-board, from a Stream Deck, or via Stop all.
+board, from a Stream Deck, or via the Killswitch.
 
-**Stop all** silences every sound playing right now, without touching the
-music - for when the wrong effect goes out to the table. **Esc** does the
-same thing from the Player window, and there's a Stream Deck action for
-it too. Use **Stop** on the Player if you want the music to stop as well.
+**Killswitch** silences every soundboard sound playing right now, loops
+included, without touching the music - for when the wrong effect goes
+out to the table. **Esc** does the same thing from the Player window,
+and there's a **Soundboard Killswitch** Stream Deck action for it too.
+Use **Stop** or **Fade out** on the Player if you want the music to stop
+as well.
 
 **Right-click** any button to rename it, give it a colour or a picture,
 swap its sound or clear it. Buttons stay where you put them, so adding a

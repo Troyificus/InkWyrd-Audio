@@ -9,6 +9,7 @@ ws.on("open", () => {
 	else if (cmd === "skip") ws.send(JSON.stringify({ command: "skipTrack" }));
 	else if (cmd === "shuffle") ws.send(JSON.stringify({ command: "toggleShuffle" }));
 	else if (cmd === "stopall") ws.send(JSON.stringify({ command: "stopAllSounds" }));
+	else if (cmd === "fadeout") ws.send(JSON.stringify({ command: "fadeOutMusic" }));
 	else if (cmd === "soundboard") ws.send(JSON.stringify({ command: "triggerSoundboard", name: process.argv[3] }));
 	setTimeout(() => { ws.close(); process.exit(0); }, 500);
 });

@@ -289,8 +289,8 @@ SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToU
 
     hint.setText("Click an empty button to assign a sound, or drag files in. Drag a button onto "
                   "another to swap them. Click a button's volume bar to adjust it. Right-click to "
-                  "rename, recolour, loop, add a picture or clear. Stop all (or Esc on the Player) "
-                  "silences every sound playing.",
+                  "rename, recolour, loop, add a picture or clear. Killswitch (or Esc on the Player) "
+                  "silences every soundboard sound; the music keeps playing.",
                   juce::dontSendNotification);
     hint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(hint);

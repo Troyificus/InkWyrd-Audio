@@ -1852,6 +1852,27 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### "Soundboard Killswitch" and a Music Fade Out key (beta.26)
+
+The panic control was called **Stop all** / **Stop All Sounds**, and the
+user pointed out the name promises the opposite of the behaviour: "stop
+all sounds" reads as everything, music included, and it deliberately
+never touches the music. Renamed to **Killswitch** in the app and
+**Soundboard Killswitch** on the Stream Deck.
+
+- **Only the LABELS changed.** The action's UUID is still
+  `com.inkwyrd.audiodeck.stopallsounds` and the wire command is still
+  `stopAllSounds`. The UUID is what every key the user has already
+  placed points at - renaming it would silently orphan them - and the
+  command name is kept so an older plugin build keeps talking to a newer
+  app. Don't "tidy" either to match the new name.
+- **Music Fade Out** (`fadeOutMusic`) reads its duration through
+  `ControlServer::getFadeOutSeconds` at the moment of the press, which
+  returns the saved setting the Player's Fade out slider writes. One
+  setting, not a Stream Deck copy that drifts from it. It carries the
+  Player button's own guard - nothing to fade if nothing plays, and a
+  second press mid-fade must not restart the fade and drag it out.
+
 ### Looping soundboard slots and drag-to-rearrange (beta.25)
 
 **A looping sound is a LATCH, not a one-shot.** `SoundboardEngine`'s
@@ -1955,7 +1976,7 @@ running a game night, not editing audio.
 
 **The panic button** is wiring, not new audio code:
 `SoundboardEngine::stopAllVoices()` had existed since the soundboard
-landed and nothing had ever called it. Now four things do - a Stop all
+landed and nothing had ever called it. Now four things do - a Killswitch
 button on the Soundboard window, **Esc** in `PlayerComponent::keyPressed`,
 a `stopAllSounds` command in `ControlServer`, and a Stream Deck action.
 

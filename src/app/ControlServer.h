@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <juce_core/juce_core.h>
 
@@ -17,7 +18,9 @@ namespace ix { class WebSocketServer; }
 //
 // Commands are plain JSON text frames: {"command": "skipTrack"},
 // {"command": "toggleShuffle"}, {"command": "triggerSoundboard", "name": "..."},
-// {"command": "toggleMute"}.
+// {"command": "toggleMute"}, {"command": "stopAllSounds"} (the Soundboard
+// Killswitch - the wire name predates that label and is kept so an older
+// plugin build keeps working), {"command": "fadeOutMusic"}.
 class ControlServer
 {
 public:
@@ -26,6 +29,11 @@ public:
 
     bool start(int port);
     void stop();
+
+    // How long a fade-out from a controller takes. Asked for at the moment
+    // of the press rather than copied in once, so it always matches the
+    // Player's own Fade out slider - one setting, not two that drift.
+    std::function<double()> getFadeOutSeconds;
 
 private:
     void handleCommand(const juce::var& parsed);

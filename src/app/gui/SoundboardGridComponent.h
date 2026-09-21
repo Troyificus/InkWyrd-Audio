@@ -109,9 +109,12 @@ private:
     juce::Label caption { {}, "Soundboard" };
     juce::TextButton importButton { "Import folder..." };
 
-    // Silences every sound playing right now. Up to 16 can overlap, and
-    // one wrong press mid-session had no undo before this.
-    juce::TextButton stopAllButton { "Stop all" };
+    // Silences every SOUNDBOARD sound playing right now, and never the
+    // music. Up to 16 can overlap, and one wrong press mid-session had no
+    // undo before this. Called "Killswitch" rather than "Stop all" because
+    // "stop all" reads as everything, music included - which is exactly
+    // what it deliberately doesn't do.
+    juce::TextButton stopAllButton { "Killswitch" };
     juce::TextButton addSlotsButton { "+" };
     juce::TextButton removeSlotsButton { "-" };
     juce::Label hint;

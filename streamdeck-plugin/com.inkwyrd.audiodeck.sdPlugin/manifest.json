@@ -35,13 +35,23 @@
 			]
 		},
 		{
-			"Name": "Stop All Sounds",
+			"Name": "Soundboard Killswitch",
 			"UUID": "com.inkwyrd.audiodeck.stopallsounds",
 			"Icon": "imgs/actions/stopallsounds/icon",
-			"Tooltip": "Silences every soundboard sound playing right now. Leaves the music alone.",
+			"Tooltip": "Silences every soundboard sound, loops included. The music keeps playing.",
 			"Controllers": ["Keypad"],
 			"States": [
-				{ "Image": "imgs/actions/stopallsounds/key", "TitleAlignment": "middle", "Title": "Stop all" }
+				{ "Image": "imgs/actions/stopallsounds/key", "TitleAlignment": "middle", "Title": "Killswitch" }
+			]
+		},
+		{
+			"Name": "Music Fade Out",
+			"UUID": "com.inkwyrd.audiodeck.fadeoutmusic",
+			"Icon": "imgs/actions/fadeoutmusic/icon",
+			"Tooltip": "Fades the music out and stops it, over the time set by the Player's Fade out slider. Soundboard sounds are untouched.",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "imgs/actions/fadeoutmusic/key", "TitleAlignment": "middle", "Title": "Fade out" }
 			]
 		},
 		{

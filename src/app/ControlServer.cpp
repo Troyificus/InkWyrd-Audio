@@ -77,6 +77,14 @@ void ControlServer::handleCommand(const juce::var& parsed)
     {
         soundboard.stopAllVoices();
     }
+    else if (command == "fadeOutMusic")
+    {
+        // The same guard the Player's own button has: nothing to fade if
+        // nothing is playing, and a second press mid-fade must not
+        // restart the fade from the top and drag it out.
+        if (playlist.isPlaying() && ! playlist.isFadingOut())
+            playlist.fadeOutAndStop(getFadeOutSeconds != nullptr ? getFadeOutSeconds() : 5.0);
+    }
     else if (command == "toggleMute")
     {
         masterEngine.setMicMuted(!masterEngine.isMicMuted());

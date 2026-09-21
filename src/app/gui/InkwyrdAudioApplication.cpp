@@ -73,6 +73,10 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     logLine("[App] " + juce::String(scanner.getNumKnownPlugins()) + " voice FX plugin(s) in your list.");
     logPhase("loading the voice FX plugin list");
 
+    // Read at press time, so a Stream Deck fade always uses whatever the
+    // Player's Fade out slider is set to right now.
+    controlServer.getFadeOutSeconds = [this] { return settings.getFadeOutSeconds(); };
+
     constexpr int kControlServerPort = 39231; // matches streamdeck-plugin/src/audioAppClient.ts
     if (!controlServer.start(kControlServerPort))
         logLine("[App] Warning: failed to start control server on port " + juce::String(kControlServerPort)

@@ -15,7 +15,8 @@ websocket client. `src/app/ControlServer.h` in the main repo hosts a
 tiny loopback-only server (`ws://127.0.0.1:39231`) inside
 `InkwyrdAudioApp`; this plugin connects to it and forwards button
 presses as plain JSON commands (`skipTrack`, `toggleShuffle`,
-`triggerSoundboard`, `toggleMute`, `stopAllSounds`). `InkwyrdAudioApp` must be running for
+`triggerSoundboard`, `toggleMute`, `stopAllSounds` - shown as
+**Soundboard Killswitch** - and `fadeOutMusic`). `InkwyrdAudioApp` must be running for
 buttons to do anything - the plugin reconnects quietly in the background
 if it isn't (or hasn't started yet).
 
@@ -80,6 +81,7 @@ node test-control-client.mjs skip
 node test-control-client.mjs shuffle
 node test-control-client.mjs soundboard <soundName>
 node test-control-client.mjs stopall
+node test-control-client.mjs fadeout
 ```
 
 Run `InkwyrdAudioApp` first, then run these against it. This is exactly
