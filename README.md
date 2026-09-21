@@ -1,535 +1,690 @@
 # Inkwyrd Audio
 
-**Beta** A standalone Windows app for running D&D (or any tabletop)
-sessions over Discord: local music playlists with shuffle and crossfade,
-an on-demand soundboard, and live mic processing through your own VST3
-plugins, all mixed together and sent straight to Discord through the
-app's own bot connection. No virtual audio cable, no DAW routing.
+**Beta.** A Windows app for running the sound of a tabletop game - D&D or
+anything else - over Discord.
+
+You get music playlists that crossfade on their own, a soundboard of
+effects and looping ambience, **scenes** that change the whole mood in
+one press, and your own microphone run through noise suppression and
+your VST3 plugins. It's all mixed in one place and sent straight into
+your Discord voice channel through the app's own bot. No virtual audio
+cable, no DAW, no routing.
+
+It also works with no Discord at all, playing through your own speakers,
+which is the easiest way to try it.
 
 Heavily inspired by [Kenku FM](https://www.kenku.fm/).
 
-## Download
+## Contents
 
-Get the latest release from the
+- [What it can do](#what-it-can-do)
+- [Download and install](#download-and-install)
+- [Quick start](#quick-start)
+- **Guides**
+  - [Finding your way around](#finding-your-way-around)
+  - [Playing music](#playing-music)
+  - [Building your library](#building-your-library)
+  - [Previewing a track](#previewing-a-track)
+  - [Making and using playlists](#making-and-using-playlists)
+  - [Setting a track's volume and fade](#setting-a-tracks-volume-and-fade)
+  - [Editing tags and cover art](#editing-tags-and-cover-art)
+  - [The soundboard](#the-soundboard)
+  - [Looping ambience](#looping-ambience)
+  - [Scenes](#scenes)
+  - [Your microphone](#your-microphone)
+  - [Ducking the music while you talk](#ducking-the-music-while-you-talk)
+  - [Connecting to Discord](#connecting-to-discord)
+  - [Muting yourself in Discord automatically](#muting-yourself-in-discord-automatically)
+  - [Using a Stream Deck](#using-a-stream-deck)
+  - [Skins](#skins)
+  - [Settings, updates and your files](#settings-updates-and-your-files)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Troubleshooting](#troubleshooting)
+- [Known limitations](#known-limitations)
+
+## What it can do
+
+**Music**
+- As many playlists as you like, with smooth crossfades between tracks
+  and when you switch from one playlist to another. Shuffle is set per
+  playlist.
+- A library of every track you've added, viewable as a sortable table
+  or by folder, with a search box.
+- **Preview** any track in your own headphones without the table hearing
+  it.
+- Per-track volume and fade length, so one loud file can't ambush the
+  table.
+- Loop a single track, fade the music out, and a master volume over
+  everything.
+- A tag editor for titles, artists, albums and cover art, written into
+  the files themselves.
+
+**Soundboard and ambience**
+- A grid of buttons you arrange yourself, each with its own name,
+  colour, picture and volume. Up to 16 sounds can overlap.
+- Buttons can **loop**, for rain, taverns and wind under a scene.
+- A **Killswitch** that silences every sound effect at once without
+  touching the music.
+
+**Scenes**
+- One press sets the playlist, the looping ambience and optionally the
+  volume. The whole room crossfades together, and anything already
+  right is left alone.
+
+**Your voice**
+- Your mic runs through noise suppression and your own VST3 plugins (EQ,
+  compression, gates) before it reaches the call.
+- Optional **ducking**: the music dips while you talk.
+- Optional automatic muting of your own Discord client, so your voice
+  doesn't reach the call twice.
+
+**Control and comfort**
+- A **Stream Deck** plugin for skip, shuffle, mic, sound effects, fade
+  out, the Killswitch and scenes.
+- Keyboard shortcuts on the Player window.
+- Six windows that snap together and remember where you left them.
+- **Skins**: change the colours, fonts and logo, or write your own.
+
+**Under the hood**
+- Plays WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A and WMA.
+- Implements Discord's end-to-end-encrypted voice protocol (DAVE), the
+  same one the official Discord client uses.
+
+## Download and install
+
+Get the newest release from the
 [Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases).
-Take the newest one at the top: GitHub's "latest" shortcut skips
-pre-releases, so it doesn't work while this is still a beta.
+Take the one at the **top of the list**: GitHub's "Latest" label skips
+pre-releases, so it doesn't point at the newest version while this is a
+beta.
 
-Each release comes in two forms, the same program in both.
+Each release comes in two forms, the same program in both:
 
-**The portable ZIP** (`InkwyrdAudio-Portable-...zip`) is the simplest,
-and the one to start with. Unzip it anywhere and run
-`Inkwyrd Audio.exe`. Nothing is installed, nothing is written outside
-the folder you unzipped, and you remove it by deleting that folder.
+- **The portable ZIP** (`InkwyrdAudio-Portable-...zip`) is the simplest
+  and the one to start with. Unzip it anywhere and run
+  `Inkwyrd Audio.exe`. Nothing is installed, and you remove it by
+  deleting the folder.
+- **The installer** (`InkwyrdAudio-Setup-...exe`) adds a Start menu
+  entry, a desktop shortcut and an uninstaller. It installs for your own
+  Windows account only, with no admin rights needed, and upgrades
+  replace the old version in place.
 
-**The installer** (`InkwyrdAudio-Setup-...exe`) is worth it if you'd
-rather have a Start menu entry, a desktop shortcut and an uninstaller.
-It installs for your own Windows account only, with no admin rights
-needed, and upgrades replace the old version in place.
+Your settings, playlists, soundboard and scenes live in
+`%APPDATA%\Inkwyrd Audio` whichever you choose, so you can switch
+between the two without losing anything.
 
-Your settings and playlists live in `%APPDATA%\Inkwyrd Audio` whichever
-you choose, so you can switch between them without losing anything.
-
-> Windows will likely show a **"Windows protected your PC"** SmartScreen
-> warning the first time you run either one. This is a small beta
-> project without a paid code-signing certificate yet, not a sign
-> anything is wrong. Click **More info -> Run anyway** to continue.
+> **Windows warnings.** Windows will probably show **"Windows protected
+> your PC"** the first time you run either one, and your browser may say
+> the file **"isn't commonly downloaded."** Both happen because this is a
+> small project without a paid code-signing certificate yet. Click
+> **More info -> Run anyway** to continue.
 >
-> Your browser may also say the file **"isn't commonly downloaded."**
-> That's the same thing: a new release has no download history yet.
->
-> If **Microsoft Defender blocks a download as a threat**, please don't
-> override it. [Open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
+> **If Microsoft Defender blocks a download as a threat, please don't
+> override it.** [Open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
 > instead. Microsoft's automatic machine-learning check (detection names
-> ending in `!ml`) has flagged Inkwyrd's unsigned downloads, while other
-> antivirus products flag few or none of them, and its verdict has
-> flipped between builds of identical code. It has been reported to
-> Microsoft as a false positive; code signing is the long-term fix. The
-> portable ZIP avoids the checks that flag *installers* specifically,
-> but Microsoft's check has flagged the program itself too.
+> ending in `!ml`) has flagged Inkwyrd's unsigned downloads before, while
+> other antivirus products flag few or none of them, and its verdict has
+> changed between builds of identical code. It has been reported to
+> Microsoft as a false positive. Code signing is the long-term fix.
 >
-> Each release's notes list the SHA-256 of both downloads, so you can
-> check yours matches with `Get-FileHash <file>` in PowerShell.
-
-## Setting up your Discord bot
-
-Inkwyrd Audio connects to Discord as its own bot, so everyone running it
-needs their own bot application. It's free and takes about five minutes.
-
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-   and sign in with your Discord account.
-2. Click **New Application**, give it a name (e.g. "Table Audio"), and
-   create it.
-3. Open the **Bot** tab on the left. Click **Reset Token** and copy the
-   token that appears, this is your `DISCORD_BOT_TOKEN`. Keep it
-   private; anyone with it can control the bot.
-4. You don't need to enable any of the privileged "Gateway Intents" -
-   the bot only joins voice channels, it never reads messages.
-5. Open the **OAuth2** tab, then **URL Generator**. Under **Scopes**,
-   check `bot`. Under **Bot Permissions**, check `Connect` and `Speak`.
-   Copy the URL generated at the bottom of the page.
-6. Paste that URL into your browser, pick your Discord server from the
-   dropdown, and click **Authorize**. The bot now shows up in your
-   server's member list (it'll show offline until the app connects it).
-7. Back in Discord, turn on Developer Mode: **User Settings -> Advanced
-   -> Developer Mode**. Then right-click your server's icon and
-   **Copy Server ID** (this is `DISCORD_GUILD_ID`), and right-click the
-   voice channel you want the bot to join and **Copy Channel ID** (this
-   is `DISCORD_CHANNEL_ID`).
-
-You should now have three values: a bot token, a server ID, and a voice
-channel ID.
-
-## Optional: muting yourself in Discord automatically
-
-When you make your mic live in Inkwyrd, your voice reaches the call
-twice: once from your own Discord client and again through the bot.
-Inkwyrd can mute *you* in Discord whenever your mic goes live here, and
-put your setting back when it stops.
-
-This is entirely optional. If you only use Inkwyrd for music and sound
-effects, skip it - nothing else depends on it.
-
-It needs two more things from the **same** Discord application you made
-above:
-
-1. **Register a redirect URI.** In the Developer Portal, open your app,
-   go to **OAuth2 -> Redirects**, click **Add Redirect**, enter
-   `https://inkwyrd.com/rpc` exactly, and **Save Changes**.
-
-   Nothing is ever sent to that address - OAuth just requires one to
-   exist. It does need to be that exact URI, and if you register several
-   it must be the **first** one in the list.
-
-2. **Fully restart Discord.** Right-click Discord in the system tray and
-   choose **Quit Discord** (closing the window only hides it). The
-   desktop client caches your application's settings when it starts and
-   won't see a redirect you added while it was running.
-
-3. **Copy your client secret.** Developer Portal -> your app ->
-   **OAuth2** -> **Client Secret** -> **Reset Secret**, then copy it.
-   Resetting it is safe: nothing else uses it. Keep it private, like the
-   bot token.
-
-4. **In Inkwyrd**, open **Settings**. Under *Mute me in Discord while my
-   mic is live*, paste the client secret, tick **Enable**, and click
-   **Authorise...**. Discord will put a consent dialog on screen - click
-   **Authorize** on it. The status line under the field will confirm it.
-   Then click **Save & Apply**.
-
-You don't need a client ID: Inkwyrd reads it from the bot token you've
-already entered.
-
-This mutes your own Discord client locally. It needs no special
-permissions on the server and works in any server, including ones you
-don't run.
-
-## Installing and running
-
-1. Get the app and run it as described under [Download](#download).
-2. **First run:** a Setup screen appears. Click **Browse...** and point
-   it at a folder of music files (WAV, AIFF, FLAC, Ogg Vorbis, MP3,
-   AAC/M4A, or WMA), that's the only required field. Optionally Browse
-   to a folder of short sound-effect files to import onto the soundboard,
-   and paste in the three values from the [Discord bot setup](#setting-up-your-discord-bot)
-   above if you want to actually stream to Discord. Then click
-   **Save & Launch**.
-
-   Leaving the Discord fields blank is fine, the app runs in
-   **local-monitor-only mode**: mic, playlist, and soundboard mixed and
-   played through your own speakers, nothing sent to Discord. That's a
-   good way to try it out before setting up a bot at all. Everything you
-   enter is saved, so this screen only needs filling in once. A
-   **Settings** button on the Player window brings it back later if you
-   want to change folders or Discord details.
-3. **Wear headphones.** Mic input is mixed live into the same output as
-   the music and soundboard, so without headphones you'll get feedback.
-
-## The windows
-
-Inkwyrd is laid out as six separate windows you can arrange however
-suits your screen, rather than one fixed panel.
-
-- **Player** - the main window. Now playing, transport, and everything
-  that shapes playback.
-- **Playlist** - the tracks in whichever playlist is selected.
-- **Library** - your playlists, and every track the app knows about.
-- **Voice FX** - noise suppression and your microphone plugin chain.
-- **Soundboard** - the button grid.
-- **Scenes** - one press to set the whole room: playlist, ambience and
-  volume.
-
-**They snap together.** Drag a window near another one, or near a screen
-edge, and it pulls itself flush. Resizing snaps the same way. Drag a
-window away to pull it off the group.
-
-**The Player window carries the group.** Dragging it moves everything
-docked to it. Dragging any other window detaches just that one, so you
-can rearrange without taking the whole layout apart.
-
-**Only the Player has a minimise button**, and minimising it takes every
-open window down with it - and brings them all back together. The other
-five have an X, which hides them; the buttons along the bottom of the
-Player window (**Playlist**, **Library**, **Voice FX**, **Soundboard**,
-**Scenes**) bring any of them back.
-
-Positions, sizes and which windows were open are all remembered between
-sessions.
-
-## Using it
-
-### The Player window
-
-At the top is the **now-playing display**: the track's artist and title,
-the time elapsed and total, a live spectrum of everything being sent
-out, and a **seek bar** - click or drag anywhere along it to move
-through the track.
-
-Artist and title come from the file's own tags, the same ones the
-Library and Playlist windows show. A file with no tags falls back to its
-filename: `Artist - Title` splits into both, and anything else shows the
-whole name as the title.
-
-**Keyboard shortcuts** work whenever the Player window is focused:
-**Space** play/pause, **S** stop, **M** mic on/off, **Right arrow** skip,
-**Up/Down** master volume, **Esc** stop every soundboard sound.
-
-**The transport row:** **Pause** (keeps your place), **Stop** (silences
-everything and starts the list from the top next time), **Fade out**
-(rides the music down to silence and then stops. Useful for ending a scene, for exmaple),
-**Skip**, **Shuffle**, and the **Master** fader, which is one control
-over everything the app sends out: your speakers *and* Discord.
-
-**The row below** is how the app behaves rather than what it's doing now:
-**Mic** mute, **Monitor**, whether tracks **Crossfade** into each other
-and over how long, **Loop track**, and how long **Fade out** takes. All
-of it is remembered between sessions.
-
-**Loop track** repeats whatever is playing instead of moving on, for a
-single ambient bed you want running all session. The slider next to it
-sets the silence between repeats: leave it on **No gap** and the track
-goes straight back round. With Crossfade on, it dissolves into itself
-and loops seamlessly. Skip still moves to the next track; looping only
-governs what happens when a track reaches its own end.
-
-Fade out is on the Stream Deck too, as **Music Fade Out**, and takes as
-long as the slider here says - change it here and the Stream Deck key
-follows.
-
-Fade out only takes the *music* down, not your microphone. Fading
-yourself out mid-sentence isn't what a button next to Stop should do. Use
-the Master fader if you want to take absolutely everything down.
-
-**Monitor is off when the app starts.** It controls whether the mix also
-comes out of *your own* speakers. When you're in the Discord call you
-already hear everything through the bot, so leaving it on would play
-every track twice, slightly offset. If you're running without a Discord
-bot, turn Monitor on.
-
-### The Library window
-
-The top half is **your playlists**. Keep as many as you like (one per
-scene, mood or session). Click one to look at its tracks in the Playlist
-window; **double-click, or hit Play, to switch to it.** The music
-crossfades across rather than cutting. **New**, **Rename** and
-**Delete** manage the list. To see where they're stored (readable JSON
-files), use **Open playlists folder** in Settings.
-
-**The search box** above the list narrows it as you type, matching on
-title, artist, album, genre and filename - so untagged tracks are still
-findable by what they're called on disk. Words match in any order, so
-"drake blue" finds "Blue Drake". The caption says how many of how many
-you're looking at, **Esc** or the **x** clears it, and the filter is
-never remembered between sessions. It narrows the Folders view too:
-folders with nothing matching in them drop out, and the ones left
-**open themselves so you can see where the matches live**. Clearing the
-search puts the tree back the way you had it.
-
-The bottom half is **All Tracks**: every track Inkwyrd knows about,
-independent of which playlists happen to use it. It stays put while you
-click between playlists.
-
-All Tracks has two views, switched with the **Table** and **Folders**
-buttons next to its heading. Whichever you last used is remembered.
-
-**Table** shows **Title, Artist, Album and Genre**, read from each file's
-embedded tags. Click a column header to sort by it, and click again to
-reverse. Sorting by Album keeps each record in track-number order. The
-first launch after adding music reads the tags in the background, so rows
-may show filenames for a moment before they fill in.
-
-**Folders** shows the same tracks grouped by the folders they actually
-live in, in the same order Windows Explorer would, with a count on each
-folder. Folders that lead to a single folder are joined into one row, so
-a path like `Artist\Album` isn't several clicks deep for nothing.
-**Selecting a folder selects everything in it**, which is the quick way
-to put a whole album into a playlist: click the folder, then **Add to
-playlist**. Dragging onto the Playlist window works from the table view
-only.
-
-**Add files...** and **Add folder...** put tracks into this library.
-Add folder either keeps the folder linked (files you add to it later
-show up automatically) or takes a one-time copy of what's in it. You can
-also **drag files and folders straight in from Windows Explorer**.
-
-To get tracks into a playlist, select them here and click
-**Add to playlist**, or **drag them onto the Playlist window** - from
-either view, and dragging a folder in the Folders view takes everything
-in it.
-
-**To preview a track**, hover over it: a small play symbol appears at the
-left of its row, in both the Table and Folders views. Click that to audition it, and the symbol becomes a stop
-button inside a pulsing ring so it's obvious what's playing. Click it
-again to stop. Only you hear a preview - it never reaches Discord, and it
-plays even with Monitor off. The playlist pauses while it runs and picks
-up again afterwards.
-
-**Right-click a track** for Edit tags..., Add to playlist and Remove
-from library - the same menu in both views. A track's volume and fade
-are set by clicking its **Vol** column in the Table view.
-
-**Remove** takes a track out of the library. It does *not* touch any
-playlist already using it - a track can disappear from All Tracks and
-still play fine in a playlist that has it.
-
-**Every track has its own volume and its own fade length**, reached by
-clicking the small bar in its **Vol** column.
-
-**Volume** is for the track that was exported hotter than everything else
-and makes everyone jump when shuffle lands on it. Pull it down once and
-it stays down. The small notch on each bar is normal volume.
-
-**Fade into next** sets how long *this* track takes to hand over to
-whatever follows it, overriding the global Crossfade length. It's for the
-track that ends on a long tail and wants a slow hand-off, or the one that
-stops dead and wants a quick one. Leave it on **Default** and it follows
-the global setting; tracks with a fade of their own say so on their row.
-
-Both settings belong to the *file*, so a track that appears in several
-playlists is fixed in all of them at once, and the volume applies
-straight away if that track is playing.
-
-### The Playlist window
-
-Shows the tracks in whichever playlist is selected in the Library, with
-the playing one marked, in **Title** and **Artist** columns. The columns
-don't sort: the list is always in the playlist's own order, which is
-the order it plays in with Shuffle off. Double-click a track to jump to
-it. Drop files
-here (from the Library or from Explorer) to add them to that playlist,
-and **Remove from playlist** (or the Delete key) takes one out.
-
-Adding tracks to the playlist you're currently listening to never
-interrupts it: the track playing carries on, and the new tracks join the
-running order without it jumping back to the top.
-
-### Editing tags
-
-**Right-click a track in the Library or the Playlist window and choose
-Edit tags...** to change what the file itself says it is: title, artist,
-album, album artist, year, genre, track and disc numbers, BPM, comment,
-composer and publisher, plus the cover art. Changes are written into the
-file, so every other music program sees them too.
-
-**Select several tracks first** to edit them together. Fields that differ
-across the selection show `<keep>` and are left alone unless you type in
-them - so you can fix an album's artist without flattening thirteen
-different titles. Only the fields you actually edit are written.
-
-Your files are handled carefully: Inkwyrd never edits a file in place. It
-copies it, tags the copy, checks the copy still reads, and only then puts
-it in place of the original. If anything fails, the original is untouched.
-
-A track that's **loaded in the player can't be tagged** - Windows won't
-let a file being played be replaced. Press Stop and save again. A track
-being previewed is fine: the preview stops itself.
-
-### The Soundboard window
-
-A grid of programmable buttons, like a Stream Deck. Click an empty one to
-pick a sound for it, or **drag sound files straight onto a button** from
-Explorer. Click a filled button to fire it, sounds can overlap.
-**Drag a button onto another to swap them.** That's how you rearrange
-the board - drop one onto an empty button to move it there. Everything
-travels with the button, including its name, so Stream Deck buttons keep
-working afterwards.
-
-**A button can loop.** Right-click it and choose *Loop this sound*, and
-it repeats until you press it again instead of playing once - which is
-what you want for rain, a tavern, wind under a scene. A looping button
-is outlined while it's running and carries a small loop mark, so you can
-see at a glance what's still going. The same press stops it, from the
-board, from a Stream Deck, or via the Killswitch.
-
-**Killswitch** silences every soundboard sound playing right now, loops
-included, without touching the music - for when the wrong effect goes
-out to the table. **Esc** does the same thing from the Player window,
-and there's a **Soundboard Killswitch** Stream Deck action for it too.
-Use **Stop** or **Fade out** on the Player if you want the music to stop
-as well.
-
-**Right-click** any button to rename it, give it a colour or a picture,
-swap its sound or clear it. Buttons stay where you put them, so adding a
-new sound never shuffles the board around. **+** and **-** change how
-many buttons there are (a button with a sound on it is never removed),
-and **Import folder...** drops everything in a folder onto the free
-buttons.
-
-**Each button has its own volume too**, as a bar along its bottom edge.
-Click the *bar* to open a slider; click anywhere else on the button to
-fire the sound as usual.
-
-**Buttons can have a picture.** Right-click one and choose *Set a
-picture*, or just drag an image file onto a button that already has a
-sound. The picture is dimmed behind the button's name so the label stays
-readable. PNG, JPEG, GIF, BMP and WebP.
-
-Button names are what a Stream Deck sends to trigger a sound, so
-renaming one means updating that button in the Stream Deck app to match.
-
-### The Scenes window
-
-A scene is one press that sets the whole room: **which playlist is
-playing, which looping soundboard sounds are running, and - if you want
-- the master volume.** "Tavern", "Road", "Combat", "Storm".
-
-**To make one, set the room up, then save it.** Play the playlist you
-want, start the looping sounds (rain, a fire, a crowd), set the volume,
-then click **+ Save current as scene**. A dialog opens already filled in
-from what's playing. Name it, untick anything you don't want in it,
-pick a colour, and save.
-
-The dialog also lets you choose what the scene does to the music:
-
-- **Play a playlist** - the usual one.
-- **Fade the music out** - for a scene that's deliberately quiet.
-- **Leave the music alone** - for ambience-only scenes, like "it starts
-  raining", that shouldn't interrupt the track.
-
-**Set the master volume to** is off unless you tick it. The master fader
-is also what Discord hears, so a scene only moves it when you've asked
-it to - and when it does, it glides rather than jumping. Grabbing the
-fader yourself during a glide stops it.
-
-**Press a scene to switch to it.** What happens:
-
+> Every release's notes list the SHA-256 checksum of both downloads.
+> Check yours matches with `Get-FileHash <file>` in PowerShell.
+
+## Quick start
+
+This gets you from nothing to music playing, without setting up Discord.
+
+1. **Wear headphones.** Your mic is mixed into the same output as the
+   music, so speakers will feed back.
+2. **Run Inkwyrd Audio.** A Setup screen appears the first time.
+3. **Choose a music folder.** Under *Music folder*, click **Browse...**
+   and pick a folder of music. It's the only thing Setup needs.
+   Optionally pick a folder of short sound effects to put on the
+   soundboard. Leave the Discord fields empty for now.
+4. **Click Save & Launch.** Inkwyrd makes a playlist from your music
+   folder and starts playing it.
+5. **Turn Monitor on.** On the Player window, click **Monitor: Off** so
+   it reads **Monitor: On**. With no Discord connection, Monitor is what
+   lets you hear the mix yourself.
+6. **Open the other windows** from the buttons along the bottom of the
+   Player: **Playlist**, **Library**, **Voice FX**, **Soundboard**,
+   **Scenes**.
+7. **Fill your library.** In the Library window, the lower list is
+   **All Tracks**. If it's empty, click **Add folder...** and choose
+   your music folder. That's where you can search, preview and edit your
+   tracks.
+
+When you're ready to play over Discord, follow
+[Connecting to Discord](#connecting-to-discord).
+
+## Finding your way around
+
+Inkwyrd is six windows you can arrange however suits your screen:
+
+| Window | What it's for |
+|---|---|
+| **Player** | The main window: what's playing, the transport buttons, volume and playback settings |
+| **Playlist** | The tracks in the selected playlist |
+| **Library** | Your playlists (top) and every track you've added (bottom) |
+| **Voice FX** | Noise suppression and your microphone plugins |
+| **Soundboard** | The grid of sound-effect buttons |
+| **Scenes** | One-press setups for the whole room |
+
+- **Open or hide a window** with the buttons along the bottom of the
+  Player window. A window's X also hides it; the same button brings it
+  back.
+- **Windows snap together.** Drag one near another, or near the edge of
+  the screen, and it pulls itself flush. Resizing snaps the same way.
+- **Dragging the Player moves everything docked to it.** Dragging any
+  other window pulls just that one away, so you can rearrange without
+  taking the layout apart.
+- **Only the Player can be minimised**, and minimising it takes every
+  open window with it, then brings them all back together.
+- **Closing the Player quits the app.**
+- Positions, sizes and which windows were open are remembered.
+
+**The warning banner** on the Player window is where Inkwyrd tells you
+about anything that would otherwise fail silently: the audio device
+didn't open, a playlist has no playable files, tracks are missing from
+disk, a file couldn't be read, or a newer version of Inkwyrd is
+available.
+
+## Playing music
+
+Everything here is on the **Player** window.
+
+**The display** at the top shows the track's artist, title and cover
+art, the time played and total, a live spectrum of what's being sent
+out, and a **seek bar**. Click or drag the seek bar to move through the
+track.
+
+**The transport buttons:**
+- **Play / Pause** - Pause keeps your place.
+- **Stop** - silences the music and starts the list from the top next
+  time.
+- **Fade out** - lowers the music to silence, then stops. Good for
+  ending a scene. It fades only the music, never your microphone.
+- **Skip** - crossfades to the next track.
+- **Shuffle** - on or off for the playlist that's playing.
+
+**Master** is the volume of everything Inkwyrd sends out: your speakers
+*and* Discord.
+
+**The row below** sets how playback behaves. All of it is remembered:
+- **Mic: Live / Muted** - whether your microphone is in the mix.
+- **Monitor: On / Off** - whether the mix also comes out of **your own**
+  speakers. Turn it **on** when you're not using Discord. Leave it
+  **off** when you're in the Discord call, because you already hear
+  everything through the bot, and Monitor would play it all twice,
+  slightly out of step.
+- **Crossfade** - whether tracks blend into each other, and over how
+  many seconds.
+- **Loop track** - repeats the current track instead of moving on, for
+  one ambient piece you want running all session. The slider sets a
+  silence between repeats; leave it on **No gap** to loop straight
+  round. Skip still moves on.
+- **Fade out** - how long the Fade out button takes.
+
+**Keyboard:** click the Player window, then use **Space** to play or
+pause, **S** to stop, **Right arrow** to skip, **Up/Down** for the master
+volume, **M** for the mic and **Esc** for the Killswitch. See
+[Keyboard shortcuts](#keyboard-shortcuts).
+
+## Building your library
+
+The **Library** window's lower half, **All Tracks**, is every track
+you've added to Inkwyrd, whether or not it's in a playlist. It's where
+you search, preview, tag and pick tracks for playlists.
+
+**To add music:**
+- Click **Add files...** to pick individual tracks, or **Add folder...**
+  to add everything in a folder and its subfolders.
+- Or drag files and folders straight in from Windows Explorer.
+
+**Two ways to look at it**, switched with **Table** and **Folders** next
+to the heading. Whichever you used last is remembered.
+
+- **Table** shows **Title, Artist, Album and Genre** from each file's
+  own tags. Click a column heading to sort, and click again to reverse.
+  Sorting by Album keeps each album in track order. Right after adding
+  music, rows may show filenames for a moment while the tags are read.
+- **Folders** groups tracks by the folders they're in, in the same order
+  Windows Explorer uses, with a count on each folder. **Selecting a
+  folder selects everything in it**, which is the quick way to put a
+  whole album into a playlist.
+
+**To search**, type in the box above the list. It matches title,
+artist, album, genre and **filename**, so untagged tracks are still
+findable. Words match in any order: "drake blue" finds "Blue Drake". In
+the Folders view, the folders containing matches open up so you can see
+where they are. **Esc** or the **x** clears the search, and the tree goes
+back the way you had it. The heading shows how many tracks match, for
+example "All Tracks (12 of 84)".
+
+**To remove tracks**, select them and click **Remove** (or press
+Delete). That takes them out of the library only. It never deletes the
+files, and doesn't touch any playlist already using them.
+
+## Previewing a track
+
+A preview plays a track **in your ears only**, to check it's the one you
+want, without the table hearing it.
+
+1. Open the **Library** window.
+2. In **All Tracks** (the lower list), **move your mouse over a track.**
+   A small **play symbol** appears at the left of that row. This works
+   in both the Table and Folders views.
+3. **Click the play symbol.** The track starts, and the symbol turns into
+   a **stop button inside a pulsing ring**, so you can see what's
+   previewing. The heading also says what's playing.
+4. **Click it again to stop.** It also stops on its own at the end of
+   the track.
+
+While a preview plays, the playlist **pauses** and picks up again
+afterwards. A preview never reaches Discord, and you hear it even when
+Monitor is off.
+
+> Can't see a play symbol? Make sure **All Tracks** has tracks in it.
+> If it's empty, click **Add folder...** and add your music.
+
+## Making and using playlists
+
+The **Library** window's upper half is your playlists. Keep as many as
+you like: one per location, mood or session.
+
+**To make a playlist**, click **New**. A box asks for its name; type it
+and press **Enter**.
+
+**To put tracks in it:**
+1. Click the playlist to select it.
+2. Select tracks in **All Tracks** below. Ctrl+click picks several, and
+   in the Folders view a folder picks everything inside it.
+3. Click **Add to playlist**, or right-click and choose **Add to
+   playlist**, or **drag them onto the Playlist window**. You can drag
+   from either view, or straight from Windows Explorer.
+
+**To play a playlist**, double-click it, or select it and click
+**Play**. If something is already playing, it crossfades across rather
+than cutting. Switching back to a playlist later in the same session
+resumes it where it left off.
+
+**Clicking a playlist** (single click) just shows its tracks in the
+Playlist window, without changing what's playing, so you can look
+through one list while another plays.
+
+**Rename** and **Delete** manage the list. **Refresh** re-reads a
+playlist's linked folder (see below).
+
+**The Playlist window** shows the selected playlist's tracks in the
+order they play when Shuffle is off, with the playing one marked.
+- **Double-click a track** to jump to it.
+- **Remove from playlist**, or the Delete key, takes a track out.
+- Right-click a track to **Edit tags...** or remove it.
+- Adding tracks to the playlist that's playing never interrupts it: the
+  current track carries on and the new ones join the running order.
+
+**The playlist made from your Setup music folder is linked to that
+folder.** Music you add to the folder later joins the playlist; click
+**Refresh** to pick it up straight away. Tracks in a linked playlist
+can't be removed one at a time, because they come from the folder.
+
+To see where playlists are stored (readable JSON files), use **Open
+playlists folder** in Settings.
+
+## Setting a track's volume and fade
+
+Every track has its own **volume** and its own **fade length**. Both
+belong to the file, so a track in several playlists is fixed in all of
+them at once.
+
+1. In the Library's **Table** view, find the track.
+2. Click the small bar in its **Vol** column.
+3. Set:
+   - **Volume** - for the track that's much louder or quieter than the
+     rest. The small notch on the bar is normal volume. A bar shown in
+     the warning colour is boosted above normal.
+   - **Fade into next** - how long *this* track takes to hand over to
+     the next one, overriding the global Crossfade length. Useful for a
+     track with a long tail, or one that stops dead. **Default** follows
+     the global setting. Tracks with their own fade say so on their row.
+
+A change applies straight away, even to the track that's playing.
+
+## Editing tags and cover art
+
+Tags are what a music file says about itself: title, artist, album and
+so on. Inkwyrd shows them everywhere, and can change them.
+
+1. **Right-click a track** in the Library or the Playlist window.
+2. Choose **Edit tags...**.
+3. Change any of: title, artist, album, album artist, year, genre,
+   track and disc numbers, BPM, comment, composer, publisher, and the
+   **cover art** (**Replace...** or **Remove**).
+4. Click **Save**.
+
+Changes are written into the file itself, so every other music program
+sees them too, and the Library updates straight away.
+
+**Editing several tracks at once:** select them first, then right-click.
+Fields that differ between them show `<keep>` and are left alone unless
+you type in them. So you can fix an album's artist without flattening
+thirteen different titles. Only the fields you actually change are
+written.
+
+**Your files are handled carefully.** Inkwyrd never edits a file in
+place. It copies it, tags the copy, checks the copy still plays, and
+only then swaps it in. If anything fails, the original is untouched.
+
+A track that's **currently loaded in the player can't be tagged**,
+because Windows won't let a file in use be replaced. Press **Stop** and
+save again. A track being previewed is fine: the preview stops itself.
+
+## The soundboard
+
+The **Soundboard** window is a grid of buttons for sound effects.
+
+**To put a sound on a button:**
+- Click an **empty button** (marked **+**) and pick a file. Pick
+  several and they fill the following empty buttons.
+- Or **drag sound files onto a button** from Windows Explorer.
+- Or click **Import folder...** to put a whole folder's sounds onto the
+  free buttons.
+
+**To play a sound**, click its button. Sounds can overlap, and the same
+button can be pressed repeatedly.
+
+**To rearrange the board**, drag a button onto another to swap them, or
+onto an empty one to move it there. Everything moves with the button,
+including its name, so Stream Deck keys keep working.
+
+**Right-click a button** to:
+- **Rename** it. The name is what a Stream Deck key uses to find it, so
+  update the key if you rename.
+- Set its **Volume** (or click the thin bar along its bottom edge).
+- Choose a **Colour**.
+- **Set a picture** (PNG, JPEG, GIF, BMP or WebP). You can also drag an
+  image onto a button that already has a sound. The picture is dimmed so
+  the name stays readable.
+- **Loop this sound** - see [Looping ambience](#looping-ambience).
+- **Replace** the sound or **Clear** the button.
+
+**+** and **-** at the top add or remove buttons. A button with a sound
+on it is never removed.
+
+**Killswitch** (top of the window, or **Esc** on the Player) instantly
+silences every sound effect playing, loops included. It never touches
+the music: use **Stop** or **Fade out** on the Player for that.
+
+A button whose file has gone missing says **(file missing)** rather than
+silently doing nothing.
+
+## Looping ambience
+
+Any soundboard button can loop instead of playing once. That's what you
+want for rain, a crackling fire, a tavern crowd or wind: sounds that
+should run under the music until you say otherwise.
+
+1. **Right-click** the button on the Soundboard.
+2. Choose **Loop this sound**. A small loop mark appears on it.
+3. **Click the button to start it.** It's outlined while it's running.
+4. **Click it again to stop it.**
+
+The same press starts and stops it from a Stream Deck too, and the
+Killswitch stops it. Each loop keeps its own volume, so you can set an
+ambience bed quietly under the music and leave it.
+
+Loops are what [scenes](#scenes) switch on and off.
+
+## Scenes
+
+A scene is one press that sets the whole room: **which playlist plays,
+which looping sounds are running, and (if you choose) the master
+volume.** For example "Tavern", "Road", "Combat" or "Storm".
+
+Open the **Scenes** window from the **Scenes** button on the Player.
+
+**To make a scene:**
+1. Set the room up the way you want it: play the playlist, start the
+   looping sounds, set the volume.
+2. In the Scenes window, click **+ Save current as scene**.
+3. A dialog opens, already filled in from what's playing. Give it a
+   name, untick anything you don't want in it, and pick a colour.
+4. Choose what it does to the music:
+   - **Play a playlist** - the usual choice.
+   - **Fade the music out** - for a deliberately quiet scene.
+   - **Leave the music alone** - for ambience-only scenes like "it
+     starts raining", which shouldn't interrupt the track.
+5. Tick **Set the master volume to** only if you want this scene to
+   change the volume. It's off by default, because the master volume is
+   also what Discord hears.
+6. Click **Save**.
+
+**To use a scene, click it.** Here's what happens:
 - The music crossfades to the scene's playlist. **If that playlist is
-  already playing, it's left alone** - pressing Combat during combat
+  already playing, it's left alone**, so pressing Combat during combat
   never restarts the fight music.
-- The scene's looping sounds fade in, and any running loop the scene
-  doesn't include fades out. **A loop both scenes share keeps running
-  without a hiccup**, so rain carries on from Road into Storm.
-- One-shot sound effects are never touched.
+- The scene's loops fade in and any other running loops fade out. **A
+  loop both scenes share keeps going without a break**, so rain carries
+  on from Road into Storm.
+- If the scene sets the volume, it glides there. Grab the Master slider
+  yourself and the glide stops.
+- Sound effects that aren't loops are never touched.
 - **Pressing the scene you're already in puts it back.** If the
-  Killswitch cut the ambience, one press of the scene brings it back,
-  without restarting anything that's still right.
+  Killswitch stopped the ambience, one press brings it back without
+  restarting anything that's still right.
 
-The scene you last pressed is outlined. Scene changes take as long as
-the Player's crossfade setting (never less than a second), so the whole
-room moves together.
+The scene you last pressed is outlined. A scene change takes as long as
+the Player's crossfade setting, and never less than a second.
 
-**Right-click a scene** for:
+**Right-click a scene** to:
+- **Update from what's playing now** - the easiest way to change one.
+  Set the room up again, then update.
+- **Edit...** - change it without having to play it first.
+- **Move earlier / Move later** - reorder.
+- **Delete...** - removes the scene only. The playlist and soundboard
+  are untouched.
 
-- **Update from what's playing now** - the main way to change a scene.
-- **Edit...** - the same dialog as saving, to change something without
-  having to play it first.
-- **Move earlier / Move later**.
-- **Delete...**.
-
-**If something a scene uses goes away** - its playlist is deleted, or a
-soundboard button is cleared or stops looping - the scene's button says
-how many things are missing, and hovering over it says which. The rest
-of the scene still works. **Renaming a soundboard button updates every
+**If something a scene uses disappears** (its playlist is deleted, or a
+soundboard button is cleared or stops looping), its button says how
+many things are missing and hovering over it says which. The rest of
+the scene still works. **Renaming a soundboard button updates every
 scene that uses it**, and moving buttons around the board changes
 nothing.
 
-### Ducking the music while you talk
+## Your microphone
 
-Settings has **Duck the music while my mic is live**, off until you turn
-it on. With it on, the music and sound effects drop while you're
-speaking and come back when you stop, so you can narrate over a bed
-without riding the master fader.
+Your mic is mixed in with the music and sent to Discord. The **Mic**
+button on the Player (or **M**) turns it on and off, and the setting is
+remembered.
 
-Two numbers, both in dB like every other level here:
+The **Voice FX** window shapes how you sound.
 
-- **Drop the music by** - how far down it goes. -12 dB is a good
-  starting point: clearly under your voice, not gone.
-- **Speaking is louder than** - what counts as speech. Raise it if a
-  noisy room holds the music down when you're not talking.
+**Noise suppression** (at the top, off by default) removes steady
+background noise - a fan, hiss, room tone - from the gaps between your
+words. Turn it on for a noisy mic and leave it off for a quiet one: on a
+clean mic it takes more from your voice than from the noise. It adds
+about 40ms of delay. The line under the switch says which state you're
+in.
 
-The timing is fixed and deliberately not adjustable: it ducks quickly
-enough not to clip your first word, and waits a moment before coming
-back, so the music doesn't surge up between sentences.
+**Your plugin chain** runs your mic through VST3 plugins you already own
+(EQ, compression, a noise gate and so on).
+1. Click **Add VST3...**. It opens at your system VST3 folder. Pick the
+   plugins you want; you can select several. They're added to your list,
+   which is remembered.
+2. Click a plugin in your list to put it in the **live chain**. Its own
+   window opens so you can set it up or pick a preset, as you would in a
+   DAW.
+3. Click a plugin's name in the live chain to reopen its window, or
+   **Remove** to take it out. Plugins run in the order listed.
+4. **Forget** takes a plugin off your list.
 
-**It reads your mic after noise suppression and your plugin chain**, so
-whatever you already use to clean up your voice decides what counts as
-speech. A muted mic never ducks anything. Your voice itself is never
-ducked, only the music under it.
+Save your settings as each plugin's own presets. The chain itself isn't
+remembered between sessions. Noise suppression runs before your
+plugins, so they shape your voice rather than your room.
 
-### The Voice FX window
+## Ducking the music while you talk
 
-**Noise suppression** sits at the top, and is **off by default**. It
-removes steady background noise - fan, hiss, room tone - from the gaps
-between your words.
+With ducking on, the music and sound effects dip while you're speaking
+and come back when you stop, so you can narrate without riding the
+Master slider.
 
-Leave it off if your mic is already quiet. It genuinely helps a noisy
-one, and genuinely hurts a clean one: on a quiet mic it takes more from
-your voice than from the noise. It also adds about 40ms of delay to your
-voice. The line under the toggle says which state you're in.
+1. Open **Settings** from the Player.
+2. Under **Duck the music while my mic is live**, tick **Enable**.
+3. Set:
+   - **Drop the music by** - how far it dips. **-12 dB** is a good start:
+     clearly under your voice but not gone.
+   - **Speaking is louder than** - what counts as speech. Raise it if
+     background noise keeps the music dipped when you're not talking.
+4. Click **Save & Apply**. It takes effect straight away.
 
-Below that is your **microphone plugin chain**.
+The timing is fixed: it dips fast enough not to clip your first word,
+and waits a moment before coming back so the music doesn't surge up
+between sentences. It listens to your mic *after* noise suppression and
+your plugins, so a noise gate you already use decides what counts as
+speech. A muted mic never ducks anything, and your voice itself is
+never ducked.
 
-Click **Add VST3...** to pick the plugins you want. It opens at your
-system VST3 folder, and you can select several at once. Only what you
-pick appears in the list, the app doesn't trawl through everything
-installed, because most of it won't be anything you'd put on a mic.
-Your list is remembered between sessions, and **Forget** takes something
-off it.
+## Connecting to Discord
 
-Clicking a plugin in your list adds it to the live chain **and opens the
-plugin's own window**, so you can set it up and pick presets exactly as
-you would in a DAW. Clicking a plugin's name in the *Live voice chain*
-reopens that window later; **Remove** takes it out of the chain. Plugins
-run on your mic in the order listed.
+Inkwyrd plays into Discord as **its own bot**, so you need a bot of your
+own. It's free and takes about five minutes.
 
-Plugin settings are saved as the plugin's own presets, the same way you'd
-save them in a DAW - the chain itself isn't stored between sessions.
+**Create the bot:**
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+   and sign in.
+2. Click **New Application**, give it a name (for example "Table
+   Audio"), and create it.
+3. Open the **Bot** tab. Click **Reset Token** and copy the token. Keep
+   it private: anyone with it can control the bot.
+4. You don't need any of the "Privileged Gateway Intents". The bot only
+   joins voice channels; it never reads messages.
 
-Noise suppression runs *before* your plugins, so they shape your voice
-rather than your room.
+**Invite it to your server:**
+5. Open **OAuth2 -> URL Generator**. Under **Scopes** tick `bot`; under
+   **Bot Permissions** tick `Connect` and `Speak`. Copy the URL at the
+   bottom.
+6. Open that URL in your browser, pick your server, and click
+   **Authorize**. The bot appears in your member list (offline until
+   Inkwyrd connects it).
 
----
+**Get the server and channel IDs:**
+7. In Discord, turn on **User Settings -> Advanced -> Developer Mode**.
+8. Right-click your server's icon and **Copy Server ID**.
+9. Right-click the voice channel the bot should join and **Copy Channel
+   ID**.
 
-Changing a Discord bot token/server/channel via Settings takes effect on
-the next launch, not immediately. Everything else applies right away.
+**Put them into Inkwyrd:**
+10. Open **Settings**, paste the **Bot token**, **Server (guild) ID** and
+    **Voice channel ID**, and click **Save & Apply**.
+11. Inkwyrd connects straight away, and the status line at the top of
+    the Player shows how it's going. **Changing** these details later,
+    once it has connected, takes effect the next time Inkwyrd starts; it
+    offers to restart for you.
+
+**Once you're connected, turn Monitor off.** You're in the call too, so
+you already hear everything through the bot.
+
+## Muting yourself in Discord automatically
+
+When your mic is live in Inkwyrd, your voice reaches the call twice:
+once from your own Discord client and again through the bot. Inkwyrd can
+mute **you** in Discord whenever your mic is live here, and unmute you
+when it isn't.
+
+This is optional. If you only use Inkwyrd for music and effects, skip
+it. It uses the **same** Discord application as your bot:
+
+1. **Add a redirect.** In the Developer Portal, open your app, go to
+   **OAuth2 -> Redirects**, click **Add Redirect**, enter
+   `https://inkwyrd.com/rpc` exactly, and **Save Changes**. Nothing is
+   ever sent there - Discord just requires one. It must be that exact
+   address, and first in the list if you have several.
+2. **Fully quit Discord** - right-click it in the system tray and choose
+   **Quit Discord** - then start it again. Discord only reads your
+   application's settings when it starts.
+3. **Copy the client secret:** Developer Portal -> your app -> **OAuth2**
+   -> **Client Secret** -> **Reset Secret**, then copy it. Keep it
+   private.
+4. **In Inkwyrd**, open **Settings**. Under *Mute me in Discord while my
+   mic is live*, paste the client secret, tick **Enable**, and click
+   **Authorise...**. Discord shows a consent box: click **Authorize**.
+   The status line under the field confirms it.
+5. Click **Save & Apply**.
+
+It mutes your own Discord client on your own machine, so it needs no
+special server permissions and works in any server.
+
+## Using a Stream Deck
+
+Inkwyrd has a plugin for Elgato's Stream Deck. Every key works while
+Inkwyrd is running.
+
+| Action | What it does |
+|---|---|
+| **Skip Track** | Crossfades to the next track |
+| **Toggle Shuffle** | Turns shuffle on or off |
+| **Toggle Mic Mute** | Turns your mic on or off |
+| **Music Fade Out** | Same as the Player's Fade out button, taking the same time |
+| **Soundboard** | Plays one soundboard sound, or starts/stops a loop |
+| **Soundboard Killswitch** | Silences every sound effect; the music keeps playing |
+| **Scene** | Switches to a scene |
+
+**Installing it.** The plugin isn't in the ZIP or installer yet - it's
+built from this repository's source. You need the Stream Deck app
+(version 6.5 or later) and [Node.js](https://nodejs.org/).
+
+1. Download this repository (**Code -> Download ZIP** on GitHub, or
+   `git clone`).
+2. Open a terminal in its `streamdeck-plugin` folder and run:
+   ```
+   npm install
+   npm run build
+   npx @elgato/cli link com.inkwyrd.audiodeck.sdPlugin
+   ```
+3. Quit the Stream Deck app from its tray icon and start it again.
+   **Inkwyrd Audio Deck** appears in its list of actions.
+
+**Setting up the keys.** Drag actions onto keys. For a **Soundboard**
+key, select it and type the button's name **exactly as it reads on the
+Soundboard** (capitals and spaces count). For a **Scene** key, type the
+scene's name (capitals don't matter).
+
+**What the key tells you:**
+- A **tick** means Inkwyrd received the press.
+- A **warning triangle** means Inkwyrd isn't running, or a Soundboard or
+  Scene key has no name set. A press that didn't reach Inkwyrd is
+  dropped. It never fires later when Inkwyrd starts.
+- A tick with nothing happening usually means a mistyped name.
+
+There's more detail in [streamdeck-plugin/README.md](streamdeck-plugin/README.md).
 
 ## Skins
 
-Inkwyrd's colours, fonts, a couple of sizes and the logo all come from a
-skin, and you can write your own.
+A skin changes Inkwyrd's colours, fonts, corner rounding, title bar
+height and logo.
 
-Open **Settings** and look under **Skin**. Three examples are already
-there - **Amber**, **Midnight** and **High Contrast**. Pick one and the
-whole app changes straight away, no restart.
+**To change skin**, open **Settings** and pick one under **Skin**. It
+applies straight away. Three examples are included - **Amber**,
+**Midnight** and **High Contrast** - and **Inkwyrd (built-in)** always
+takes you back.
 
-### Making your own
-
-Click **Export current...** in Settings. That writes what's on screen
-now into your skins folder as a starting point, and opens the folder.
-Edit the `skin.json` inside it, click **Reload**, and your changes
-appear.
+**To make your own:**
+1. Pick the skin closest to what you want, then click **Export
+   current...**. That saves it into your skins folder and opens the
+   folder.
+2. Edit the `skin.json` inside it.
+3. Click **Reload** in Settings to see your changes.
 
 A skin is a folder under `%APPDATA%\Inkwyrd Audio\skins`, holding a
-`skin.json` and optionally an image for the logo:
+`skin.json` and optionally a logo image:
 
 ```
 skins\Amber\skin.json
 skins\Amber\logo.png
 ```
 
-Everything in the file is optional. Leave anything out and Inkwyrd uses
-its own value, so a short file is fine, and a skin written today keeps
-working when a later version adds a new colour.
+Everything in the file is optional. Anything you leave out uses
+Inkwyrd's own value, so a short file is fine.
 
 ```json
 {
@@ -542,17 +697,15 @@ working when a later version adds a new colour.
 }
 ```
 
-Colours are `#rrggbb`, or `#aarrggbb` if you want transparency.
+Colours are `#rrggbb`, or `#aarrggbb` for transparency.
 
-### The colours, and what each one paints
-
-| Key | Where you see it |
+| Colour key | Where you see it |
 |---|---|
 | `background` | Behind everything, and the deepest areas inside a window |
-| `panelDeep` | List and table backgrounds, the album art slot |
+| `panelDeep` | List and table backgrounds, the cover art slot |
 | `panel` | A window's main body |
-| `panelRaised` | Buttons, table headers, menus, empty soundboard pads |
-| `titleBar` | The title bar across the top of each window |
+| `panelRaised` | Buttons, table headings, menus, empty soundboard buttons |
+| `titleBar` | The bar across the top of each window |
 | `titleBarText` | The window name and buttons on that bar |
 | `titleBarSubtle` | The smaller second line ("AUDIO PLAYER") |
 | `text` | Normal text |
@@ -562,99 +715,153 @@ Colours are `#rrggbb`, or `#aarrggbb` if you want transparency.
 | `outline` | Borders around panels, buttons and fields |
 | `outlineFaint` | The fine lines between rows in a list |
 | `warning` | Things needing attention: a missing file, a boosted track |
-| `danger` | The close button when you hover it |
+| `danger` | The close button when you hover over it |
 
-### Fonts, sizes and the logo
+**Fonts** name a font already installed on the computer; nothing is
+bundled. `title` is for headings, `label` for ordinary text, and
+`digits` for the time readout (a monospaced font stops the numbers
+jumping about). A font that isn't installed falls back to the default.
 
-**Fonts** name a font family already installed on the machine - nothing
-is bundled. `title` is for headings, `label` for ordinary text and
-`digits` for the time readout, which wants a monospaced font so the
-numbers don't jiggle. A name nobody has falls back to the default rather
-than breaking.
-
-**`cornerRadius`** rounds panels, buttons and fields; `0` gives square
-corners. **`titleBarHeight`** is capped between 28 and 80 pixels - a
-title bar too small to grab would leave a window you can't move.
+**`cornerRadius`** rounds panels, buttons and fields (`0` for square).
+**`titleBarHeight`** is kept between 28 and 80 pixels, so a window can
+always be grabbed.
 
 **`logo`** names an image next to your `skin.json` (PNG, JPEG, GIF or
-SVG) to use in place of the drawn ink bottle, in every title bar and on
-the player's display. SVGs are drawn without blur, filters or text, so
-stick to plain shapes. Leave `logo` out to keep the drawn mark.
+SVG) to use instead of the drawn ink bottle, in every title bar and on
+the Player's display. SVGs are drawn without blur, filters or text, so
+keep them to plain shapes.
 
-### If something's wrong with a skin
+**If something's wrong with a skin**, Inkwyrd keeps working. A file it
+can't read leaves the previous look in place and says why under the
+Skin picker. A single colour it can't understand keeps that one colour
+and uses the rest of your file.
 
-Inkwyrd keeps working. A file it can't read leaves the previous look
-alone and says why under the Skin picker; a single colour it can't
-understand keeps that one colour and uses the rest of your file. "Inkwyrd
-(built-in)" in the list always takes you back.
+## Settings, updates and your files
 
-## Features
+**Settings** opens from the button at the top of the Player window. It
+floats over the other windows while it's open.
 
-- Scenes: one press - on screen or on a Stream Deck - sets the playlist,
-  the looping ambience and optionally the master volume, crossfading
-  the whole room together and leaving alone anything that's already
-  right.
-- Six detachable windows that snap magnetically to each other and to
-  screen edges, drag as a group from the main window, and remember
-  where you left them.
-- As many named playlists as you like, with equal-power crossfade both
-  between tracks and when you jump from one playlist to another, no
-  manual DJing during a session. Shuffle is per-playlist.
-- A master track library, separate from any playlist, that you build
-  from linked folders (which stay up to date as you add files), one-off
-  folder imports, individual tracks, or files dragged in from Windows
-  Explorer - then push tracks into whichever playlists need them.
-- A now-playing display with a live spectrum of the outgoing mix and a
-  seek bar.
-- A programmable soundboard: a grid of assignable buttons you arrange
-  yourself by dragging, each able to loop as an ambience bed, and each
-  with its own name, colour, volume and optional picture,
-  layered independently of the music (up to 16 sounds can overlap at
-  once). Assign by drag and drop, by picking a file, or by importing a
-  whole folder at once.
-- A search box over the whole library, matching tags or filename in any
-  word order, filtering both the table and the folder tree - and
-  opening the tree to show where matches live.
-- Optional ducking: the music drops while your mic is live and comes
-  back when you stop talking, so you can narrate over it.
-- An optional check for newer releases at startup. It only ever tells
-  you; it never downloads anything.
-- A panic control - one button, one key, or one Stream Deck press -
-  that silences every soundboard sound at once without stopping the
-  music.
-- Volume control at every level: a master fader over everything, a trim
-  per soundboard button, and a trim per track so one loud export can't
-  ambush the table when shuffle reaches it.
-- Live microphone processing through your own VST3 plugin chain (EQ,
-  compression, noise gates, whatever you already own), added and
-  removed on the fly while a session is running.
-- Optional noise suppression on the mic (RNNoise), and optional
-  automatic muting of your own Discord client while your mic is live
-  here, so your voice doesn't arrive in the call twice.
-- Everything (music, soundboard, and processed mic) is mixed in one
-  place and streamed to Discord through the app's own bot connection.
-  No virtual audio cable, no separate DAW routing.
-- Broad format support: WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A, and
-  WMA.
-- Fully implements Discord's mandatory end-to-end-encrypted voice
-  protocol (DAVE), the same one the official Discord client uses.
+| Setting | What it does |
+|---|---|
+| **Music folder** | Required on first run. Becomes your first playlist, linked to the folder |
+| **Sound effects folder** | Optional. Its sounds are added to free soundboard buttons |
+| **Discord bot** | Token, server and channel - see [Connecting to Discord](#connecting-to-discord) |
+| **Mute me in Discord** | See [Muting yourself in Discord automatically](#muting-yourself-in-discord-automatically) |
+| **Duck the music** | See [Ducking the music while you talk](#ducking-the-music-while-you-talk) |
+| **Tell me when a newer release exists** | Checks GitHub once at startup |
+| **Playlist files** | Opens the folder your playlists are saved in |
+| **Skin** | See [Skins](#skins) |
 
-## Known limitations (beta)
+Click **Save & Apply** to keep your changes. **Closing Settings with its
+X discards them.** Everything applies straight away, except changing
+Discord details after Inkwyrd has already connected: that takes effect
+the next time it starts, and it offers to restart. Your version number
+is shown at the bottom right.
 
-- The installer isn't code-signed, so Windows SmartScreen will flag it
-  on first run (see [Download](#download) above).
-- The Stream Deck plugin needs to be built from source and requires
-  physical Stream Deck hardware to fully test.
-- Changing your Discord bot token/server/channel via Settings takes
-  effect on the next launch, not immediately. The app won't drop an
-  active Discord connection to reconnect with new details mid-session.
-- Automatic Discord muting needs its own one-time setup (see
-  [above](#optional-muting-yourself-in-discord-automatically)) and the
-  redirect URI has to be `https://inkwyrd.com/rpc`, first in the list if
-  you have more than one.
-- Because Inkwyrd draws its own window frames, Windows Snap Layouts (the
-  hover-over-maximise flyout) and Win+arrow snapping don't work on its
-  windows. Inkwyrd's own snapping does.
+**Updates.** With the update check on, Inkwyrd asks GitHub once at
+startup whether a newer release exists, and says so in the Player's
+warning banner with a link. **It never downloads or installs anything**
+- you get the new version from the Releases page yourself.
 
-If you hit a bug, please open an issue on this repo with what you were
-doing and (if possible) a screenshot of the status line/error.
+**Your files** all live in `%APPDATA%\Inkwyrd Audio` (paste that into
+Explorer's address bar to open it): settings, playlists, the
+soundboard, scenes, your track library, per-track volumes, cached tags,
+your plugin list and skins. Copy that folder to back everything up.
+
+**Inkwyrd never overwrites a file it can't safely read.** If one was
+written by a newer version of Inkwyrd, or has been damaged, it's left
+exactly as it is and the warning banner tells you. Changes to that part
+of the app won't be saved until you go back to the newer version or fix
+the file, so nothing in it is lost. (The one exception is the tag cache,
+which is rebuilt, because tags can always be read again from your
+tracks.)
+
+## Keyboard shortcuts
+
+**Player window** (click it first):
+
+| Key | Does |
+|---|---|
+| **Space** | Play / pause |
+| **S** | Stop |
+| **Right arrow** | Skip to the next track |
+| **Up / Down** | Master volume up / down |
+| **M** | Mic on / off |
+| **Esc** | Killswitch: silence every sound effect |
+
+**Elsewhere:**
+
+| Where | Key | Does |
+|---|---|---|
+| Library search box | **Esc** | Clear the search |
+| Library track list | **Delete** | Remove the selected tracks from the library |
+| Playlist window | **Delete** | Remove the selected track from the playlist |
+| Naming a new playlist | **Enter** | Save the name |
+
+Shortcuts only work while Inkwyrd's window has focus. For control while
+you're in another program, use a [Stream Deck](#using-a-stream-deck).
+
+## Troubleshooting
+
+**I can't hear anything.**
+If you're not connected to Discord, turn **Monitor** on - without
+Discord it's the only way to hear the mix. Also check the **Master**
+slider, and the Player's warning banner (it says if the audio device
+failed to open, or a playlist has no playable files).
+
+**I hear everything twice, slightly out of step.**
+Monitor is on while you're in the Discord call. Turn **Monitor** off:
+you already hear the bot in the call.
+
+**People hear my voice twice.**
+Your own Discord mic and Inkwyrd's are both live. Set up
+[automatic muting](#muting-yourself-in-discord-automatically), or mute
+yourself in Discord.
+
+**There's feedback or echo from my mic.**
+Wear headphones. Your mic is mixed into the same output as the music.
+
+**I can't find how to preview a track.**
+Hover over a track in the Library's **All Tracks** list and click the
+play symbol that appears. If All Tracks is empty, click **Add
+folder...** and add your music first. See
+[Previewing a track](#previewing-a-track).
+
+**My Discord changes didn't do anything.**
+Once Inkwyrd has connected, changes to the bot token, server or channel
+apply the next time it starts. Accept the restart it offers, or close
+and reopen it.
+
+**"Can't tag this track."**
+It's loaded in the player. Press **Stop**, then save again.
+
+**The warning banner says a file is being kept as it is.**
+That file was written by a newer version of Inkwyrd, or is damaged. It
+hasn't been touched, but changes to that part of the app won't be saved.
+Go back to the newer version, or restore the file from a backup. See
+[Settings, updates and your files](#settings-updates-and-your-files).
+
+**A Stream Deck key shows a warning triangle.**
+Inkwyrd isn't running, or the key needs a sound or scene name. See
+[Using a Stream Deck](#using-a-stream-deck).
+
+**Windows or Defender blocked the download.**
+See the note under [Download and install](#download-and-install).
+
+## Known limitations
+
+- The downloads aren't code-signed yet, so Windows warns about them on
+  first run.
+- The Stream Deck plugin has to be built from source.
+- Changing your Discord bot token, server or channel after Inkwyrd has
+  connected takes effect the next time it starts. It won't drop a live
+  connection to reconnect mid-session.
+- Keyboard shortcuts only work while Inkwyrd has focus. Global hotkeys
+  are planned.
+- Because Inkwyrd draws its own window frames, Windows Snap Layouts
+  (the flyout over the maximise button) and Win+arrow snapping don't
+  work on its windows. Inkwyrd's own snapping does.
+
+**Found a bug?** Please [open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
+saying what you were doing, with a screenshot of the Player's status
+line or warning banner if you can.
