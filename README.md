@@ -13,7 +13,7 @@ cable, no DAW, no routing.
 It also works with no Discord at all, playing through your own speakers,
 which is the easiest way to try it.
 
-Heavily inspired by [Kenku FM](https://www.kenku.fm/).
+Inspired by Kenku FM and Winamp.
 
 ## Contents
 
