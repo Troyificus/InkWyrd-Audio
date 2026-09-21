@@ -40,6 +40,7 @@ void TrackSettingsStore::load()
 {
     settingsByPath.clear();
     loadWarnings.clear();
+    fileMustNotBeOverwritten = false;
 
     // Fall back to the file this replaced, so trims set in beta.7 survive
     // the upgrade. The old file is left alone; the first change writes
@@ -59,7 +60,12 @@ void TrackSettingsStore::load()
     if (!parsed.isObject())
     {
         loadWarnings.add(fileToRead.getFileName() + " could not be read (not valid JSON) - "
-                          "track volumes and fades have been reset to normal");
+                          "track volumes and fades have been reset to normal"
+                          + juce::String(fileToRead == storeFile
+                                             ? ". The file is being kept as it is, so volume and "
+                                               "fade changes won't be saved until it's fixed"
+                                             : ""));
+        fileMustNotBeOverwritten = (fileToRead == storeFile);
         return;
     }
 
@@ -69,7 +75,12 @@ void TrackSettingsStore::load()
         // files: rewriting a newer version's file with older code would
         // quietly destroy whatever it added.
         loadWarnings.add(fileToRead.getFileName() + " was made by a newer version of Inkwyrd Audio "
-                          "and was not loaded");
+                          "and was not loaded"
+                          + juce::String(fileToRead == storeFile
+                                             ? ". It's being kept as it is, so volume and fade "
+                                               "changes won't be saved in this version"
+                                             : ""));
+        fileMustNotBeOverwritten = (fileToRead == storeFile);
         return;
     }
 
@@ -170,6 +181,9 @@ void TrackSettingsStore::setFadeSeconds(const juce::File& file, double seconds)
 
 void TrackSettingsStore::save()
 {
+    if (fileMustNotBeOverwritten)
+        return;
+
     storeFile.getParentDirectory().createDirectory();
 
     juce::DynamicObject::Ptr tracks = new juce::DynamicObject();

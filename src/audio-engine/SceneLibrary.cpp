@@ -129,7 +129,8 @@ void SceneLibrary::load()
         // edited into invalid JSON is still theirs to fix, and silently
         // replacing it with an empty list would lose every scene in it.
         loadWarnings.add(file.getFileName() + " could not be read (not valid JSON), so no scenes "
-                          "were loaded and it won't be overwritten");
+                          "were loaded. The file is being kept as it is, so scene changes won't be "
+                          "saved until it's fixed");
         fileMustNotBeOverwritten = true;
         return;
     }
@@ -137,7 +138,8 @@ void SceneLibrary::load()
     if ((int) parsed.getProperty(kKeySchemaVersion, 0) > kCurrentSchemaVersion)
     {
         loadWarnings.add(file.getFileName() + " was made by a newer version of Inkwyrd Audio and was "
-                          "not loaded. It won't be changed.");
+                          "not loaded. It's being kept as it is, so scene changes won't be saved in "
+                          "this version.");
         fileMustNotBeOverwritten = true;
         return;
     }

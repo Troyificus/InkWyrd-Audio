@@ -27,6 +27,7 @@ void TrackLibrary::load()
 {
     entriesByPath.clear();
     loadWarnings.clear();
+    fileMustNotBeOverwritten = false;
 
     if (! storeFile.existsAsFile())
         return; // a first run has no library yet; that's not a problem
@@ -36,8 +37,10 @@ void TrackLibrary::load()
 
     if (root == nullptr)
     {
-        loadWarnings.add("The track library file couldn't be read and was ignored: "
-                          + storeFile.getFullPathName());
+        loadWarnings.add("The track library file couldn't be read, so the library is empty. The file "
+                          "is being kept as it is, so changes to the library won't be saved until "
+                          "it's fixed: " + storeFile.getFullPathName());
+        fileMustNotBeOverwritten = true;
         return;
     }
 
@@ -47,8 +50,10 @@ void TrackLibrary::load()
     auto schemaVersion = (int) root->getProperty(kKeySchemaVersion);
     if (schemaVersion > kCurrentSchemaVersion)
     {
-        loadWarnings.add("The track library was written by a newer version of Inkwyrd Audio "
-                          "and was left untouched.");
+        loadWarnings.add("The track library was written by a newer version of Inkwyrd Audio and "
+                          "was not loaded. It's being kept as it is, so changes to the library "
+                          "won't be saved in this version.");
+        fileMustNotBeOverwritten = true;
         return;
     }
 
@@ -65,6 +70,9 @@ void TrackLibrary::load()
 
 void TrackLibrary::save()
 {
+    if (fileMustNotBeOverwritten)
+        return;
+
     storeFile.getParentDirectory().createDirectory();
 
     juce::Array<juce::var> tracks;

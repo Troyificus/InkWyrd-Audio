@@ -1005,6 +1005,16 @@ void InkwyrdAudioApplication::updateWarningBanner()
 
     warnings.addArray(library.getLoadWarnings());
 
+    // Every store that can refuse to overwrite its file. Until beta.27.1
+    // only the playlists' warnings reached the screen, so with the
+    // refuse-to-overwrite protection in place a user whose file had been
+    // set aside would have made changes that silently didn't stick -
+    // which looks exactly like the app forgetting them.
+    warnings.addArray(soundboardLayout.getLoadWarnings());
+    warnings.addArray(trackLibrary.getLoadWarnings());
+    warnings.addArray(trackGains.getLoadWarnings());
+    warnings.addArray(sceneLibrary.getLoadWarnings());
+
     // Last: it is the one line here that isn't a problem, and it should
     // not push a real warning out of sight.
     if (updateNotice.isNotEmpty())

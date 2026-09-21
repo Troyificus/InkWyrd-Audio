@@ -44,6 +44,7 @@ void SoundboardLayout::load()
 {
     slots.clear();
     loadWarnings.clear();
+    fileMustNotBeOverwritten = false;
 
     if (!layoutFile.existsAsFile())
     {
@@ -54,8 +55,13 @@ void SoundboardLayout::load()
     auto parsed = juce::JSON::parse(layoutFile.loadFileAsString());
     if (!parsed.isObject())
     {
+        // Not rewritten on the next edit either: a hand-edited file with a
+        // typo in it is still the user's board, and replacing it with an
+        // empty one would lose every button in it.
         loadWarnings.add(layoutFile.getFileName() + " could not be read (not valid JSON) - "
-                          "starting from an empty soundboard");
+                          "showing an empty soundboard. The file is being kept as it is, so changes to the "
+                          "soundboard won't be saved until it's fixed");
+        fileMustNotBeOverwritten = true;
         slots.resize(kDefaultSlotCount);
         return;
     }
@@ -65,9 +71,12 @@ void SoundboardLayout::load()
     {
         // Leave it strictly alone, exactly as PlaylistLibrary does:
         // rewriting a newer version's file with older code would quietly
-        // destroy whatever it added.
+        // destroy whatever it added. That includes later edits - every
+        // mutator saves, so save() itself has to refuse.
         loadWarnings.add(layoutFile.getFileName() + " was made by a newer version of Inkwyrd Audio "
-                          "and was not loaded");
+                          "and was not loaded. It's being kept as it is, so changes to the soundboard won't be "
+                          "saved in this version");
+        fileMustNotBeOverwritten = true;
         slots.resize(kDefaultSlotCount);
         return;
     }
@@ -414,6 +423,9 @@ juce::Array<SoundboardSlot> SoundboardLayout::getFilledSlots() const
 
 void SoundboardLayout::save()
 {
+    if (fileMustNotBeOverwritten)
+        return;
+
     layoutFile.getParentDirectory().createDirectory();
 
     juce::DynamicObject::Ptr root = new juce::DynamicObject();

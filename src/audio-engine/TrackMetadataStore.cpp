@@ -387,6 +387,7 @@ void TrackMetadataStore::load()
 {
     const juce::ScopedLock scope(lock);
     entries.clear();
+    fileMustNotBeOverwritten = false;
 
     if (! storeFile.existsAsFile())
         return;
@@ -399,7 +400,10 @@ void TrackMetadataStore::load()
     // written by a later version is left alone rather than half-read and
     // then overwritten.
     if ((int) parsed.getProperty(kSchemaKey, 0) > kCurrentSchemaVersion)
+    {
+        fileMustNotBeOverwritten = true;
         return;
+    }
 
     auto tracks = parsed.getProperty(kTracksKey, {});
     if (auto* array = tracks.getArray())
@@ -429,7 +433,7 @@ void TrackMetadataStore::load()
 
 void TrackMetadataStore::save()
 {
-    if (storeFile == juce::File())
+    if (storeFile == juce::File() || fileMustNotBeOverwritten)
         return;
 
     juce::Array<juce::var> array;

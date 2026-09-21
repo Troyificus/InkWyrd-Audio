@@ -113,6 +113,14 @@ private:
     // message thread reads them to paint.
     mutable juce::CriticalSection lock;
 
+    // Set when the cache on disk came from a NEWER version: save() then
+    // refuses, rather than rewriting it in this version's older shape.
+    // Deliberately NOT set for invalid JSON, unlike the other stores -
+    // this file is only a cache of tags read from the tracks themselves,
+    // so replacing a corrupt one loses nothing, and refusing would stop
+    // it ever rebuilding. Atomic because the scan thread saves too.
+    std::atomic<bool> fileMustNotBeOverwritten { false };
+
     std::unique_ptr<ScanThread> scanThread;
     std::atomic<int> remaining { 0 };
 

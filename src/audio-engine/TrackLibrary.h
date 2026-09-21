@@ -74,4 +74,11 @@ private:
     juce::File storeFile;
     std::map<juce::String, juce::File> entriesByPath;
     juce::StringArray loadWarnings;
+
+    // Set when the file on disk came from a NEWER version, or couldn't be
+    // read at all. Saving is then refused outright, not just skipped at
+    // load: an edit made here would otherwise rewrite that file with this
+    // version's understanding of it and quietly throw away whatever it
+    // held. Same rule as SceneLibrary.
+    bool fileMustNotBeOverwritten = false;
 };

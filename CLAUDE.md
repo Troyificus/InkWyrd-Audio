@@ -1852,6 +1852,51 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Stores no longer overwrite files they refused to load (beta.27.1)
+
+**The bug:** `SoundboardLayout`, `TrackLibrary` and `TrackSettingsStore`
+all "refused" a newer version's file (and an unreadable one) at LOAD -
+then the very next edit overwrote it, because every setter calls
+`save()` and `save()` had no guard. Running an older build after a newer
+one, or hand-editing a file with a typo, lost that data on the first
+click. `TrackMetadataStore` had the same flaw for a newer-version file.
+
+**The fix** is `SceneLibrary`'s pattern: a `fileMustNotBeOverwritten`
+flag set in `load()`, checked at the top of `save()` - in `save()` itself,
+because every mutator saves. Two deliberate exceptions:
+
+- **The tag cache is only protected from a NEWER version**, not from
+  unreadable JSON. It is a cache of tags re-readable from the tracks, so
+  a corrupt one is rebuilt; refusing would stop it ever recovering. (Its
+  flag is atomic: the scan thread saves too.)
+- **`TrackSettingsStore` only protects its own file**, not the legacy
+  `track-gains.json` it can migrate from - that one is never written.
+- `PlaylistLibrary` was checked and is safe: one file per playlist, a
+  skipped file never becomes a save target.
+
+**Protection without a warning would look like the app forgetting
+things.** Only the playlists' load warnings used to reach the screen;
+soundboard, track library, track volume and scene warnings went nowhere.
+They now all go to the Player's warning banner, and each says in plain
+words that changes won't be saved until the file is fixed (or, for a
+newer version's file, in this version).
+
+**The checks were proven to catch the bug** by switching the guard off in
+all four stores: all seven protection checks failed. On the first
+attempt the TRACK LIBRARY checks still passed with the guard off -
+`registerTrack` (singular) doesn't save, so the test's edit never
+reached the disk. It now uses `registerTracks`, the path the app uses.
+When writing a "must not overwrite" test, check the edit actually SAVES.
+
+**Process note:** this was first started as a separate background task,
+which was created in the WRONG repository (spawn_task defaulted to this
+session's primary folder, Adventure-PDF-Forge, while its prompt pointed
+at G:\Inkwyrd-Audio by absolute path - so it edited the same working
+tree as the main session). Its engine edits were good and were kept
+after review; the session was stopped to avoid two sessions editing one
+folder. When spawning a task for this repo, set its `cwd` to
+G:\Inkwyrd-Audio.
+
 ### Scenes (beta.27)
 
 One press - Scenes window or Stream Deck - sets the playlist, the running
@@ -1905,9 +1950,8 @@ propagate through `SoundboardLayout::onSlotRenamed` - on the model, not
 the grid, so every rename path is covered.
 
 **`SceneLibrary` refuses to overwrite a file it couldn't use** - newer
-schema OR unreadable JSON - even after later edits. Note that
-`SoundboardLayout` does NOT do this: it refuses a newer file at load but
-its next `save()` overwrites it anyway. Known, not fixed here.
+schema OR unreadable JSON - even after later edits. (The other stores
+didn't, which was found here and fixed in beta.27.1 - see below.)
 
 **There was no `juce::TooltipWindow` anywhere in the app**, so no
 tooltip had ever appeared - including the Settings ones added in

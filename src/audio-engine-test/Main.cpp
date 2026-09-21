@@ -1635,6 +1635,98 @@ namespace
             }
 
             {
+                // beta.27.1: every store that refuses a file it can't use
+                // must KEEP refusing after an edit. Each of these used to
+                // refuse at load and then overwrite the file on the very
+                // next change - every setter saves - destroying a newer
+                // version's data, or a hand-edited file with a typo in it.
+                const juce::String newer = R"({"schemaVersion": 99, "slots": [], "tracks": []})";
+                const juce::String broken = "this is not json {";
+
+                auto expectKept = [&](const juce::String& what, const juce::String& contents,
+                                       const std::function<juce::StringArray(const juce::File&)>& loadAndEdit)
+                {
+                    auto file = scratch.getChildFile("protected-" + what.removeCharacters(" ") + ".json");
+                    file.replaceWithText(contents);
+
+                    auto warnings = loadAndEdit(file);
+                    auto label = what + (contents == newer ? " from a newer version" : " that can't be read");
+
+                    check(file.loadFileAsString() == contents,
+                           "a " + label + " is NOT overwritten by a later edit");
+                    check(! warnings.isEmpty() && warnings.joinIntoString(" ").contains("won't be saved"),
+                           "and the warning says changes won't be saved, so it can't look like the app "
+                           "forgetting them (" + label + ")");
+                };
+
+                for (auto contents : { newer, broken })
+                {
+                    expectKept("soundboard", contents, [&](const juce::File& file)
+                    {
+                        SoundboardLayout store(formatManager);
+                        store.setFile(file);
+                        store.load();
+                        store.assign(0, folderTracks[0]);
+                        store.setColour(0, 0xff8c2f2f);
+                        return store.getLoadWarnings();
+                    });
+
+                    expectKept("track library", contents, [&](const juce::File& file)
+                    {
+                        TrackLibrary store;
+                        store.setFile(file);
+                        store.load();
+
+                        // registerTracks, not registerTrack: the single
+                        // form doesn't save by itself, so it would never
+                        // reach the file and this check would prove
+                        // nothing. This is the path the app actually uses.
+                        juce::Array<juce::File> one;
+                        one.add(folderTracks[0]);
+                        store.registerTracks(one);
+                        return store.getLoadWarnings();
+                    });
+
+                    expectKept("track volume file", contents, [&](const juce::File& file)
+                    {
+                        TrackSettingsStore store;
+                        store.setFile(file);
+                        store.load();
+                        store.setGainDb(folderTracks[0], -3.0f);
+                        return store.getLoadWarnings();
+                    });
+                }
+
+                // The tag cache is the one deliberate exception, and only
+                // half of it: a NEWER version's cache is kept, but an
+                // unreadable one is rebuilt - it's only tags that can be
+                // read again from the tracks, and refusing would stop it
+                // ever recovering.
+                auto cacheFile = scratch.getChildFile("protected-tagcache.json");
+
+                cacheFile.replaceWithText(newer);
+                {
+                    TrackMetadataStore cache;
+                    cache.setFile(cacheFile);
+                    cache.load();
+                    cache.save();
+                }
+                check(cacheFile.loadFileAsString() == newer,
+                       "a tag cache from a newer version is NOT overwritten");
+
+                cacheFile.replaceWithText(broken);
+                {
+                    TrackMetadataStore cache;
+                    cache.setFile(cacheFile);
+                    cache.load();
+                    cache.save();
+                }
+                check(cacheFile.loadFileAsString() != broken,
+                       "but an unreadable tag cache IS rebuilt - it's only a cache, and keeping it "
+                       "would stop it ever recovering");
+            }
+
+            {
                 // Dropping files onto a SPECIFIC button, through the real
                 // grid component. The width is forced narrow so the grid
                 // is one column and a row number IS a slot number, making

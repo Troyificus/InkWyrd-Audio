@@ -90,4 +90,12 @@ private:
     juce::File storeFile;
     std::map<juce::String, TrackSettings> settingsByPath;
     juce::StringArray loadWarnings;
+
+    // Set when storeFile itself came from a NEWER version, or couldn't be
+    // read at all. Saving is then refused outright, not just skipped at
+    // load: every setter saves, and would otherwise rewrite that file and
+    // quietly throw away whatever it held. Same rule as SceneLibrary. Not
+    // set for a bad LEGACY track-gains.json - saving never writes that
+    // file, so there's nothing to protect by refusing.
+    bool fileMustNotBeOverwritten = false;
 };
