@@ -14,7 +14,9 @@ export class Soundboard extends SingletonAction<SoundboardSettings> {
 			await ev.action.showAlert();
 			return;
 		}
-		sendCommand({ command: "triggerSoundboard", name: soundName });
-		await ev.action.showOk();
+		// A tick only when the app really got it; the warning triangle
+		// when it isn't running - see sendCommand.
+		if (sendCommand({ command: "triggerSoundboard", name: soundName })) await ev.action.showOk();
+		else await ev.action.showAlert();
 	}
 }

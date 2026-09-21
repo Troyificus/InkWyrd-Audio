@@ -1852,6 +1852,30 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Stream Deck presses are never replayed
+
+`audioAppClient.ts` used to QUEUE every command sent while the app
+wasn't connected and flush the whole queue on the next connect. Five
+presses of Skip with the app closed skipped five tracks at the next
+launch; soundboard presses all fired into the call at once. Found by
+reading the plugin while writing test instructions, not by a report.
+
+- `sendCommand` now sends immediately or drops the command, and returns
+  which. Every action shows a tick only when the app really got it, and
+  the warning triangle otherwise. The old tick meant "sent", including
+  "queued for later" - it never told the user anything was wrong.
+- **A press is a request for something to happen NOW.** One that can't
+  must not happen later by surprise. Don't reintroduce a queue, even a
+  short one "for presses during the reconnect window": any delay turns
+  a Skip into a surprise skip.
+- `test-no-replay.mjs` runs the real client against a stand-in server on
+  port 39299 (safe while the real app holds 39231). **Proven to catch the
+  bug:** against the old client it received all three presses made
+  while "closed". `INKWYRD_CONTROL_URL` exists only for that test.
+- Plugin-only: no app binary changed, so no app release was cut for it.
+  The plugin ships from source and a linked install picks it up on a
+  plugin restart.
+
 ### "Soundboard Killswitch" and a Music Fade Out key (beta.26)
 
 The panic control was called **Stop all** / **Stop All Sounds**, and the

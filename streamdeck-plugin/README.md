@@ -20,6 +20,14 @@ presses as plain JSON commands (`skipTrack`, `toggleShuffle`,
 buttons to do anything - the plugin reconnects quietly in the background
 if it isn't (or hasn't started yet).
 
+**A press only counts if the app is connected at that moment.** The key
+shows a tick when the command really went to the app, and a warning
+triangle when it didn't. A refused press is dropped - never saved up.
+Earlier builds queued presses made while the app was closed and replayed
+them all on the next connect, so five presses of Skip skipped five
+tracks at the next launch. `test-no-replay.mjs` guards against that
+coming back (see below).
+
 ## Building
 
 ```
@@ -89,6 +97,23 @@ how `ControlServer` was verified: real command sent, `[ControlServer]
 received: ...` and the resulting state change (e.g. `mic muted = true`)
 both appeared in the app's own log output.
 
+### The no-replay test
+
+```
+node test-no-replay.mjs
+```
+
+Runs the real `src/audioAppClient.ts` against a stand-in server on its
+own port (39299), with a stand-in for the Stream Deck SDK, so it is safe
+to run while the app itself is open on 39231. It checks that presses
+made while disconnected are refused and NOT delivered once a connection
+appears, and that a connected press arrives exactly once.
+
+It was confirmed to catch the original bug by running it against the
+old queueing client: all three presses made while "closed" arrived on
+connect. `INKWYRD_CONTROL_URL` exists only so this test can point the
+client somewhere other than the real app; Stream Deck never sets it.
+
 ## Configuring the Soundboard button
 
 Each Soundboard button needs its target sound's name typed into the
@@ -105,8 +130,9 @@ rearranging never breaks a Stream Deck button.
 A looping button (right-click -> Loop this sound) starts and stops from
 the same Stream Deck press - nothing extra to set up.
 
-**The key flashes a warning triangle** if no name has been set. It does
-NOT warn about a name that matches nothing: a typo just does nothing,
+**The key flashes a warning triangle** if no name has been set, or if
+Inkwyrd Audio isn't running. It does NOT warn about a name that matches
+nothing: a typo just does nothing,
 because the app treats an unknown name as ordinary user error rather
 than a fault. If a Soundboard key seems dead, check the name first.
 

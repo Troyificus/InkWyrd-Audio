@@ -10,7 +10,9 @@ import { sendCommand } from "../audioAppClient";
 @action({ UUID: "com.inkwyrd.audiodeck.stopallsounds" })
 export class StopAllSounds extends SingletonAction {
 	async onKeyDown(ev: KeyDownEvent): Promise<void> {
-		sendCommand({ command: "stopAllSounds" });
-		await ev.action.showOk();
+		// A tick only when the app really got it; the warning triangle
+		// when it isn't running - see sendCommand.
+		if (sendCommand({ command: "stopAllSounds" })) await ev.action.showOk();
+		else await ev.action.showAlert();
 	}
 }

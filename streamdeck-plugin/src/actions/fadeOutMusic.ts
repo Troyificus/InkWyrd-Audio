@@ -7,7 +7,9 @@ import { sendCommand } from "../audioAppClient";
 @action({ UUID: "com.inkwyrd.audiodeck.fadeoutmusic" })
 export class FadeOutMusic extends SingletonAction {
 	async onKeyDown(ev: KeyDownEvent): Promise<void> {
-		sendCommand({ command: "fadeOutMusic" });
-		await ev.action.showOk();
+		// A tick only when the app really got it; the warning triangle
+		// when it isn't running - see sendCommand.
+		if (sendCommand({ command: "fadeOutMusic" })) await ev.action.showOk();
+		else await ev.action.showAlert();
 	}
 }
