@@ -26,6 +26,10 @@ target_sources(AudioEngineTest PRIVATE
     # For INKWYRD_ICONRENDER, which draws the app icon with the same
     # drawLogo() the title bars use.
     ../app/gui/InkwyrdLookAndFeel.cpp
+    # INKWYRD_SCENESNAPSHOT draws these off-screen, so new UI can be
+    # looked at without launching the app or driving the mouse.
+    ../app/gui/ScenesComponent.cpp
+    ../app/gui/SceneEditor.cpp
     # For deriveApplicationId(), which is a pure function over a string
     # and the one part of the Discord auto-mute path that can be checked
     # without a running Discord client.

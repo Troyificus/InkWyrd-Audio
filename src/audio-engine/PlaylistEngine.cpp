@@ -239,9 +239,30 @@ void PlaylistEngine::crossfadeToTracks(const juce::Array<juce::File>& tracks, co
     // Collapse any fade already in flight first, so the incoming track
     // fades in from a settled state rather than a half-faded one.
     finishCrossfadeNow();
+
+    // A fade-out in progress would otherwise carry on regardless and
+    // stop the NEW music too once it reached the bottom: press Fade out,
+    // then pick a different playlist (or a scene), and the fade took the
+    // new list down with the old one.
+    //
+    // AFTER finishCrossfadeNow, not before: collapsing a crossfade
+    // replaces currentTrackGain with the incoming track's, so folding the
+    // fade level in first would lose it and snap back up to full.
+    abandonFadeOutKeepingLevel();
+
     setTracks(tracks);
     seekOrderTo(startFrom);
     beginCrossfadeTo(pickNextFile());
+}
+
+void PlaylistEngine::abandonFadeOutKeepingLevel()
+{
+    if (! fadingOut)
+        return;
+
+    currentTrackGain *= fadeGain;
+    fadingOut = false;
+    fadeGain = 1.0f;
 }
 
 void PlaylistEngine::crossfadeToTrackInCurrentList(const juce::File& file)
@@ -257,7 +278,12 @@ void PlaylistEngine::crossfadeToTrackInCurrentList(const juce::File& file)
         return;
     }
 
+    // Same reason, and same order, as crossfadeToTracks: double-clicking
+    // a track during a fade-out must not have the fade carry on and stop
+    // that track too.
     finishCrossfadeNow();
+    abandonFadeOutKeepingLevel();
+
     beginCrossfadeTo(pickNextFile());
 }
 

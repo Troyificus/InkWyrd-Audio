@@ -6,6 +6,7 @@ import { Soundboard } from "./actions/soundboard";
 import { ToggleMute } from "./actions/toggleMute";
 import { StopAllSounds } from "./actions/stopAllSounds";
 import { FadeOutMusic } from "./actions/fadeOutMusic";
+import { SceneKey } from "./actions/scene";
 
 // Establishes the connection to InkwyrdAudioApp's local control server
 // as a side effect of import - see audioAppClient.ts.
@@ -17,5 +18,6 @@ streamDeck.actions.registerAction(new Soundboard());
 streamDeck.actions.registerAction(new ToggleMute());
 streamDeck.actions.registerAction(new StopAllSounds());
 streamDeck.actions.registerAction(new FadeOutMusic());
+streamDeck.actions.registerAction(new SceneKey());
 
 streamDeck.connect();

@@ -1,6 +1,7 @@
 #include "SoundboardGridComponent.h"
 
 #include "InkwyrdTheme.h"
+#include "PresetColours.h"
 
 #include "Dialogs.h"
 #include "VolumeCallout.h"
@@ -18,21 +19,8 @@ namespace
     constexpr int kVolumeBarBottomInset = 6;
     constexpr int kVolumeBarSideInset = 8;
 
-    // A small fixed palette rather than a full ColourSelector: on a board
-    // meant to be scanned at a glance mid-session, a handful of clearly
-    // distinct colours is more useful than a colour wheel.
-    struct PresetColour { const char* name; juce::uint32 argb; };
-
-    const PresetColour kPresetColours[] = {
-        { "Slate",  0xff2a3a33 },
-        { "Red",    0xff8c2f2f },
-        { "Orange", 0xff9c5a1e },
-        { "Yellow", 0xff8a7a1e },
-        { "Green",  0xff2f7f52 },
-        { "Teal",   0xff1e6b6b },
-        { "Blue",   0xff2f4a8c },
-        { "Purple", 0xff5a2f8c },
-    };
+    // The preset colours live in PresetColours.h, shared with Scenes.
+    using inkwyrd::kPresetColours;
 
     // Where a gain sits within the trim range, 0..1, for drawing the bar.
     float gainFractionFor(float gainDb)

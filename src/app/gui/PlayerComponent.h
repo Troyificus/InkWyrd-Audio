@@ -34,6 +34,7 @@ public:
                      std::function<void()> onToggleLibraryToUse,
                      std::function<void()> onToggleVoiceFxToUse,
                      std::function<void()> onToggleSoundboardToUse,
+                     std::function<void()> onToggleScenesToUse,
                      std::function<void()> onSettingsClickedToUse);
 
     void resized() override;
@@ -135,10 +136,12 @@ private:
     juce::TextButton libraryButton { "Library" };
     juce::TextButton voiceFxButton { "Voice FX" };
     juce::TextButton soundboardButton { "Soundboard" };
+    juce::TextButton scenesButton { "Scenes" };
     juce::TextButton settingsButton { "Settings" };
 
     std::function<void()> onTogglePlaylist;
     std::function<void()> onToggleLibrary;
     std::function<void()> onToggleVoiceFx;
     std::function<void()> onToggleSoundboard;
+    std::function<void()> onToggleScenes;
 };

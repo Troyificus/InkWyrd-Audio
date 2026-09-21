@@ -18,6 +18,10 @@
 #include "PlayerWindow.h"
 #include "PlaylistLibrary.h"
 #include "PlaylistWindow.h"
+#include "SceneEditor.h"
+#include "SceneLibrary.h"
+#include "ScenesWindow.h"
+#include "VolumeGlide.h"
 #include "SoundboardWindow.h"
 #include "TagEditorWindow.h"
 #include "VoiceFxWindow.h"
@@ -152,6 +156,37 @@ private:
     // in it to copy.
     void writeExampleSkinsIfNeeded();
 
+    // --- Scenes ---------------------------------------------------------
+    // Carries out what planScene says pressing a scene should change. The
+    // rules themselves live in planScene (SceneLibrary.h), where the
+    // self-test can reach them; this only does what the plan says.
+    void activateScene(const juce::Uuid& id);
+
+    // A Stream Deck Scene key. Exact name, then ignoring case.
+    void activateSceneByName(const juce::String& name);
+
+    // What is true right now, as far as a scene cares.
+    SceneContext buildSceneContext();
+
+    // What is playing now, written into `base` - keeping its id, name,
+    // colour and whether it sets the volume. Both "Save current as
+    // scene" and "Update from what's playing now" are this.
+    Scene captureCurrentScene(Scene base);
+
+    void saveCurrentAsNewScene();
+    void updateSceneFromCurrent(const juce::Uuid& id);
+    void editScene(const juce::Uuid& id);
+    void deleteScene(const juce::Uuid& id);
+    void openSceneEditor(const Scene& scene, bool isNew);
+    ScenesComponent::Callbacks makeScenesCallbacks();
+    void refreshScenesWindow();
+
+    // How long a scene change takes: loops fade and the volume glides over
+    // this. The playlist crossfade length, so the whole room moves
+    // together; never under a second, so a scene is never a cut even
+    // with crossfading switched off.
+    double sceneTransitionSeconds();
+
     // A different playlist was SELECTED for browsing - the Playlist
     // window follows this. Never touches playback.
     void handlePlaylistSelected(const juce::Uuid& id);
@@ -209,6 +244,15 @@ private:
 
     std::unique_ptr<TagEditorWindow> tagEditorWindow;
 
+    SceneLibrary sceneLibrary;
+
+    // The scene last pressed, for the highlight. Session-only: after a
+    // restart nothing has been pressed yet, and highlighting a scene the
+    // room isn't actually in would be a lie.
+    juce::Uuid activeSceneId;
+
+    VolumeGlide volumeGlide;
+
     DiscordConnector discordConnector;
     std::unique_ptr<DiscordAudioSender> sender;
 
@@ -243,6 +287,10 @@ private:
     std::unique_ptr<LibraryWindow> libraryWindow;
     std::unique_ptr<VoiceFxWindow> voiceFxWindow;
     std::unique_ptr<SoundboardWindow> soundboardWindow;
+    std::unique_ptr<ScenesWindow> scenesWindow;
+
+    // The one TooltipWindow for the whole app - see initialise().
+    std::unique_ptr<juce::TooltipWindow> tooltipWindow;
 
     // Last member, so it's destroyed first and its thread is joined
     // before anything it might log about goes away.

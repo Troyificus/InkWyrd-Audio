@@ -53,6 +53,12 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     // window's title bar is drawn by it.
     juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
 
+    // Without one of these, setTooltip() anywhere in the app does nothing
+    // at all - and there was none, so every tooltip written so far had
+    // never once appeared. Created after the look and feel, so it draws
+    // in the skin's colours.
+    tooltipWindow = std::make_unique<juce::TooltipWindow>(nullptr, 600);
+
     // The saved skin, before any window exists - a window reads its
     // background colour and title bar height at construction, so applying
     // a skin afterwards would leave the first frame on the old palette.
@@ -76,6 +82,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     // Read at press time, so a Stream Deck fade always uses whatever the
     // Player's Fade out slider is set to right now.
     controlServer.getFadeOutSeconds = [this] { return settings.getFadeOutSeconds(); };
+    controlServer.onActivateScene = [this](const juce::String& name) { activateSceneByName(name); };
 
     constexpr int kControlServerPort = 39231; // matches streamdeck-plugin/src/audioAppClient.ts
     if (!controlServer.start(kControlServerPort))
@@ -138,6 +145,33 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     migrateSoundboardLayoutIfNeeded();
     registerSoundboardLayout();
     logPhase("loading the soundboard");
+
+    sceneLibrary.load();
+    for (const auto& warning : sceneLibrary.getLoadWarnings())
+        logLine("[Scene] " + warning);
+
+    // Scenes refer to loops by button name. Renaming a button carries its
+    // scenes along with it rather than quietly breaking them.
+    soundboardLayout.onSlotRenamed = [this](const juce::String& oldName, const juce::String& newName)
+    {
+        if (sceneLibrary.renameLoop(oldName, newName) > 0)
+            refreshScenesWindow();
+    };
+
+    // The fader follows a scene's volume glide on screen too; the level is
+    // saved once, when the glide arrives, not on every step.
+    volumeGlide.apply = [this](float level)
+    {
+        if (playerWindow != nullptr)
+            playerWindow->getPlayerComponent().setMasterVolume(level);
+        else
+            masterEngine.setMasterGain(level);
+    };
+    volumeGlide.arrived = [this](float level)
+    {
+        settings.setMasterVolume(level);
+        settings.save();
+    };
 
     mainWindow = std::make_unique<MainWindow>(getApplicationName(), settings);
     logPhase("creating the window");
@@ -449,7 +483,9 @@ void InkwyrdAudioApplication::shutdown()
     libraryWindow.reset();
     voiceFxWindow.reset();
     soundboardWindow.reset();
+    scenesWindow.reset();
     mainWindow.reset();
+    tooltipWindow.reset();
 
     // After every window is gone, since they draw through it, and before
     // this object is destroyed - JUCE asserts if a LookAndFeel dies
@@ -833,6 +869,11 @@ void InkwyrdAudioApplication::showPlayer()
                 if (soundboardWindow != nullptr)
                     soundboardWindow->setVisible(!soundboardWindow->isVisible());
             },
+            [this]
+            {
+                if (scenesWindow != nullptr)
+                    scenesWindow->setVisible(!scenesWindow->isVisible());
+            },
             [this] { showSetup(); });
 
         playlistWindow = std::make_unique<PlaylistWindow>(
@@ -856,7 +897,17 @@ void InkwyrdAudioApplication::showPlayer()
                                                           [this] { saveVoicePlugins(); });
 
         soundboardWindow = std::make_unique<SoundboardWindow>(settings, soundboard, soundboardLayout,
-                                                                [this] { registerSoundboardLayout(); });
+                                                                [this]
+                                                                {
+                                                                    registerSoundboardLayout();
+
+                                                                    // A button cleared, or no longer
+                                                                    // looping, changes what a scene
+                                                                    // can do - its button says so.
+                                                                    refreshScenesWindow();
+                                                                });
+
+        scenesWindow = std::make_unique<ScenesWindow>(settings, sceneLibrary, makeScenesCallbacks());
     }
     else
     {
@@ -903,6 +954,10 @@ void InkwyrdAudioApplication::showPlayer()
     });
     player.setMasterVolumeChangedCallback([this](float volume)
     {
+        // The user has hold of the fader: a scene's glide lets go at once
+        // rather than dragging it back on its next step.
+        volumeGlide.cancel();
+
         settings.setMasterVolume(volume);
         settings.save();
     });
@@ -1184,6 +1239,235 @@ void InkwyrdAudioApplication::offerRestart()
 
         quit();
     });
+}
+
+double InkwyrdAudioApplication::sceneTransitionSeconds()
+{
+    return juce::jmax(1.0, settings.getCrossfadeSeconds());
+}
+
+SceneContext InkwyrdAudioApplication::buildSceneContext()
+{
+    SceneContext context;
+    context.activePlaylistId = activePlaylistId;
+    context.musicPlaying = playlist.isPlaying() && ! playlist.isFadingOut();
+    context.playlistExists = [this](const juce::Uuid& id) { return library.findById(id) != nullptr; };
+    context.runningLoops = soundboard.getPlayingLoopNames();
+
+    for (const auto& slot : soundboardLayout.getFilledSlots())
+    {
+        context.boardNames.add(slot.name);
+
+        // A looping button whose file has gone can't be started, so for a
+        // scene's purposes it isn't a loop it can use.
+        if (slot.loop && slot.file.existsAsFile())
+            context.loopingNames.add(slot.name);
+    }
+
+    return context;
+}
+
+void InkwyrdAudioApplication::activateScene(const juce::Uuid& id)
+{
+    auto* scene = sceneLibrary.findById(id);
+    if (scene == nullptr)
+        return;
+
+    auto plan = planScene(*scene, buildSceneContext());
+    auto seconds = sceneTransitionSeconds();
+
+    if (plan.switchPlaylist)
+    {
+        // The same playlist, merely paused: carry on from where it was
+        // rather than starting it over. Anything else - a different list,
+        // or this one fading away - goes through the normal crossfade.
+        if (plan.playlistId == activePlaylistId && ! playlist.isPlaying()
+            && playlist.getCurrentTrackFile() != juce::File())
+            playlist.resume();
+        else
+            activatePlaylist(plan.playlistId);
+    }
+
+    if (plan.fadeOutMusic)
+        playlist.fadeOutAndStop(settings.getFadeOutSeconds());
+
+    for (const auto& name : plan.loopsToStop)
+        soundboard.stopLoop(name, seconds);
+
+    for (const auto& name : plan.loopsToStart)
+        soundboard.startLoop(name, seconds);
+
+    if (plan.setVolume)
+        volumeGlide.start(masterEngine.getMasterGain(), plan.volume, seconds);
+
+    activeSceneId = id;
+    if (scenesWindow != nullptr)
+        scenesWindow->getScenes().setActiveScene(id);
+
+    logLine("[Scene] " + scene->name
+             + (plan.problems.isEmpty() ? juce::String()
+                                        : " - skipped: " + plan.problems.joinIntoString("; ")));
+}
+
+void InkwyrdAudioApplication::activateSceneByName(const juce::String& name)
+{
+    if (auto* scene = sceneLibrary.findByName(name))
+        activateScene(scene->id);
+    else
+        logLine("[Scene] No scene called \"" + name + "\"");
+}
+
+Scene InkwyrdAudioApplication::captureCurrentScene(Scene base)
+{
+    // What the room sounds like right now. Music that isn't playing is
+    // captured as "fade the music out" - silence IS what's playing - so
+    // saving a scene from a quiet room gives a scene that makes the room
+    // quiet, not one that leaves whatever happens to be on.
+    if (playlist.isPlaying() && ! playlist.isFadingOut() && library.findById(activePlaylistId) != nullptr)
+    {
+        base.music = Scene::Music::playPlaylist;
+        base.playlistId = activePlaylistId;
+    }
+    else
+    {
+        base.music = Scene::Music::fadeOut;
+    }
+
+    base.loops = soundboard.getPlayingLoopNames();
+
+    // The level is always captured, so ticking "set the volume" later
+    // starts from what it was when the scene was made. Whether the scene
+    // USES it is left exactly as it was.
+    base.volume = masterEngine.getMasterGain();
+    return base;
+}
+
+void InkwyrdAudioApplication::saveCurrentAsNewScene()
+{
+    Scene scene;
+
+    // A name to start from, so Save works first time; the dialog opens
+    // with it selected, ready to be typed over.
+    scene.name = "Scene " + juce::String(sceneLibrary.getNumScenes() + 1);
+    if (auto* active = library.findById(activePlaylistId); active != nullptr && playlist.isPlaying())
+        scene.name = active->name;
+
+    openSceneEditor(captureCurrentScene(scene), true);
+}
+
+void InkwyrdAudioApplication::updateSceneFromCurrent(const juce::Uuid& id)
+{
+    auto* scene = sceneLibrary.findById(id);
+    if (scene == nullptr)
+        return;
+
+    auto updated = captureCurrentScene(*scene);
+    auto options = inkwyrd::dialogOptions(scenesWindow.get(), juce::MessageBoxIconType::QuestionIcon,
+                                           "Update \"" + scene->name + "\"?",
+                                           "This replaces what the scene does with what is playing right "
+                                           "now. Its name, colour and volume setting stay as they are.")
+                        .withButton("Update")
+                        .withButton("Cancel");
+
+    juce::AlertWindow::showAsync(options, [this, updated](int result)
+    {
+        if (result != 1)
+            return;
+
+        sceneLibrary.update(updated);
+        activeSceneId = updated.id; // it IS what's playing now
+        refreshScenesWindow();
+    });
+}
+
+void InkwyrdAudioApplication::editScene(const juce::Uuid& id)
+{
+    if (auto* scene = sceneLibrary.findById(id))
+        openSceneEditor(*scene, false);
+}
+
+void InkwyrdAudioApplication::deleteScene(const juce::Uuid& id)
+{
+    auto* scene = sceneLibrary.findById(id);
+    if (scene == nullptr)
+        return;
+
+    auto options = inkwyrd::dialogOptions(scenesWindow.get(), juce::MessageBoxIconType::WarningIcon,
+                                           "Delete \"" + scene->name + "\"?",
+                                           "The scene is removed. Nothing it plays is touched - the "
+                                           "playlist and the soundboard buttons stay exactly as they are.")
+                        .withButton("Delete")
+                        .withButton("Cancel");
+
+    juce::AlertWindow::showAsync(options, [this, id](int result)
+    {
+        if (result != 1)
+            return;
+
+        sceneLibrary.remove(id);
+        if (activeSceneId == id)
+            activeSceneId = juce::Uuid::null();
+
+        refreshScenesWindow();
+    });
+}
+
+void InkwyrdAudioApplication::openSceneEditor(const Scene& scene, bool isNew)
+{
+    std::vector<SceneEditor::PlaylistChoice> choices;
+    for (int i = 0; i < library.getNumPlaylists(); ++i)
+        if (auto* entry = library.getPlaylist(i))
+            choices.push_back({ entry->id, entry->name });
+
+    auto editor = std::make_unique<SceneEditor>(scene, std::move(choices), buildSceneContext().loopingNames,
+        [this, isNew](const Scene& edited) -> juce::String
+    {
+        if (sceneLibrary.isNameTaken(edited.name, isNew ? juce::Uuid::null() : edited.id))
+            return "There's already a scene called \"" + edited.name + "\". Scene names have to be "
+                   "different - a Stream Deck Scene key finds its scene by name.";
+
+        if (isNew)
+        {
+            // Saved from what is playing, so it is the scene in effect.
+            activeSceneId = sceneLibrary.add(edited);
+        }
+        else if (! sceneLibrary.update(edited))
+        {
+            return "That scene couldn't be saved.";
+        }
+
+        refreshScenesWindow();
+        return {};
+    });
+
+    SceneEditor::launch(scenesWindow.get(), isNew ? "Save as a scene" : "Edit scene", std::move(editor));
+}
+
+ScenesComponent::Callbacks InkwyrdAudioApplication::makeScenesCallbacks()
+{
+    ScenesComponent::Callbacks callbacks;
+    callbacks.activate = [this](const juce::Uuid& id) { activateScene(id); };
+    callbacks.saveCurrentAsNew = [this] { saveCurrentAsNewScene(); };
+    callbacks.updateFromCurrent = [this](const juce::Uuid& id) { updateSceneFromCurrent(id); };
+    callbacks.edit = [this](const juce::Uuid& id) { editScene(id); };
+    callbacks.remove = [this](const juce::Uuid& id) { deleteScene(id); };
+    callbacks.move = [this](const juce::Uuid& id, int delta)
+    {
+        sceneLibrary.move(id, delta);
+        refreshScenesWindow();
+    };
+    callbacks.problemsFor = [this](const Scene& scene) { return planScene(scene, buildSceneContext()).problems; };
+    return callbacks;
+}
+
+void InkwyrdAudioApplication::refreshScenesWindow()
+{
+    if (scenesWindow == nullptr)
+        return;
+
+    auto& scenes = scenesWindow->getScenes();
+    scenes.refresh();
+    scenes.setActiveScene(activeSceneId);
 }
 
 void InkwyrdAudioApplication::registerSoundboardLayout()

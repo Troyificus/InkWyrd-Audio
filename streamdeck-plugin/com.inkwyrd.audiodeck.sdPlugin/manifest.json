@@ -35,6 +35,17 @@
 			]
 		},
 		{
+			"Name": "Scene",
+			"UUID": "com.inkwyrd.audiodeck.scene",
+			"Icon": "imgs/actions/scene/icon",
+			"Tooltip": "Switches to a scene: its playlist, its looping ambience, and its volume if it sets one. Set the scene's name in the key's settings.",
+			"PropertyInspectorPath": "ui/scene.html",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "imgs/actions/scene/key", "TitleAlignment": "middle" }
+			]
+		},
+		{
 			"Name": "Soundboard Killswitch",
 			"UUID": "com.inkwyrd.audiodeck.stopallsounds",
 			"Icon": "imgs/actions/stopallsounds/icon",

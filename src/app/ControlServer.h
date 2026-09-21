@@ -20,7 +20,8 @@ namespace ix { class WebSocketServer; }
 // {"command": "toggleShuffle"}, {"command": "triggerSoundboard", "name": "..."},
 // {"command": "toggleMute"}, {"command": "stopAllSounds"} (the Soundboard
 // Killswitch - the wire name predates that label and is kept so an older
-// plugin build keeps working), {"command": "fadeOutMusic"}.
+// plugin build keeps working), {"command": "fadeOutMusic"},
+// {"command": "activateScene", "name": "..."}.
 class ControlServer
 {
 public:
@@ -34,6 +35,11 @@ public:
     // of the press rather than copied in once, so it always matches the
     // Player's own Fade out slider - one setting, not two that drift.
     std::function<double()> getFadeOutSeconds;
+
+    // {"command": "activateScene", "name": "..."} - a Stream Deck Scene
+    // key. A callback rather than a reference, because a scene touches
+    // playlists, loops and the volume glide, which all live in the app.
+    std::function<void(const juce::String& sceneName)> onActivateScene;
 
 private:
     void handleCommand(const juce::var& parsed);

@@ -1852,6 +1852,76 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Scenes (beta.27)
+
+One press - Scenes window or Stream Deck - sets the playlist, the running
+loops and optionally the master volume. Designed with the user before
+building: a SEPARATE window (not a row on the Soundboard: a scene
+changes the room, an effect is momentary, and one grid invites the wrong
+press); volume per-scene, off by default; number-key shortcuts
+deliberately deferred to global hotkeys.
+
+**The rules are all in `planScene` (`SceneLibrary.{h,cpp}`)**, a pure
+function from (scene, what's playing) to a plan. The app only carries
+the plan out (`InkwyrdAudioApplication::activateScene`). Keep it that
+way: every rule that makes scenes feel right is checked headlessly there.
+
+- **A playlist already playing is never re-activated.** Checked in the
+  code before planning this: `activatePlaylist` on the running list
+  crossfades and JUMPS TRACK. Pressing Combat during combat must be a
+  no-op for the music.
+- **A scene's loops are the complete set.** Listed loops start, unlisted
+  running loops stop, and a loop in both is in NEITHER list - so it is
+  never touched and carries across scenes without a hiccup.
+- **Pressing the scene in effect restores it** (drifted things come
+  back, correct things are left alone). Falls out of the two rules above
+  for free; there is a check for it after a Killswitch.
+- Missing pieces (deleted playlist, cleared button, button no longer
+  looping) are skipped and reported, and the rest still happens.
+- Same playlist merely PAUSED: `resume()`, not a restart.
+
+**Loops needed fades first.** `SoundboardEngine::startLoop/stopLoop` are
+"make this true", not toggles, and fade on a 30 Hz message-thread timer
+(the same pattern PlaylistEngine's crossfade uses). A voice keeps its
+trim (`baseGain`) and fade level apart so a fade never loses the trim. A
+loop fading out is NOT reported as running, so a scene that wants it
+brings it back up - from where it is, without restarting the file. The
+Killswitch stays instant, fades and all. The button latch
+(`trigger`) is still instant too; only scene changes fade.
+
+**A pre-existing bug found while planning, fixed here:** starting a new
+playlist during a Fade out let the fade carry on and stop the NEW music
+at the bottom (press Fade out, double-click a playlist: silence). Every
+scene pressed mid-fade would have hit it. `abandonFadeOutKeepingLevel()`
+folds the fade level into the OUTGOING track's gain so the crossfade
+continues down from where it really is - simply cancelling would snap
+the old track back up to full. **Order matters:** it runs AFTER
+`finishCrossfadeNow()`, which replaces `currentTrackGain`; the first
+draft had it before, which would have lost the level. The regression
+check was confirmed to FAIL with the fix switched off.
+
+**Scenes refer to loops by button NAME**, like the Stream Deck. Renames
+propagate through `SoundboardLayout::onSlotRenamed` - on the model, not
+the grid, so every rename path is covered.
+
+**`SceneLibrary` refuses to overwrite a file it couldn't use** - newer
+schema OR unreadable JSON - even after later edits. Note that
+`SoundboardLayout` does NOT do this: it refuses a newer file at load but
+its next `save()` overwrites it anyway. Known, not fixed here.
+
+**There was no `juce::TooltipWindow` anywhere in the app**, so no
+tooltip had ever appeared - including the Settings ones added in
+beta.24. One now exists for the app's lifetime (created after the
+LookAndFeel, reset before it).
+
+**`INKWYRD_SCENESNAPSHOT=<folder>`** on the harness draws the Scenes
+grid and the editor to PNGs off-screen, with the real LookAndFeel. It
+exists because new UI must be looked at, and launching a second copy or
+driving the mouse is off-limits while the user may be at the machine.
+It caught a warning line truncated mid-word before release. The
+component was split out of `ScenesWindow.cpp` into `ScenesComponent.cpp`
+so the harness can build it without the window machinery.
+
 ### Stream Deck presses are never replayed
 
 `audioAppClient.ts` used to QUEUE every command sent while the app

@@ -267,6 +267,13 @@ private:
     double loopGapElapsedSeconds = 0.0;
 
     bool fadingOut = false;
+
+    // A new list or track was asked for while a fade-out was running.
+    // The fade is abandoned, but the level it had reached is folded into
+    // the OUTGOING track's gain, so the crossfade that follows carries it
+    // down from where it actually is. Simply cancelling the fade would
+    // snap the old track back up to full volume for an instant.
+    void abandonFadeOutKeepingLevel();
     double fadeOutElapsedSeconds = 0.0;
     double fadeOutSeconds = 5.0;
     float fadeGain = 1.0f; // 1 normally, ramping to 0 during a fade-out

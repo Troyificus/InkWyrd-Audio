@@ -226,9 +226,14 @@ bool SoundboardLayout::rename(int index, const juce::String& newName)
             return false; // the engine keys sounds by name - a duplicate hides one of them
 
     auto slot = slots.getReference(index);
+    auto oldName = slot.name;
     slot.name = trimmed;
     slots.set(index, slot);
     save();
+
+    if (oldName != trimmed && onSlotRenamed != nullptr)
+        onSlotRenamed(oldName, trimmed);
+
     return true;
 }
 

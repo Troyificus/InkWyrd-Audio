@@ -28,6 +28,7 @@ public:
                  std::function<void()> onToggleLibrary,
                  std::function<void()> onToggleVoiceFx,
                  std::function<void()> onToggleSoundboard,
+                 std::function<void()> onToggleScenes,
                  std::function<void()> onSettingsClicked);
 
     PlayerComponent& getPlayerComponent() { return *playerComponent; }

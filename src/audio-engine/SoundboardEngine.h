@@ -9,7 +9,8 @@
 // playlist state. Registered sounds can be triggered repeatedly and
 // overlap with themselves (e.g. a rapid-fire sword-clash sound effect) -
 // each trigger() call gets its own voice from the pool.
-class SoundboardEngine : public juce::AudioSource
+class SoundboardEngine : public juce::AudioSource,
+                          private juce::Timer
 {
 public:
     explicit SoundboardEngine(juce::AudioFormatManager& formatManagerToUse);
@@ -46,8 +47,28 @@ public:
     bool isPlaying(const juce::String& name) const;
 
     // Names of every looping sound running right now, so the UI can ask
-    // once rather than per button.
+    // once rather than per button. A loop that is fading OUT is not
+    // listed: it is on its way out, and a scene that wants it has to
+    // bring it back.
     juce::StringArray getPlayingLoopNames() const;
+
+    // Scene changes. Unlike trigger(), these are not toggles: they say
+    // what should be TRUE afterwards, so pressing a scene twice is
+    // harmless. And they fade, because a scene change where the music
+    // crossfades smoothly but the rain cuts dead sounds broken.
+    //
+    // startLoop on a loop that is already running (or fading out) brings
+    // it back up to full without restarting the file - which is what
+    // lets rain carry on uninterrupted from one scene into the next.
+    // Both ignore anything that isn't a registered LOOPING sound; a
+    // scene never fires one-shots.
+    void startLoop(const juce::String& name, double fadeSeconds);
+    void stopLoop(const juce::String& name, double fadeSeconds);
+
+    // 0..1: where this sound's fade has got to (1 when not fading, or
+    // not playing at all). For the self-test, which has no other way to
+    // see a fade happen without an audio device.
+    float getFadeLevel(const juce::String& name) const;
 
     bool hasSound(const juce::String& name) const;
     juce::File getSoundFile(const juce::String& name) const; // {} if not registered
@@ -76,7 +97,28 @@ private:
         // stopped. Empty once it has been used for nothing yet.
         juce::String name;
         bool looping = false;
+
+        // The button's own trim, and where a fade has got to on top of
+        // it. Kept apart so a fade never loses the trim.
+        float baseGain = 1.0f;
+        float fadeLevel = 1.0f;
+        float fadeTarget = 1.0f;
+        float fadeStepPerTick = 0.0f;
+        bool stopWhenSilent = false;
+
+        bool isFading() const { return ! juce::approximatelyEqual(fadeLevel, fadeTarget); }
     };
+
+    // Finds a free voice (or steals one - see the .cpp) and starts `name`
+    // on it at the given fade level. nullptr if the file can't be read.
+    Voice* startVoice(const juce::String& name, float initialFadeLevel);
+
+    void beginFade(Voice& voice, float target, double seconds, bool stopAtEnd);
+
+    // Message thread, and only while something is fading: this is what
+    // moves each fading voice a step, the same way PlaylistEngine's own
+    // timer drives its crossfades.
+    void timerCallback() override;
 
     juce::AudioFormatManager& formatManager;
     juce::TimeSliceThread readAheadThread { "SoundboardEngine read-ahead" };

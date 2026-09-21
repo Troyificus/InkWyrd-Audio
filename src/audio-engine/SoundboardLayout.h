@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_core/juce_core.h>
 
@@ -90,6 +92,11 @@ public:
     // engine keys sounds by name, so a duplicate would make one of them
     // untriggerable.
     bool rename(int index, const juce::String& newName);
+
+    // Fired after a successful rename that actually changed the name. On
+    // the MODEL rather than the grid, so every path that renames a button
+    // is covered - scenes refer to loops by name and follow it from here.
+    std::function<void(const juce::String& oldName, const juce::String& newName)> onSlotRenamed;
 
     void setColour(int index, juce::uint32 colourArgb);
 

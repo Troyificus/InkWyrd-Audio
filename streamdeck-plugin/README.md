@@ -16,7 +16,7 @@ tiny loopback-only server (`ws://127.0.0.1:39231`) inside
 `InkwyrdAudioApp`; this plugin connects to it and forwards button
 presses as plain JSON commands (`skipTrack`, `toggleShuffle`,
 `triggerSoundboard`, `toggleMute`, `stopAllSounds` - shown as
-**Soundboard Killswitch** - and `fadeOutMusic`). `InkwyrdAudioApp` must be running for
+**Soundboard Killswitch** - `fadeOutMusic`, and `activateScene`). `InkwyrdAudioApp` must be running for
 buttons to do anything - the plugin reconnects quietly in the background
 if it isn't (or hasn't started yet).
 
@@ -90,6 +90,7 @@ node test-control-client.mjs shuffle
 node test-control-client.mjs soundboard <soundName>
 node test-control-client.mjs stopall
 node test-control-client.mjs fadeout
+node test-control-client.mjs scene <sceneName>
 ```
 
 Run `InkwyrdAudioApp` first, then run these against it. This is exactly
@@ -113,6 +114,17 @@ It was confirmed to catch the original bug by running it against the
 old queueing client: all three presses made while "closed" arrived on
 connect. `INKWYRD_CONTROL_URL` exists only so this test can point the
 client somewhere other than the real app; Stream Deck never sets it.
+
+## Configuring the Scene button
+
+Like the Soundboard key: select it once it's placed, and type the
+scene's name as it reads in Inkwyrd's Scenes window. Capitals don't
+matter here - scene names are unique ignoring case, so "combat" finds
+"Combat". Renaming a scene in Inkwyrd means updating its key to match.
+
+The app decides what actually changes, so pressing the scene you're
+already in is safe: it restores anything that has drifted (a loop the
+Killswitch cut) and leaves the rest alone.
 
 ## Configuring the Soundboard button
 

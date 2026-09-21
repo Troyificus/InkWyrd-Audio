@@ -147,7 +147,7 @@ don't run.
 
 ## The windows
 
-Inkwyrd is laid out as five separate windows you can arrange however
+Inkwyrd is laid out as six separate windows you can arrange however
 suits your screen, rather than one fixed panel.
 
 - **Player** - the main window. Now playing, transport, and everything
@@ -156,6 +156,8 @@ suits your screen, rather than one fixed panel.
 - **Library** - your playlists, and every track the app knows about.
 - **Voice FX** - noise suppression and your microphone plugin chain.
 - **Soundboard** - the button grid.
+- **Scenes** - one press to set the whole room: playlist, ambience and
+  volume.
 
 **They snap together.** Drag a window near another one, or near a screen
 edge, and it pulls itself flush. Resizing snaps the same way. Drag a
@@ -167,9 +169,9 @@ can rearrange without taking the whole layout apart.
 
 **Only the Player has a minimise button**, and minimising it takes every
 open window down with it - and brings them all back together. The other
-four have an X, which hides them; the four buttons along the bottom of
-the Player window (**Playlist**, **Library**, **Voice FX**,
-**Soundboard**) bring any of them back.
+five have an X, which hides them; the buttons along the bottom of the
+Player window (**Playlist**, **Library**, **Voice FX**, **Soundboard**,
+**Scenes**) bring any of them back.
 
 Positions, sizes and which windows were open are all remembered between
 sessions.
@@ -385,6 +387,62 @@ readable. PNG, JPEG, GIF, BMP and WebP.
 Button names are what a Stream Deck sends to trigger a sound, so
 renaming one means updating that button in the Stream Deck app to match.
 
+### The Scenes window
+
+A scene is one press that sets the whole room: **which playlist is
+playing, which looping soundboard sounds are running, and - if you want
+- the master volume.** "Tavern", "Road", "Combat", "Storm".
+
+**To make one, set the room up, then save it.** Play the playlist you
+want, start the looping sounds (rain, a fire, a crowd), set the volume,
+then click **+ Save current as scene**. A dialog opens already filled in
+from what's playing. Name it, untick anything you don't want in it,
+pick a colour, and save.
+
+The dialog also lets you choose what the scene does to the music:
+
+- **Play a playlist** - the usual one.
+- **Fade the music out** - for a scene that's deliberately quiet.
+- **Leave the music alone** - for ambience-only scenes, like "it starts
+  raining", that shouldn't interrupt the track.
+
+**Set the master volume to** is off unless you tick it. The master fader
+is also what Discord hears, so a scene only moves it when you've asked
+it to - and when it does, it glides rather than jumping. Grabbing the
+fader yourself during a glide stops it.
+
+**Press a scene to switch to it.** What happens:
+
+- The music crossfades to the scene's playlist. **If that playlist is
+  already playing, it's left alone** - pressing Combat during combat
+  never restarts the fight music.
+- The scene's looping sounds fade in, and any running loop the scene
+  doesn't include fades out. **A loop both scenes share keeps running
+  without a hiccup**, so rain carries on from Road into Storm.
+- One-shot sound effects are never touched.
+- **Pressing the scene you're already in puts it back.** If the
+  Killswitch cut the ambience, one press of the scene brings it back,
+  without restarting anything that's still right.
+
+The scene you last pressed is outlined. Scene changes take as long as
+the Player's crossfade setting (never less than a second), so the whole
+room moves together.
+
+**Right-click a scene** for:
+
+- **Update from what's playing now** - the main way to change a scene.
+- **Edit...** - the same dialog as saving, to change something without
+  having to play it first.
+- **Move earlier / Move later**.
+- **Delete...**.
+
+**If something a scene uses goes away** - its playlist is deleted, or a
+soundboard button is cleared or stops looping - the scene's button says
+how many things are missing, and hovering over it says which. The rest
+of the scene still works. **Renaming a soundboard button updates every
+scene that uses it**, and moving buttons around the board changes
+nothing.
+
 ### Ducking the music while you talk
 
 Settings has **Duck the music while my mic is live**, off until you turn
@@ -532,7 +590,11 @@ understand keeps that one colour and uses the rest of your file. "Inkwyrd
 
 ## Features
 
-- Five detachable windows that snap magnetically to each other and to
+- Scenes: one press - on screen or on a Stream Deck - sets the playlist,
+  the looping ambience and optionally the master volume, crossfading
+  the whole room together and leaving alone anything that's already
+  right.
+- Six detachable windows that snap magnetically to each other and to
   screen edges, drag as a group from the main window, and remember
   where you left them.
 - As many named playlists as you like, with equal-power crossfade both

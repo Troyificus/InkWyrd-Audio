@@ -1,5 +1,7 @@
 #include "PlayerComponent.h"
 
+#include <iterator>
+
 #include "InkwyrdTheme.h"
 
 namespace
@@ -14,13 +16,15 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
                                   std::function<void()> onToggleLibraryToUse,
                                   std::function<void()> onToggleVoiceFxToUse,
                                   std::function<void()> onToggleSoundboardToUse,
+                                  std::function<void()> onToggleScenesToUse,
                                   std::function<void()> onSettingsClickedToUse)
     : playlist(playlistToUse),
       masterEngine(masterEngineToUse),
       onTogglePlaylist(std::move(onTogglePlaylistToUse)),
       onToggleLibrary(std::move(onToggleLibraryToUse)),
       onToggleVoiceFx(std::move(onToggleVoiceFxToUse)),
-      onToggleSoundboard(std::move(onToggleSoundboardToUse))
+      onToggleSoundboard(std::move(onToggleSoundboardToUse)),
+      onToggleScenes(std::move(onToggleScenesToUse))
 {
     nowPlaying = std::make_unique<NowPlayingDisplay>(playlist, masterEngine.getSpectrumTap(), trackMetadata);
     addAndMakeVisible(*nowPlaying);
@@ -183,6 +187,9 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
 
     addAndMakeVisible(soundboardButton);
     soundboardButton.onClick = [this] { if (onToggleSoundboard) onToggleSoundboard(); };
+
+    addAndMakeVisible(scenesButton);
+    scenesButton.onClick = [this] { if (onToggleScenes) onToggleScenes(); };
 
     addAndMakeVisible(settingsButton);
     settingsButton.onClick = [onSettingsClickedToUse] { if (onSettingsClickedToUse) onSettingsClickedToUse(); };
@@ -479,10 +486,11 @@ void PlayerComponent::resized()
     // instead of above it.
     auto activatorRow = area.removeFromBottom(28);
     juce::TextButton* activators[] = { &playlistButton, &libraryButton,
-                                        &voiceFxButton, &soundboardButton };
+                                        &voiceFxButton, &soundboardButton, &scenesButton };
 
     constexpr int gap = 8;
-    auto buttonWidth = (activatorRow.getWidth() - gap * 3) / 4;
+    constexpr int count = (int) std::size(activators);
+    auto buttonWidth = (activatorRow.getWidth() - gap * (count - 1)) / count;
 
     for (auto* button : activators)
     {

@@ -77,6 +77,12 @@ void ControlServer::handleCommand(const juce::var& parsed)
     {
         soundboard.stopAllVoices();
     }
+    else if (command == "activateScene")
+    {
+        auto name = parsed.getProperty("name", "").toString();
+        if (name.isNotEmpty() && onActivateScene != nullptr)
+            onActivateScene(name);
+    }
     else if (command == "fadeOutMusic")
     {
         // The same guard the Player's own button has: nothing to fade if

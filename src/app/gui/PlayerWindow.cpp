@@ -19,6 +19,7 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
                             std::function<void()> onToggleLibrary,
                             std::function<void()> onToggleVoiceFx,
                             std::function<void()> onToggleSoundboard,
+                            std::function<void()> onToggleScenes,
                             std::function<void()> onSettingsClicked)
     // The master window is the only one that gets a minimise button.
     : DetachableWindow("Inkwyrd Audio", "player", "Audio Player", settingsToUse, defaultPlayerBounds(), true,
@@ -29,6 +30,7 @@ PlayerWindow::PlayerWindow(AppSettings& settingsToUse,
                                            std::move(onToggleLibrary),
                                            std::move(onToggleVoiceFx),
                                            std::move(onToggleSoundboard),
+                                           std::move(onToggleScenes),
                                            std::move(onSettingsClicked));
     playerComponent = component;
 

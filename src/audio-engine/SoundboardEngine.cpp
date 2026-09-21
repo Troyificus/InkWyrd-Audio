@@ -3,6 +3,11 @@
 namespace
 {
     constexpr int kReadAheadBufferSamples = 32768;
+
+    // How often a fade moves. At 30 Hz a step is ~33 ms, and the
+    // transport ramps smoothly across the block between steps, so this
+    // is inaudible as steps.
+    constexpr int kFadeTickHz = 30;
 }
 
 SoundboardEngine::SoundboardEngine(juce::AudioFormatManager& formatManagerToUse)
@@ -16,6 +21,7 @@ SoundboardEngine::SoundboardEngine(juce::AudioFormatManager& formatManagerToUse)
 
 SoundboardEngine::~SoundboardEngine()
 {
+    stopTimer();
     mixer.removeAllInputs();
     for (auto* voice : voices)
         voice->transport.setSource(nullptr);
@@ -61,15 +67,26 @@ void SoundboardEngine::clearSounds()
 
 void SoundboardEngine::stopAllVoices()
 {
+    // Instant, deliberately, fades and all: this is the panic button.
     for (auto* voice : voices)
+    {
         voice->transport.stop();
+        voice->fadeLevel = voice->fadeTarget = 1.0f;
+        voice->stopWhenSilent = false;
+    }
 }
 
 void SoundboardEngine::stop(const juce::String& name)
 {
     for (auto* voice : voices)
+    {
         if (voice->name == name)
+        {
             voice->transport.stop();
+            voice->fadeLevel = voice->fadeTarget = 1.0f;
+            voice->stopWhenSilent = false;
+        }
+    }
 }
 
 bool SoundboardEngine::isPlaying(const juce::String& name) const
@@ -86,10 +103,111 @@ juce::StringArray SoundboardEngine::getPlayingLoopNames() const
     juce::StringArray names;
 
     for (auto* voice : voices)
-        if (voice->looping && voice->transport.isPlaying())
+        if (voice->looping && voice->transport.isPlaying() && ! voice->stopWhenSilent)
             names.addIfNotAlreadyThere(voice->name);
 
     return names;
+}
+
+void SoundboardEngine::startLoop(const juce::String& name, double fadeSeconds)
+{
+    auto it = registeredSounds.find(name);
+    if (it == registeredSounds.end() || ! it->second.looping)
+        return;
+
+    // Already running, or on its way out: bring THAT voice back up rather
+    // than starting a second copy - the file carries on from where it is.
+    for (auto* voice : voices)
+    {
+        if (voice->name == name && voice->transport.isPlaying())
+        {
+            beginFade(*voice, 1.0f, fadeSeconds, false);
+            return;
+        }
+    }
+
+    if (auto* voice = startVoice(name, 0.0f))
+        beginFade(*voice, 1.0f, fadeSeconds, false);
+}
+
+void SoundboardEngine::stopLoop(const juce::String& name, double fadeSeconds)
+{
+    for (auto* voice : voices)
+        if (voice->name == name && voice->looping && voice->transport.isPlaying())
+            beginFade(*voice, 0.0f, fadeSeconds, true);
+}
+
+float SoundboardEngine::getFadeLevel(const juce::String& name) const
+{
+    for (auto* voice : voices)
+        if (voice->name == name && voice->transport.isPlaying())
+            return voice->fadeLevel;
+
+    return 1.0f;
+}
+
+void SoundboardEngine::beginFade(Voice& voice, float target, double seconds, bool stopAtEnd)
+{
+    voice.fadeTarget = target;
+    voice.stopWhenSilent = stopAtEnd;
+
+    auto ticks = juce::jmax(1.0, seconds * kFadeTickHz);
+    voice.fadeStepPerTick = (float) (std::abs(target - voice.fadeLevel) / ticks);
+
+    // A zero-length fade is just a jump - settle it now rather than
+    // waiting a tick.
+    if (seconds <= 0.0 || voice.fadeStepPerTick <= 0.0f)
+        voice.fadeLevel = target;
+
+    voice.transport.setGain(voice.baseGain * voice.fadeLevel);
+
+    if (voice.isFading())
+    {
+        if (! isTimerRunning())
+            startTimerHz(kFadeTickHz);
+    }
+    else if (stopAtEnd && voice.fadeLevel <= 0.0f)
+    {
+        voice.transport.stop();
+        voice.stopWhenSilent = false;
+        voice.fadeLevel = voice.fadeTarget = 1.0f;
+    }
+}
+
+void SoundboardEngine::timerCallback()
+{
+    auto anyStillFading = false;
+
+    for (auto* voice : voices)
+    {
+        if (! voice->isFading())
+            continue;
+
+        auto rising = voice->fadeTarget > voice->fadeLevel;
+        voice->fadeLevel += rising ? voice->fadeStepPerTick : -voice->fadeStepPerTick;
+
+        // Clamp onto the target rather than stepping past it.
+        if (rising ? voice->fadeLevel >= voice->fadeTarget : voice->fadeLevel <= voice->fadeTarget)
+            voice->fadeLevel = voice->fadeTarget;
+
+        voice->transport.setGain(voice->baseGain * voice->fadeLevel);
+
+        if (voice->isFading())
+        {
+            anyStillFading = true;
+        }
+        else if (voice->stopWhenSilent && voice->fadeLevel <= 0.0f)
+        {
+            // All the way down: actually stop, so the voice is free again
+            // and the board stops showing it as running.
+            voice->transport.stop();
+            voice->stopWhenSilent = false;
+            voice->fadeLevel = voice->fadeTarget = 1.0f;
+        }
+    }
+
+    if (! anyStillFading)
+        stopTimer();
 }
 
 void SoundboardEngine::trigger(const juce::String& name)
@@ -106,9 +224,18 @@ void SoundboardEngine::trigger(const juce::String& name)
         return;
     }
 
+    startVoice(name, 1.0f);
+}
+
+SoundboardEngine::Voice* SoundboardEngine::startVoice(const juce::String& name, float initialFadeLevel)
+{
+    auto it = registeredSounds.find(name);
+    if (it == registeredSounds.end())
+        return nullptr;
+
     auto* reader = formatManager.createReaderFor(it->second.file);
     if (reader == nullptr)
-        return;
+        return nullptr;
 
     auto gain = it->second.gain;
 
@@ -154,8 +281,15 @@ void SoundboardEngine::trigger(const juce::String& name)
     voice->readerSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
     voice->readerSource->setLooping(it->second.looping);
     voice->transport.setSource(voice->readerSource.get(), kReadAheadBufferSamples, &readAheadThread, reader->sampleRate);
-    voice->transport.setGain(gain);
+
+    voice->baseGain = gain;
+    voice->fadeLevel = voice->fadeTarget = initialFadeLevel;
+    voice->fadeStepPerTick = 0.0f;
+    voice->stopWhenSilent = false;
+
+    voice->transport.setGain(gain * initialFadeLevel);
     voice->transport.start();
+    return voice;
 }
 
 void SoundboardEngine::prepareToPlay(int samplesPerBlockExpected, double sampleRate)

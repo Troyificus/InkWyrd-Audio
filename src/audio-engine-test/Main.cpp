@@ -28,6 +28,9 @@
 #include "LibraryFolderTree.h"
 #include "TrackSearch.h"
 #include "DuckEnvelope.h"
+#include "SceneLibrary.h"
+#include "ScenesComponent.h"
+#include "SceneEditor.h"
 #include "UpdateCheck.h"
 #include "SkinLoader.h"
 #include "TagEditor.h"
@@ -746,6 +749,182 @@ namespace
         }
 
         {
+            // What pressing a scene should CHANGE. Every rule that makes
+            // scenes feel right is in planScene, so this is where they are
+            // proven - with no window, no audio device and no timing.
+            juce::Uuid tavernList, combatList, deletedList;
+
+            SceneContext context;
+            context.playlistExists = [&](const juce::Uuid& id) { return id == tavernList || id == combatList; };
+            context.boardNames = juce::StringArray { "Rain", "Fire", "Crowd", "Wind", "Clang" };
+            context.loopingNames = juce::StringArray { "Rain", "Fire", "Crowd", "Wind" };
+
+            Scene combat;
+            combat.name = "Combat";
+            combat.music = Scene::Music::playPlaylist;
+            combat.playlistId = combatList;
+            combat.loops = juce::StringArray { "Rain", "Wind" };
+
+            // From a tavern with rain and a fire going.
+            context.activePlaylistId = tavernList;
+            context.musicPlaying = true;
+            context.runningLoops = juce::StringArray { "Rain", "Fire" };
+
+            auto plan = planScene(combat, context);
+            check(plan.switchPlaylist && plan.playlistId == combatList,
+                   "a scene switches to its playlist when something else is playing");
+            check(plan.loopsToStart == juce::StringArray { "Wind" },
+                   "only the scene's loops that aren't already running are started");
+            check(plan.loopsToStop == juce::StringArray { "Fire" },
+                   "loops the scene doesn't list are stopped - a scene is the complete set");
+            check(! plan.loopsToStart.contains("Rain") && ! plan.loopsToStop.contains("Rain"),
+                   "a loop both scenes share is left running untouched, so it doesn't hiccup");
+            check(! plan.setVolume, "a scene leaves the master volume alone unless told otherwise");
+
+            // Now in combat. Pressing Combat again must not restart the
+            // fight music - re-activating a playlist crossfades and jumps.
+            context.activePlaylistId = combatList;
+            context.runningLoops = juce::StringArray { "Rain", "Wind" };
+            check(! planScene(combat, context).changesAnything(),
+                   "pressing the scene already in effect changes nothing - the music is not restarted");
+
+            // The Killswitch cut the ambience; the scene puts it back.
+            context.runningLoops.clear();
+            plan = planScene(combat, context);
+            check(! plan.switchPlaylist && plan.loopsToStart == juce::StringArray { "Rain", "Wind" },
+                   "pressing it again after the Killswitch brings the loops back and leaves the music alone");
+
+            // The music was stopped (or is fading away): the scene brings
+            // it back.
+            context.musicPlaying = false;
+            context.runningLoops = juce::StringArray { "Rain", "Wind" };
+            check(planScene(combat, context).switchPlaylist,
+                   "and it brings its music back if that had stopped");
+
+            // Parts of a scene that have gone.
+            Scene broken;
+            broken.music = Scene::Music::playPlaylist;
+            broken.playlistId = deletedList;
+            broken.loops = juce::StringArray { "Rain", "Gone", "Clang" };
+            context.musicPlaying = true;
+            context.runningLoops.clear();
+
+            plan = planScene(broken, context);
+            check(! plan.switchPlaylist && plan.problems.size() == 3,
+                   "a deleted playlist, a missing button and a button that no longer loops are each reported");
+            check(plan.loopsToStart == juce::StringArray { "Rain" },
+                   "and everything else in the scene still happens");
+
+            Scene silence;
+            silence.music = Scene::Music::fadeOut;
+            context.musicPlaying = true;
+            check(planScene(silence, context).fadeOutMusic, "a silence scene fades the music out");
+            context.musicPlaying = false;
+            check(! planScene(silence, context).fadeOutMusic,
+                   "and does nothing to music that is already silent");
+
+            Scene ambienceOnly;
+            ambienceOnly.music = Scene::Music::leave;
+            ambienceOnly.loops = juce::StringArray { "Rain" };
+            context.musicPlaying = true;
+            plan = planScene(ambienceOnly, context);
+            check(! plan.switchPlaylist && ! plan.fadeOutMusic,
+                   "\"leave the music alone\" really leaves it alone");
+
+            Scene loud;
+            loud.setsVolume = true;
+            loud.volume = 1.5f;
+            plan = planScene(loud, context);
+            check(plan.setVolume && juce::approximatelyEqual(plan.volume, 1.0f),
+                   "a scene that sets the volume does, and never past full");
+        }
+
+        {
+            // The scene list itself: names, persistence, and following a
+            // renamed soundboard button.
+            auto sceneFile = scratch.getChildFile("scenes.json");
+            sceneFile.deleteFile();
+
+            SceneLibrary scenes;
+            scenes.setFile(sceneFile);
+            scenes.load();
+            check(scenes.getNumScenes() == 0 && scenes.getLoadWarnings().isEmpty(),
+                   "no scenes file yet is an empty list, not a problem");
+
+            juce::Uuid tavernList;
+            Scene tavern;
+            tavern.name = "Tavern";
+            tavern.colourArgb = 0xff8c2f2f;
+            tavern.music = Scene::Music::playPlaylist;
+            tavern.playlistId = tavernList;
+            tavern.loops = juce::StringArray { "Fire", "Crowd" };
+            tavern.setsVolume = true;
+            tavern.volume = 0.6f;
+            auto tavernId = scenes.add(tavern);
+
+            Scene clash;
+            clash.name = "tavern";
+            auto clashId = scenes.add(clash);
+            check(scenes.findById(clashId)->name == "tavern (2)",
+                   "a scene name that clashes, ignoring case, is made unique - a Stream Deck finds scenes by name");
+
+            SceneLibrary reloaded;
+            reloaded.setFile(sceneFile);
+            reloaded.load();
+            auto* back = reloaded.findById(tavernId);
+            check(back != nullptr && back->name == "Tavern" && back->colourArgb == 0xff8c2f2f
+                   && back->music == Scene::Music::playPlaylist && back->playlistId == tavernList
+                   && back->loops == juce::StringArray { "Fire", "Crowd" }
+                   && back->setsVolume && juce::approximatelyEqual(back->volume, 0.6f),
+                   "every part of a scene survives a restart");
+
+            check(scenes.findByName("Tavern") != nullptr && scenes.findByName("Tavern")->id == tavernId,
+                   "a scene is found by its exact name");
+            check(scenes.findByName("  TAVERN ") != nullptr && scenes.findByName("  TAVERN ")->id == tavernId,
+                   "and by its name typed in any case, since names are unique ignoring case");
+            check(scenes.findByName("Nowhere") == nullptr, "a name that matches nothing finds nothing");
+
+            check(scenes.renameLoop("Fire", "Hearth") == 1,
+                   "renaming a soundboard button updates the scenes that use it");
+            SceneLibrary afterRename;
+            afterRename.setFile(sceneFile);
+            afterRename.load();
+            check(afterRename.findById(tavernId)->loops == juce::StringArray { "Hearth", "Crowd" },
+                   "and that survives a restart");
+
+            auto renamed = *scenes.findById(clashId);
+            renamed.name = "TAVERN";
+            check(! scenes.update(renamed), "a scene can't be renamed to another scene's name");
+
+            scenes.move(clashId, -1);
+            check(scenes.getScene(0)->id == clashId, "a scene can be moved earlier");
+
+            scenes.remove(clashId);
+            check(scenes.getNumScenes() == 1 && scenes.findById(clashId) == nullptr, "a scene can be deleted");
+
+            // A newer version's file, and an unreadable one, are left
+            // strictly alone - even after an edit is made here.
+            for (auto contents : { juce::String(R"({"schemaVersion": 99, "scenes": []})"),
+                                   juce::String("this is not json") })
+            {
+                auto untouchable = scratch.getChildFile("scenes-untouchable.json");
+                untouchable.replaceWithText(contents);
+
+                SceneLibrary guarded;
+                guarded.setFile(untouchable);
+                guarded.load();
+                check(guarded.getNumScenes() == 0 && ! guarded.getLoadWarnings().isEmpty(),
+                       "a scenes file this version can't use is reported, not loaded");
+
+                Scene attempt;
+                attempt.name = "Attempt";
+                guarded.add(attempt);
+                check(untouchable.loadFileAsString() == contents,
+                       "and it is NOT overwritten by a later edit - its scenes aren't lost");
+            }
+        }
+
+        {
             // The master track library on its own: dedup, persistence,
             // removal, and the newer-schema rule every other store here
             // follows.
@@ -1390,6 +1569,72 @@ namespace
             }
 
             {
+                // Scene changes: loops that FADE, and "make this true"
+                // rather than toggle. Real time has to pass for a fade, so
+                // the message loop is run for it.
+                SoundboardEngine engine(formatManager);
+                engine.prepareToPlay(512, 44100.0);
+                engine.registerSound("Rain", folderTracks[0], 1.0f, true);
+                engine.registerSound("Clang", folderTracks[1], 1.0f, false);
+
+                auto wait = [](int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); };
+
+                engine.startLoop("Rain", 0.5);
+                check(engine.isPlaying("Rain") && engine.getFadeLevel("Rain") < 0.2f,
+                       "a scene starts a loop from silence rather than at full volume");
+                wait(900);
+                check(juce::approximatelyEqual(engine.getFadeLevel("Rain"), 1.0f),
+                       "and it fades all the way in");
+
+                engine.startLoop("Rain", 0.5);
+                check(juce::approximatelyEqual(engine.getFadeLevel("Rain"), 1.0f),
+                       "starting a loop that's already running leaves it alone rather than restarting it");
+
+                engine.stopLoop("Rain", 0.5);
+                check(engine.isPlaying("Rain"), "stopping a loop for a scene fades it rather than cutting it");
+                check(! engine.getPlayingLoopNames().contains("Rain"),
+                       "and a loop on its way out no longer counts as running");
+
+                wait(200); // partway down
+                engine.startLoop("Rain", 0.5);
+                wait(900);
+                check(engine.isPlaying("Rain") && juce::approximatelyEqual(engine.getFadeLevel("Rain"), 1.0f),
+                       "a loop wanted again mid-fade-out comes back up instead of stopping");
+
+                engine.stopLoop("Rain", 0.3);
+                wait(800);
+                check(! engine.isPlaying("Rain"), "a loop faded all the way out really stops");
+
+                engine.startLoop("Clang", 0.3);
+                check(! engine.isPlaying("Clang"), "a scene never fires a one-shot");
+
+                engine.startLoop("Rain", 2.0);
+                wait(200);
+                engine.stopAllVoices();
+                check(! engine.isPlaying("Rain"), "the Killswitch still stops a loop at once, even mid-fade");
+            }
+
+            {
+                // Scenes follow a renamed button through this hook, so it
+                // has to fire - and only when the name really changed.
+                SoundboardLayout board(formatManager);
+                board.setFile(scratch.getChildFile("rename-hook-board.json"));
+                board.load();
+                board.assign(0, folderTracks[0], "Rain");
+
+                juce::String seenOld, seenNew;
+                board.onSlotRenamed = [&](const juce::String& o, const juce::String& n) { seenOld = o; seenNew = n; };
+
+                board.rename(0, "Heavy Rain");
+                check(seenOld == "Rain" && seenNew == "Heavy Rain",
+                       "renaming a button reports its old and new names, so scenes can follow");
+
+                seenOld = {};
+                board.rename(0, "Heavy Rain");
+                check(seenOld.isEmpty(), "\"renaming\" a button to the name it already has reports nothing");
+            }
+
+            {
                 // Dropping files onto a SPECIFIC button, through the real
                 // grid component. The width is forced narrow so the grid
                 // is one column and a row number IS a slot number, making
@@ -1549,6 +1794,24 @@ namespace
                 engine.resume();
                 juce::MessageManager::getInstance()->runDispatchLoopUntil(400);
                 check(magnitude.load() > 0.01f, "and Play brings it back");
+
+                // A new list asked for during a fade-out. The fade used to
+                // carry on regardless and stop the NEW music as well when
+                // it reached the bottom - press Fade out, then pick a
+                // playlist or a scene, and nothing played.
+                engine.fadeOutAndStop(1.0);
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(300);
+                check(engine.isFadingOut(), "a fade-out is under way (setting up the next check)");
+
+                juce::Array<juce::File> justA;
+                justA.add(toneA);
+                engine.crossfadeToTracks(justA, {});
+                check(! engine.isFadingOut(), "starting a new list during a fade-out takes over from the fade");
+
+                // Well past where the abandoned fade-out would have ended.
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(1500);
+                check(engine.isPlaying() && magnitude.load() > 0.01f,
+                       "so the new music keeps playing instead of being faded out along with the old");
 
                 pulling.store(false);
                 puller.join();
@@ -1723,6 +1986,115 @@ namespace
         }
 
         return 0;
+    }
+
+    // INKWYRD_SCENESNAPSHOT=<folder>: draws the Scenes window's content
+    // and the scene editor to PNGs, off-screen, with the app's own look
+    // and feel. A way to SEE new UI without launching a second copy of
+    // the app or driving anyone's mouse - neither is acceptable while the
+    // user may be at the machine. Uses a scratch scenes file, never the
+    // real one.
+    int runSceneSnapshot(const juce::File& folder)
+    {
+        juce::ScopedJuceInitialiser_GUI gui;
+        InkwyrdLookAndFeel lookAndFeel;
+        juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
+        folder.createDirectory();
+
+        auto write = [&folder](juce::Component& component, const juce::String& name)
+        {
+            auto image = component.createComponentSnapshot(component.getLocalBounds(), true, 1.0f);
+            auto file = folder.getChildFile(name + ".png");
+            file.deleteFile();
+
+            juce::FileOutputStream out(file);
+            auto ok = out.openedOk() && juce::PNGImageFormat().writeImageToStream(image, out);
+            std::cout << (ok ? "" : "FAILED ") << file.getFullPathName() << std::endl;
+            return ok;
+        };
+
+        auto scratchFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                               .getChildFile("inkwyrd-scene-snapshot.json");
+        scratchFile.deleteFile();
+
+        auto okCount = 0;
+
+        {
+            // Empty: the first thing anyone sees.
+            SceneLibrary empty;
+            empty.setFile(scratchFile);
+            empty.load();
+
+            ScenesComponent scenes(empty, {});
+            scenes.setSize(560, 240);
+            okCount += write(scenes, "scenes-empty") ? 1 : 0;
+        }
+
+        juce::Uuid activeId;
+        SceneLibrary library;
+        library.setFile(scratchFile);
+        library.load();
+
+        auto addScene = [&library](const juce::String& name, juce::uint32 colour)
+        {
+            Scene scene;
+            scene.name = name;
+            scene.colourArgb = colour;
+            return library.add(scene);
+        };
+
+        addScene("Tavern", 0xff9c5a1e);
+        addScene("Road", 0xff2a3a33);
+        activeId = addScene("Combat", 0xff8c2f2f);
+        addScene("Crypt", 0xff5a2f8c);
+        auto brokenId = addScene("Storm at Sea", 0xff1e6b6b);
+        addScene("Silence", 0xff2f4a8c);
+
+        {
+            ScenesComponent::Callbacks callbacks;
+            callbacks.problemsFor = [brokenId](const Scene& scene)
+            {
+                return scene.id == brokenId ? juce::StringArray { "\"Waves\" isn't on the soundboard any more" }
+                                            : juce::StringArray();
+            };
+
+            ScenesComponent scenes(library, callbacks);
+            scenes.setSize(560, 240);
+            scenes.setActiveScene(activeId);
+            okCount += write(scenes, "scenes-full") ? 1 : 0;
+        }
+
+        {
+            // The editor as it opens after "Save current as scene": a
+            // playlist picked, two loops running, one the board has lost.
+            Scene captured;
+            captured.name = "Tavern";
+            captured.music = Scene::Music::playPlaylist;
+            juce::Uuid tavernList;
+            captured.playlistId = tavernList;
+            captured.loops = juce::StringArray { "Fire", "Crowd", "Old Rain" };
+            captured.setsVolume = true;
+            captured.volume = 0.7f;
+
+            std::vector<SceneEditor::PlaylistChoice> playlists { { juce::Uuid(), "Combat" },
+                                                                   { tavernList, "Tavern Night" },
+                                                                   { juce::Uuid(), "Exploration" } };
+
+            SceneEditor editor(captured, playlists, juce::StringArray { "Fire", "Crowd", "Rain", "Wind" }, {});
+            okCount += write(editor, "scene-editor") ? 1 : 0;
+        }
+
+        {
+            // And with no looping buttons at all, where the hint shows.
+            Scene blank;
+            blank.name = "Scene 1";
+            SceneEditor editor(blank, {}, {}, {});
+            okCount += write(editor, "scene-editor-no-loops") ? 1 : 0;
+        }
+
+        scratchFile.deleteFile();
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+        return okCount == 4 ? 0 : 1;
     }
 
     // INKWYRD_TAGTEST=1: embedded-tag reading, against whatever is
@@ -2434,6 +2806,10 @@ int main(int argc, char* argv[])
     // goes above the PLAYLIST_FOLDER guard like the others.
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_TAGTEST", "").isNotEmpty())
         return runTagTest();
+
+    auto sceneSnapshotFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_SCENESNAPSHOT", "");
+    if (sceneSnapshotFolder.isNotEmpty())
+        return runSceneSnapshot(juce::File(sceneSnapshotFolder));
 
     auto iconFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_ICONRENDER", "");
     if (iconFolder.isNotEmpty())

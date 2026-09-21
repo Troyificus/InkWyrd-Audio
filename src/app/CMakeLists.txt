@@ -24,6 +24,14 @@ target_sources(InkwyrdAudioApp PRIVATE
     ControlServer.cpp
     UpdateCheck.cpp
     UpdateCheck.h
+    gui/ScenesWindow.cpp
+    gui/ScenesWindow.h
+    gui/ScenesComponent.cpp
+    gui/ScenesComponent.h
+    gui/SceneEditor.cpp
+    gui/SceneEditor.h
+    gui/VolumeGlide.h
+    gui/PresetColours.h
     MessageThreadWatchdog.cpp
     MessageThreadWatchdog.h
     MasterEngine.h
