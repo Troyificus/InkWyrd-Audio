@@ -15,7 +15,7 @@ websocket client. `src/app/ControlServer.h` in the main repo hosts a
 tiny loopback-only server (`ws://127.0.0.1:39231`) inside
 `InkwyrdAudioApp`; this plugin connects to it and forwards button
 presses as plain JSON commands (`skipTrack`, `toggleShuffle`,
-`triggerSoundboard`, `toggleMute`). `InkwyrdAudioApp` must be running for
+`triggerSoundboard`, `toggleMute`, `stopAllSounds`). `InkwyrdAudioApp` must be running for
 buttons to do anything - the plugin reconnects quietly in the background
 if it isn't (or hasn't started yet).
 
@@ -89,7 +89,25 @@ both appeared in the app's own log output.
 
 ## Configuring the Soundboard button
 
-Each Soundboard button needs its target sound's name set in the button's
-own settings (right-click it in Stream Deck's UI once placed) - it must
-match a filename (without extension) in whatever folder
-`SOUNDBOARD_FOLDER` points the running app at.
+Each Soundboard button needs its target sound's name typed into the
+button's settings (select it in the Stream Deck app once placed). It
+must match **the name shown on that button in Inkwyrd's Soundboard
+window**, exactly - capitals and spaces included.
+
+That name starts out as the sound file's name without its extension,
+but it is the BUTTON's name, not the file's: rename a button in Inkwyrd
+(right-click -> Rename) and the Stream Deck button has to be updated to
+match. Moving a button around the board does NOT change its name, so
+rearranging never breaks a Stream Deck button.
+
+A looping button (right-click -> Loop this sound) starts and stops from
+the same Stream Deck press - nothing extra to set up.
+
+**The key flashes a warning triangle** if no name has been set. It does
+NOT warn about a name that matches nothing: a typo just does nothing,
+because the app treats an unknown name as ordinary user error rather
+than a fault. If a Soundboard key seems dead, check the name first.
+
+(This section used to say the name had to match a file in a
+`SOUNDBOARD_FOLDER` - true before the soundboard became a board of
+nameable buttons, and misleading ever since.)
