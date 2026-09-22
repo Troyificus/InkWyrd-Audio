@@ -111,7 +111,10 @@ class PlaylistPanel::LibraryTrackTableModel : public juce::TableListBoxModel
 public:
     // Column ids. Stable numbers, not indices - juce::TableHeaderComponent
     // identifies columns by these, and they end up in the sort state.
-    enum ColumnId { title = 1, artist, album, genre, volume };
+    // length is numbered after volume, not beside genre where it SHOWS:
+    // these numbers are ids that end up in the saved sort state, so an
+    // existing one must never change meaning.
+    enum ColumnId { title = 1, artist, album, genre, volume, length };
 
     explicit LibraryTrackTableModel(PlaylistPanel& ownerToUse) : owner(ownerToUse) {}
 
@@ -161,6 +164,7 @@ public:
             case artist: text = metadata.artist; break;
             case album:  text = metadata.album; break;
             case genre:  text = metadata.genre; break;
+            case length: text = metadata.displayLength(); break;
             default: break;
         }
 
@@ -205,7 +209,11 @@ public:
                             : (playing ? inkwyrd::theme::accent
                                        : (unscanned ? inkwyrd::theme::textDim : inkwyrd::theme::text)));
         g.setFont(juce::Font(juce::FontOptions(14.0f)));
-        g.drawText(text, area, juce::Justification::centredLeft, true);
+
+        // Times line up on the right, the way every music player shows
+        // them, so a column of lengths can be read down at a glance.
+        g.drawText(text, area, columnId == length ? juce::Justification::centredRight
+                                                  : juce::Justification::centredLeft, true);
     }
 
     void cellClicked(int row, int columnId, const juce::MouseEvent& event) override
@@ -347,6 +355,9 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     header.addColumn("Artist", Column::artist, 150, 70);
     header.addColumn("Album",  Column::album,  150, 70);
     header.addColumn("Genre",  Column::genre,  110, 60);
+
+    // Narrow and fixed-ish: "1:02:45" is the widest it ever gets.
+    header.addColumn("Length", Column::length, 62, 56, 80);
 
     // Not sortable, and deliberately: it's a control, not a value, and
     // clicking its header to sort by loudness is not a thing anyone
@@ -685,6 +696,22 @@ void PlaylistPanel::sortLibraryTracks()
     std::stable_sort(libraryTracks.begin(), libraryTracks.end(),
                       [&](const juce::File& a, const juce::File& b)
     {
+        // Length sorts by the NUMBER - as text, "10:00" would come before
+        // "9:59". Tracks not measured yet go last either way, like empty
+        // tags do.
+        if (sortColumnId == Column::length)
+        {
+            auto lengthA = trackMetadata.get(a).lengthMs, lengthB = trackMetadata.get(b).lengthMs;
+
+            if ((lengthA > 0) != (lengthB > 0))
+                return lengthA > 0;
+
+            if (lengthA != lengthB)
+                return sortForwards ? lengthA < lengthB : lengthB < lengthA;
+
+            return a.getFullPathName().toLowerCase() < b.getFullPathName().toLowerCase();
+        }
+
         auto keyA = keyFor(a), keyB = keyFor(b);
 
         if (keyA != keyB)

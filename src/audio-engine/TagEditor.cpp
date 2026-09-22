@@ -166,9 +166,16 @@ namespace inkwyrd
         if (! file.existsAsFile())
             return values;
 
-        TagLib::FileRef fileRef(fileNameFor(file), false);
+        // Audio properties read in the same open as the tags, so the
+        // library's Length column costs no second pass over every file.
+        // Average, like readAudioInfo: accurate for VBR files that carry
+        // a header, and it doesn't decode the audio.
+        TagLib::FileRef fileRef(fileNameFor(file), true, TagLib::AudioProperties::Average);
         if (fileRef.isNull() || fileRef.file() == nullptr)
             return values;
+
+        if (auto* audio = fileRef.audioProperties())
+            values.lengthMilliseconds = juce::jmax(0, audio->lengthInMilliseconds());
 
         auto properties = fileRef.file()->properties();
 

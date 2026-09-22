@@ -244,10 +244,12 @@ you search, preview, tag and pick tracks for playlists.
 **Two ways to look at it**, switched with **Table** and **Folders** next
 to the heading. Whichever you used last is remembered.
 
-- **Table** shows **Title, Artist, Album and Genre** from each file's
-  own tags. Click a column heading to sort, and click again to reverse.
-  Sorting by Album keeps each album in track order. Right after adding
-  music, rows may show filenames for a moment while the tags are read.
+- **Table** shows **Title, Artist, Album, Genre and Length** from each
+  file. Click a column heading to sort, and click again to reverse.
+  Sorting by Album keeps each album in track order; sorting by Length
+  puts the shortest (or longest) first. Right after adding music, rows
+  may show filenames and blank lengths for a moment while the files are
+  read.
 - **Folders** groups tracks by the folders they're in, in the same order
   Windows Explorer uses, with a count on each folder. **Selecting a
   folder selects everything in it**, which is the quick way to put a
@@ -315,8 +317,9 @@ through one list while another plays.
 **Rename** and **Delete** manage the list. **Refresh** re-reads a
 playlist's linked folder (see below).
 
-**The Playlist window** shows the selected playlist's tracks in the
-order they play when Shuffle is off, with the playing one marked.
+**The Playlist window** shows the selected playlist's tracks - title,
+artist and length - in the order they play when Shuffle is off, with the
+playing one marked.
 - **Double-click a track** to jump to it.
 - **Remove from playlist**, or the Delete key, takes a track out.
 - Right-click a track to **Edit tags...** or remove it.

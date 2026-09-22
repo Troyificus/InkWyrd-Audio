@@ -43,6 +43,20 @@ struct TrackMetadata
     // trigger a re-read every time the window opens.
     bool scanned = false;
 
+    // How long the track plays for. lengthRead is false for a cache entry
+    // written before lengths were read at all - which is what makes an
+    // existing library pick lengths up on the next scan, entry by entry,
+    // with no cache version bump (a bump would make older builds refuse
+    // the whole cache as "from a newer version"). lengthMs stays 0 when a
+    // read was attempted and nothing could say how long the file is.
+    int lengthMs = 0;
+    bool lengthRead = false;
+
+    // "3:07", or "1:02:45" for anything an hour or longer. Empty when
+    // unknown, so a blank cell reads as "not known yet" rather than as
+    // a track of no length.
+    juce::String displayLength() const;
+
     // What to show in a Title column. Falls back to the filename, which
     // is what the app displayed everywhere before tags existed.
     juce::String displayTitle(const juce::File& file) const;

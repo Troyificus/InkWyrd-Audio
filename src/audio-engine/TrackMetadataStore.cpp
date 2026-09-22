@@ -276,6 +276,39 @@ juce::String TrackMetadataStore::keyFor(const juce::File& file)
     return file.getFullPathName().toLowerCase();
 }
 
+juce::String TrackMetadata::displayLength() const
+{
+    if (! lengthRead || lengthMs <= 0)
+        return {};
+
+    // Rounded to the nearest second, as every player shows it - a 3:06.7
+    // track reads as 3:07, not 3:06.
+    auto totalSeconds = (lengthMs + 500) / 1000;
+    auto hours = totalSeconds / 3600;
+    auto minutes = (totalSeconds / 60) % 60;
+    auto seconds = totalSeconds % 60;
+
+    if (hours > 0)
+        return juce::String::formatted("%d:%02d:%02d", hours, minutes, seconds);
+
+    return juce::String::formatted("%d:%02d", minutes, seconds);
+}
+
+namespace
+{
+    // Only when TagLib couldn't say. Through the app's own decoders, so
+    // anything the app can play gets a length even if TagLib can't open
+    // it.
+    int lengthFromReader(const juce::File& file, juce::AudioFormatManager& formatManager)
+    {
+        std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
+        if (reader == nullptr || reader->sampleRate <= 0.0 || reader->lengthInSamples <= 0)
+            return 0;
+
+        return (int) ((double) reader->lengthInSamples * 1000.0 / reader->sampleRate);
+    }
+}
+
 TrackMetadata TrackMetadataStore::readFromFile(const juce::File& file,
                                                 juce::AudioFormatManager& formatManager)
 {
@@ -286,6 +319,14 @@ TrackMetadata TrackMetadataStore::readFromFile(const juce::File& file,
     // about a file the moment someone saved a change to it - and it
     // needs no COM, unlike the property store below.
     auto tags = inkwyrd::TagEditor::read(file);
+
+    // The length comes from that same open whatever happens to the tags
+    // below, and the attempt is recorded either way, so a file nobody can
+    // measure isn't re-read on every scan.
+    metadata.lengthMs = tags.lengthMilliseconds > 0 ? tags.lengthMilliseconds
+                                                     : lengthFromReader(file, formatManager);
+    metadata.lengthRead = true;
+
     if (tags.ok && (tags.title.isNotEmpty() || tags.artist.isNotEmpty() || tags.album.isNotEmpty()))
     {
         metadata.title       = tags.title;
@@ -321,7 +362,10 @@ TrackMetadata TrackMetadataStore::get(const juce::File& file) const
 
 bool TrackMetadataStore::isStale(const juce::File& file, const Entry& entry) const
 {
+    // lengthRead: an entry cached before lengths existed is re-read once,
+    // which is how an existing library fills in its Length column.
     return ! entry.metadata.scanned
+            || ! entry.metadata.lengthRead
             || entry.fileSize != file.getSize()
             || entry.modifiedMs != file.getLastModificationTime().toMilliseconds();
 }
@@ -423,6 +467,14 @@ void TrackMetadataStore::load()
             entry.metadata.year        = (int) item.getProperty("year", 0);
             entry.metadata.trackNumber = (int) item.getProperty("trackNumber", 0);
             entry.metadata.scanned     = true;
+
+            // Absent from caches written before lengths were read: left
+            // unread, so the next scan measures it.
+            if (auto* object = item.getDynamicObject(); object != nullptr && object->hasProperty("lengthMs"))
+            {
+                entry.metadata.lengthMs = (int) item.getProperty("lengthMs", 0);
+                entry.metadata.lengthRead = true;
+            }
             entry.fileSize   = (juce::int64) (double) item.getProperty("size", 0);
             entry.modifiedMs = (juce::int64) (double) item.getProperty("modified", 0);
 
@@ -452,6 +504,11 @@ void TrackMetadataStore::save()
             object->setProperty("genre", pair.second.metadata.genre);
             object->setProperty("year", pair.second.metadata.year);
             object->setProperty("trackNumber", pair.second.metadata.trackNumber);
+
+            // Only once it has actually been read, so "not read yet"
+            // survives a save and still gets measured next time.
+            if (pair.second.metadata.lengthRead)
+                object->setProperty("lengthMs", pair.second.metadata.lengthMs);
             object->setProperty("size", (double) pair.second.fileSize);
             object->setProperty("modified", (double) pair.second.modifiedMs);
             array.add(juce::var(object));

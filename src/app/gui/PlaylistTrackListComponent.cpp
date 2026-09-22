@@ -13,7 +13,7 @@ namespace
 class PlaylistTrackListComponent::Model : public juce::TableListBoxModel
 {
 public:
-    enum ColumnId { title = 1, artist };
+    enum ColumnId { title = 1, artist, length };
 
     explicit Model(PlaylistTrackListComponent& ownerToUse) : owner(ownerToUse) {}
 
@@ -55,11 +55,14 @@ public:
                     + metadata.displayTitle(file);
         else if (columnId == artist)
             text = metadata.artist;
+        else if (columnId == length)
+            text = metadata.displayLength();
 
         g.setColour(playing ? inkwyrd::theme::accent : inkwyrd::theme::text);
         g.setFont(juce::Font(juce::FontOptions(14.0f)));
         g.drawText(text, juce::Rectangle<int>(6, 0, width - 12, height),
-                    juce::Justification::centredLeft, true);
+                    columnId == length ? juce::Justification::centredRight
+                                       : juce::Justification::centredLeft, true);
     }
 
     void selectedRowsChanged(int) override { owner.updateButtons(); }
@@ -119,6 +122,7 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
     auto& header = trackTable.getHeader();
     header.addColumn("Title",  Model::title,  240, 120, -1, kColumnFlags);
     header.addColumn("Artist", Model::artist, 140, 70,  -1, kColumnFlags);
+    header.addColumn("Length", Model::length, 62,  56,  80, kColumnFlags);
     header.setStretchToFitActive(true);
 
     addAndMakeVisible(trackTable);

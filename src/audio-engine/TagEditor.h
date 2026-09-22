@@ -52,6 +52,10 @@ namespace inkwyrd
         // Front cover, empty when the file carries none.
         juce::MemoryBlock artwork;
         juce::String artworkMimeType;
+
+        // How long the track plays for, from the same open as the tags.
+        // 0 when TagLib couldn't work it out.
+        int lengthMilliseconds = 0;
     };
 
     struct TagChanges

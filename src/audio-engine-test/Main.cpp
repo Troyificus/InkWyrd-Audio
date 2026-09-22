@@ -1812,6 +1812,75 @@ namespace
             auto tonesOk = makeTone(toneA, 220.0, 8) && makeTone(toneB, 330.0, 8);
             check(tonesOk, "test tones were written (everything below depends on this)");
 
+            {
+                // Track lengths, for the Length columns. The tones are
+                // exactly 8 seconds, which makes a real measurement
+                // checkable rather than just "some number came back".
+                auto measured = TrackMetadataStore::readFromFile(toneA, formatManager);
+                check(measured.lengthRead && std::abs(measured.lengthMs - 8000) <= 50,
+                       "a track's length is read along with its tags (8 s tone measured as "
+                       + juce::String(measured.lengthMs) + " ms)");
+                check(measured.displayLength() == "0:08", "and shows as 0:08");
+
+                if (! folderTracks.isEmpty())
+                {
+                    auto real = TrackMetadataStore::readFromFile(folderTracks[0], formatManager);
+                    check(real.lengthRead && real.lengthMs > 0,
+                           "a real compressed track gets a length too");
+                }
+
+                TrackMetadata shown;
+                shown.lengthRead = true;
+                shown.lengthMs = 186700;
+                check(shown.displayLength() == "3:07", "lengths round to the nearest second, like any player");
+                shown.lengthMs = 59400;
+                check(shown.displayLength() == "0:59", "under a minute shows as 0:ss");
+                shown.lengthMs = 3765000;
+                check(shown.displayLength() == "1:02:45", "an hour or more shows hours");
+                shown.lengthMs = 0;
+                check(shown.displayLength().isEmpty(),
+                       "a length nobody could measure shows blank, not 0:00");
+                shown.lengthRead = false;
+                shown.lengthMs = 5000;
+                check(shown.displayLength().isEmpty(), "and so does one that hasn't been read yet");
+
+                // An existing library's cache has no lengths. Its entries
+                // must come back as not-yet-read, so the next scan measures
+                // them - otherwise unchanged files would never be re-read
+                // and the column would stay blank for everything already
+                // in someone's library.
+                auto cacheFile = scratch.getChildFile("length-cache.json");
+                auto key = toneA.getFullPathName().toLowerCase();
+                auto oldCache = juce::String(R"({"schemaVersion": 1, "tracks": [{"path": )")
+                                + juce::JSON::toString(key) + R"(, "title": "Tone", "size": 1, "modified": 1}]})";
+                cacheFile.replaceWithText(oldCache);
+
+                TrackMetadataStore oldStore;
+                oldStore.setFile(cacheFile);
+                oldStore.load();
+                auto cached = oldStore.get(toneA);
+                check(cached.scanned && cached.title == "Tone" && ! cached.lengthRead,
+                       "a cache from before lengths loads its tags, and marks the length as not read yet");
+
+                // Reading it fills the length in, and it survives a save.
+                auto fresh = juce::String(R"({"schemaVersion": 1, "tracks": [{"path": )")
+                             + juce::JSON::toString(key) + R"(, "title": "Tone", "lengthMs": 8000, "size": 1, "modified": 1}]})";
+                cacheFile.replaceWithText(fresh);
+
+                TrackMetadataStore newStore;
+                newStore.setFile(cacheFile);
+                newStore.load();
+                newStore.save();
+
+                TrackMetadataStore reloaded;
+                reloaded.setFile(cacheFile);
+                reloaded.load();
+                check(reloaded.get(toneA).lengthRead && reloaded.get(toneA).lengthMs == 8000,
+                       "a cached length survives a save and reload");
+                check(cacheFile.loadFileAsString().contains("\"schemaVersion\": 1"),
+                       "and the cache version is unchanged, so older builds still read it");
+            }
+
             if (tonesOk)
             {
                 juce::Array<juce::File> tones;

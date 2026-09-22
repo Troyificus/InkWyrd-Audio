@@ -1852,6 +1852,35 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Length columns (beta.28)
+
+A **Length** column in the Library table (sortable) and the Playlist
+window, from `TrackMetadata::lengthMs` / `displayLength()`.
+
+- **Read in the SAME TagLib open as the tags** (`TagEditor::read` now
+  opens with audio properties, `Average` style - accurate for VBR files
+  with a header, and it doesn't decode). A second open per file would
+  have doubled the cost of every library scan. Falls back to the app's
+  own decoders via `AudioFormatReader` only when TagLib can't say.
+- **No cache version bump, deliberately.** An existing cache has no
+  lengths, and unchanged files are never re-read, so without care the
+  column would stay blank forever for an existing library. Instead an
+  entry loaded without `lengthMs` has `lengthRead = false`, and
+  `isStale()` treats that as stale - so the next scan measures it, once.
+  Bumping `kCurrentSchemaVersion` would also have worked for this build
+  but made every OLDER build refuse the whole cache as "from a newer
+  version" (beta.27.1's protection). Additive fields beat version bumps
+  for a rebuildable cache.
+- `lengthRead` is set even when nothing could measure the file, so an
+  unmeasurable file isn't re-read on every scan. It shows blank, never
+  "0:00" - blank reads as unknown.
+- Sorting by Length compares the NUMBER ("10:00" sorts after "9:59",
+  which text wouldn't), with unmeasured tracks last, like empty tags.
+- Its column id is `6`, after `volume`, even though it's displayed
+  before it: column ids end up in the saved sort state and must never
+  change meaning.
+- Checked against an exactly 8 s test tone: measured 8000 ms.
+
 ### Stores no longer overwrite files they refused to load (beta.27.1)
 
 **The bug:** `SoundboardLayout`, `TrackLibrary` and `TrackSettingsStore`
