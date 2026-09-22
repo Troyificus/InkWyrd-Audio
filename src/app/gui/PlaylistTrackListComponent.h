@@ -78,7 +78,25 @@ private:
     class Model;
 
     void timerCallback() override;
-    void removeSelectedTrack();
+    void removeSelectedTracks();
+
+    // Every selected track, in list order.
+    juce::Array<juce::File> getSelectedFiles() const;
+
+    // Click-and-drag selection over the rows. JUCE's list has Ctrl- and
+    // Shift-click built in once multiple selection is on, but not this.
+    // Heard through a mouse listener on the table and its row
+    // components - the rows handle their own mouse events and never pass
+    // them up.
+    void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseUp(const juce::MouseEvent& e) override;
+    int rowAt(const juce::MouseEvent& e);
+    bool isFromTable(const juce::MouseEvent& e) const;
+
+    int dragSelectAnchorRow = -1;
+    int dragSelectLastRow = -1;
+    bool dragSelecting = false;
     void showContextMenuForRow(int row);
     void updateButtons();
 

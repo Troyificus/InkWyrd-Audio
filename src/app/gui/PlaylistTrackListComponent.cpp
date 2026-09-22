@@ -79,7 +79,7 @@ public:
             owner.onPlayTrack(owner.shownId, owner.resolvedTracks.files[row]);
     }
 
-    void deleteKeyPressed(int) override { owner.removeSelectedTrack(); }
+    void deleteKeyPressed(int) override { owner.removeSelectedTracks(); }
 
 private:
     bool isPlaying(int row) const
@@ -119,6 +119,12 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
     constexpr int kColumnFlags = juce::TableHeaderComponent::visible
                                   | juce::TableHeaderComponent::resizable;
 
+    // Ctrl+click picks tracks one by one, Shift+click picks everything
+    // between, Ctrl+A picks the lot - all JUCE's own, once this is on.
+    // Click-and-drag is added below, in mouseDrag.
+    trackTable.setMultipleSelectionEnabled(true);
+    trackTable.addMouseListener(this, true);
+
     auto& header = trackTable.getHeader();
     header.addColumn("Title",  Model::title,  240, 120, -1, kColumnFlags);
     header.addColumn("Artist", Model::artist, 140, 70,  -1, kColumnFlags);
@@ -127,7 +133,7 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
 
     addAndMakeVisible(trackTable);
 
-    removeButton.onClick = [this] { removeSelectedTrack(); };
+    removeButton.onClick = [this] { removeSelectedTracks(); };
     addAndMakeVisible(removeButton);
     updateButtons();
 
@@ -178,7 +184,103 @@ void PlaylistTrackListComponent::refresh()
 
 void PlaylistTrackListComponent::updateButtons()
 {
-    removeButton.setEnabled(trackTable.getSelectedRow() >= 0 && library.findById(shownId) != nullptr);
+    auto count = trackTable.getNumSelectedRows();
+    removeButton.setEnabled(count > 0 && library.findById(shownId) != nullptr);
+
+    // Says how many, so a Ctrl+A that caught more than meant is visible
+    // before it's acted on.
+    removeButton.setButtonText(count > 1 ? "Remove " + juce::String(count) + " from playlist"
+                                         : juce::String("Remove from playlist"));
+}
+
+juce::Array<juce::File> PlaylistTrackListComponent::getSelectedFiles() const
+{
+    juce::Array<juce::File> files;
+
+    for (int i = 0; i < trackTable.getNumSelectedRows(); ++i)
+    {
+        auto row = trackTable.getSelectedRow(i);
+        if (juce::isPositiveAndBelow(row, resolvedTracks.files.size()))
+            files.add(resolvedTracks.files[row]);
+    }
+
+    return files;
+}
+
+bool PlaylistTrackListComponent::isFromTable(const juce::MouseEvent& e) const
+{
+    return e.eventComponent == &trackTable || trackTable.isParentOf(e.eventComponent);
+}
+
+int PlaylistTrackListComponent::rowAt(const juce::MouseEvent& e)
+{
+    auto position = e.getEventRelativeTo(&trackTable).getPosition();
+
+    // Past the last row, but still in the list: the last row. That's
+    // where a drag ends up when someone pulls it down past the end of a
+    // short playlist, and it should still reach the bottom track.
+    auto row = trackTable.getRowContainingPosition(position.x, position.y);
+    if (row < 0 && position.y > 0 && resolvedTracks.files.size() > 0
+        && trackTable.getLocalBounds().contains(position.withY(0)))
+        row = resolvedTracks.files.size() - 1;
+
+    return row;
+}
+
+void PlaylistTrackListComponent::mouseDown(const juce::MouseEvent& e)
+{
+    dragSelecting = false;
+    dragSelectAnchorRow = -1;
+
+    // A plain left press only. Ctrl and Shift already mean something to
+    // the list, and a right press opens the menu.
+    if (! isFromTable(e) || e.mods.isPopupMenu() || e.mods.isCommandDown() || e.mods.isShiftDown())
+        return;
+
+    dragSelectAnchorRow = rowAt(e);
+}
+
+void PlaylistTrackListComponent::mouseDrag(const juce::MouseEvent& e)
+{
+    if (dragSelectAnchorRow < 0 || ! isFromTable(e))
+        return;
+
+    // A few pixels first, so a slightly shaky click is still a click.
+    if (! dragSelecting && e.getDistanceFromDragStart() < 4)
+        return;
+
+    dragSelecting = true;
+
+    // Pulling past the top or bottom of the list scrolls it, so a
+    // selection can run longer than what's on screen.
+    auto inTable = e.getEventRelativeTo(&trackTable).getPosition();
+    if (auto* viewport = trackTable.getViewport())
+        viewport->autoScroll(inTable.x, inTable.y - trackTable.getHeaderHeight(), 20, 8);
+
+    auto row = rowAt(e);
+    if (row < 0 || row == dragSelectLastRow)
+        return;
+
+    dragSelectLastRow = row;
+    trackTable.selectRangeOfRows(dragSelectAnchorRow, row, true);
+    updateButtons();
+}
+
+void PlaylistTrackListComponent::mouseUp(const juce::MouseEvent&)
+{
+    // Pressing on a row that was ALREADY selected makes the list select
+    // that single row when the button comes up, collapsing the range
+    // just dragged out. This listener hears the release after the row
+    // does, so putting the range back here wins.
+    if (dragSelecting && dragSelectAnchorRow >= 0 && dragSelectLastRow >= 0)
+    {
+        trackTable.selectRangeOfRows(dragSelectAnchorRow, dragSelectLastRow, true);
+        updateButtons();
+    }
+
+    dragSelecting = false;
+    dragSelectAnchorRow = -1;
+    dragSelectLastRow = -1;
 }
 
 void PlaylistTrackListComponent::showContextMenuForRow(int row)
@@ -192,71 +294,133 @@ void PlaylistTrackListComponent::showContextMenuForRow(int row)
     if (! trackTable.isRowSelected(row))
         trackTable.selectRow(row);
 
-    auto file = resolvedTracks.files[row];
+    // Whatever is selected - which, after the check above, includes the
+    // row that was right-clicked.
+    auto files = getSelectedFiles();
+    auto count = files.size();
 
     // No Preview here: previewing lives in the Library window, on the
     // row itself, so there is one obvious way to start one and to stop it.
     enum MenuId { editTagsItem = 1, removeItem };
 
     juce::PopupMenu menu;
-    menu.addItem(editTagsItem, "Edit tags...", onEditTags != nullptr);
+    menu.addItem(editTagsItem, count > 1 ? "Edit tags for " + juce::String(count) + " tracks..."
+                                         : juce::String("Edit tags..."),
+                  onEditTags != nullptr);
     menu.addSeparator();
-    menu.addItem(removeItem, "Remove from playlist", library.findById(shownId) != nullptr);
+    menu.addItem(removeItem, count > 1 ? "Remove " + juce::String(count) + " from playlist"
+                                       : juce::String("Remove from playlist"),
+                  library.findById(shownId) != nullptr);
 
     menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition(),
                         [this, safeThis = juce::Component::SafePointer<PlaylistTrackListComponent>(this),
-                         file](int result)
+                         files](int result)
     {
         if (safeThis == nullptr)
             return;
 
         if (result == editTagsItem && onEditTags)
-            onEditTags({ file });
+            onEditTags(files);
         else if (result == removeItem)
-            removeSelectedTrack();
+            removeSelectedTracks();
     });
 }
 
-void PlaylistTrackListComponent::removeSelectedTrack()
+void PlaylistTrackListComponent::removeSelectedTracks()
 {
-    auto row = trackTable.getSelectedRow();
-    if (! juce::isPositiveAndBelow(row, resolvedTracks.files.size()))
-        return;
-
     auto* playlist = library.findById(shownId);
-    if (playlist == nullptr)
+    if (playlist == nullptr || trackTable.getNumSelectedRows() == 0)
         return;
 
-    auto file = resolvedTracks.files[row];
-    auto entryIndex = juce::isPositiveAndBelow(row, resolvedTracks.sourceEntryIndex.size())
-                          ? resolvedTracks.sourceEntryIndex[row]
-                          : -1;
+    // Sort the selection into what can go and what can't. A track that
+    // came from a LINKED FOLDER has no row of its own to delete - it's
+    // there because the folder is. Removing its entry would take every
+    // other track from that folder with it, so those stay, and say so.
+    juce::Array<int> entriesToRemove;
+    juce::Array<juce::File> fromLinkedFolders;
+    juce::File linkedFolder;
 
-    if (! juce::isPositiveAndBelow(entryIndex, playlist->entries.size()))
-        return;
-
-    // A track that came from a LINKED FOLDER has no row of its own to
-    // delete - it exists because the folder does. Removing the entry
-    // would silently take every other track from that folder with it, so
-    // say what's actually going on rather than doing something drastic.
-    if (playlist->entries[entryIndex].kind == PlaylistEntry::Kind::folder)
+    for (int i = 0; i < trackTable.getNumSelectedRows(); ++i)
     {
+        auto row = trackTable.getSelectedRow(i);
+        if (! juce::isPositiveAndBelow(row, resolvedTracks.files.size())
+            || ! juce::isPositiveAndBelow(row, resolvedTracks.sourceEntryIndex.size()))
+            continue;
+
+        auto entryIndex = resolvedTracks.sourceEntryIndex[row];
+        if (! juce::isPositiveAndBelow(entryIndex, playlist->entries.size()))
+            continue;
+
+        if (playlist->entries[entryIndex].kind == PlaylistEntry::Kind::folder)
+        {
+            fromLinkedFolders.add(resolvedTracks.files[row]);
+            linkedFolder = playlist->entries[entryIndex].path;
+        }
+        else
+        {
+            entriesToRemove.addIfNotAlreadyThere(entryIndex);
+        }
+    }
+
+    auto explainLinked = [this, playlistName = playlist->name, fromLinkedFolders, linkedFolder,
+                          anyRemoved = ! entriesToRemove.isEmpty()]
+    {
+        if (fromLinkedFolders.isEmpty())
+            return;
+
+        auto what = fromLinkedFolders.size() == 1
+                        ? "\"" + fromLinkedFolders[0].getFileNameWithoutExtension() + "\" is"
+                        : juce::String(fromLinkedFolders.size()) + " of those tracks are";
+
         inkwyrd::showMessage(this, juce::MessageBoxIconType::InfoIcon,
-                              "That track comes from a linked folder",
-                              "\"" + file.getFileNameWithoutExtension() + "\" is in \""
-                               + playlist->name + "\" because the folder\n"
-                               + playlist->entries[entryIndex].path.getFullPathName()
-                               + "\nis linked to it, so it can't be removed on its own.\n\n"
+                              anyRemoved ? "Some tracks were left in" : "Those tracks come from a linked folder",
+                              what + " in \"" + playlistName + "\" because the folder\n"
+                               + linkedFolder.getFullPathName()
+                               + "\nis linked to it, so they can't be removed on their own.\n\n"
                                  "Remove the folder from the playlist to drop all of its tracks, "
-                                 "or delete the file itself.");
+                                 "or delete the files themselves.");
+    };
+
+    if (entriesToRemove.isEmpty())
+    {
+        explainLinked();
         return;
     }
 
-    library.removeEntry(shownId, entryIndex);
-    refresh();
+    auto doRemove = [this, entriesToRemove, explainLinked]
+    {
+        library.removeEntries(shownId, entriesToRemove);
+        trackTable.deselectAllRows();
+        refresh();
 
-    if (onPlaylistEdited)
-        onPlaylistEdited(shownId);
+        if (onPlaylistEdited)
+            onPlaylistEdited(shownId);
+
+        explainLinked();
+    };
+
+    // One track goes straight away, as it always has. Several ask first:
+    // there's no undo, and Ctrl+A then Delete is an easy way to empty a
+    // playlist without meaning to. The files themselves are never touched.
+    if (entriesToRemove.size() == 1)
+    {
+        doRemove();
+        return;
+    }
+
+    auto options = inkwyrd::dialogOptions(this, juce::MessageBoxIconType::QuestionIcon,
+                                           "Remove " + juce::String(entriesToRemove.size()) + " tracks?",
+                                           "They'll be taken out of \"" + playlist->name + "\". "
+                                           "The files themselves aren't deleted, and stay in your library.")
+                        .withButton("Remove")
+                        .withButton("Cancel");
+
+    juce::AlertWindow::showAsync(options, [safeThis = juce::Component::SafePointer<PlaylistTrackListComponent>(this),
+                                            doRemove](int result)
+    {
+        if (safeThis != nullptr && result == 1)
+            doRemove();
+    });
 }
 
 bool PlaylistTrackListComponent::isInterestedInFileDrag(const juce::StringArray& files)

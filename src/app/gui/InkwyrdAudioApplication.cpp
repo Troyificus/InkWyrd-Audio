@@ -205,6 +205,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
 
     // Restore both before anything can be heard.
     masterEngine.setMicMuted(settings.isMicMuted());
+    masterEngine.setMicGain(settings.getMicVolume());
     applyDuckSettings();
 
     applyDiscordRpcSettings();
@@ -983,6 +984,13 @@ void InkwyrdAudioApplication::showPlayer()
         settings.setLoopGapSeconds(playlist.getLoopGapSeconds());
         settings.save();
     });
+    player.setMicVolume(settings.getMicVolume());
+    player.setMicVolumeChangedCallback([this](float volume)
+    {
+        settings.setMicVolume(volume);
+        settings.save();
+    });
+
     player.setMasterVolumeChangedCallback([this](float volume)
     {
         // The user has hold of the fader: a scene's glide lets go at once

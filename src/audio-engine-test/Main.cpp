@@ -116,6 +116,68 @@ namespace
         }
 
         {
+            // Removing a SELECTION from a playlist (beta.28.2). The trap is
+            // order: every removal shifts the indices after it, so taking
+            // entries out lowest-first would remove the wrong tracks.
+            auto removeScratch = scratch.getChildFile("remove-entries-test");
+            removeScratch.createDirectory();
+
+            // Six distinct files, whatever the fixture folder holds.
+            juce::Array<juce::File> six;
+            for (int i = 0; i < 6; ++i)
+            {
+                auto source = folderTracks[i % folderTracks.size()];
+                auto copy = removeScratch.getChildFile("track-" + juce::String(i) + source.getFileExtension());
+                source.copyFileTo(copy);
+                six.add(copy);
+            }
+
+            PlaylistLibrary removeLibrary(formatManager);
+            removeLibrary.setDirectory(removeScratch.getChildFile("playlists"));
+            removeLibrary.loadAll();
+
+            auto& list = removeLibrary.createPlaylist("Session");
+            auto id = list.id;
+            removeLibrary.addFiles(id, six);
+
+            auto entryPaths = [&removeLibrary, id]
+            {
+                juce::StringArray names;
+                for (const auto& entry : removeLibrary.findById(id)->entries)
+                    names.add(entry.path.getFileNameWithoutExtension());
+                return names;
+            };
+
+            check(entryPaths().size() == 6, "a playlist of six tracks to remove from");
+
+            // Out of order, with a repeat and an index past the end - all
+            // things a selection handed over as-is can contain.
+            removeLibrary.removeEntries(id, { 4, 1, 1, 99, 2 });
+            check(entryPaths() == juce::StringArray { "track-0", "track-3", "track-5" },
+                   "removing several tracks takes out exactly those - not the ones their positions shift onto");
+
+            PlaylistLibrary reloaded(formatManager);
+            reloaded.setDirectory(removeScratch.getChildFile("playlists"));
+            reloaded.loadAll();
+            auto* back = reloaded.findById(id);
+            check(back != nullptr && back->entries.size() == 3,
+                   "and the smaller playlist is what's saved");
+
+            removeLibrary.removeEntries(id, { 0, 1, 2 });
+            check(entryPaths().isEmpty(), "every track can be removed at once (Ctrl+A, then Delete)");
+
+            removeLibrary.removeEntries(id, {});
+            removeLibrary.removeEntries(juce::Uuid(), { 0 });
+            check(entryPaths().isEmpty(), "an empty selection, or a playlist that doesn't exist, does nothing");
+
+            for (const auto& file : six)
+                check(file.existsAsFile(), "removing a track from a playlist never deletes the file: "
+                                            + file.getFileName());
+
+            removeScratch.deleteRecursively();
+        }
+
+        {
             PlaylistLibrary library(formatManager);
             library.setDirectory(scratch);
             library.loadAll();

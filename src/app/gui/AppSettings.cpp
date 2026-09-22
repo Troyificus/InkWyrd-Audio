@@ -26,6 +26,7 @@ namespace
     constexpr const char* kDuckThresholdKey = "duckThresholdDb";
     constexpr const char* kCheckForUpdatesKey = "checkForUpdates";
     constexpr const char* kSetupFolderInLibraryKey = "setupFolderTracksInLibrary";
+    constexpr const char* kMicVolumeKey = "micVolume";
     constexpr const char* kMicMutedKey = "micMuted";
     constexpr const char* kExampleSkinsWrittenKey = "exampleSkinsWritten";
     constexpr const char* kNoiseSuppressionKey = "noiseSuppressionEnabled";
@@ -252,6 +253,16 @@ double AppSettings::getDuckThresholdDb() const
 void AppSettings::setDuckThresholdDb(double thresholdDb)
 {
     settings()->setValue(kDuckThresholdKey, thresholdDb);
+}
+
+float AppSettings::getMicVolume() const
+{
+    return (float) juce::jlimit(0.0, 1.0, settings()->getDoubleValue(kMicVolumeKey, 1.0));
+}
+
+void AppSettings::setMicVolume(float volume)
+{
+    settings()->setValue(kMicVolumeKey, (double) volume);
 }
 
 bool AppSettings::isSetupFolderInLibrary() const

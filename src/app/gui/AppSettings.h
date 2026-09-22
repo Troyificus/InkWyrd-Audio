@@ -114,6 +114,10 @@ public:
     bool isSetupFolderInLibrary() const;
     void setSetupFolderInLibrary(bool done);
 
+    // The mic's own volume, 0..1, as the Player's Mic slider left it.
+    float getMicVolume() const;
+    void setMicVolume(float volume);
+
     // Whether to ask GitHub, once per launch, if there's a newer
     // release. On by default; it only ever reports.
     bool shouldCheckForUpdates() const;

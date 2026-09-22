@@ -100,6 +100,13 @@ public:
     void addFolderLink(const juce::Uuid& id, const juce::File& folder, bool recursive);
     void addFolderSnapshot(const juce::Uuid& id, const juce::File& folder, bool recursive);
     void removeEntry(const juce::Uuid& id, int entryIndex);
+
+    // Several at once, saved once. Removing a whole selection one entry
+    // at a time would rewrite the playlist's file per track - and shift
+    // every later index after each removal, so the caller would have to
+    // get the order exactly right. Indices out of range, or repeated,
+    // are ignored.
+    void removeEntries(const juce::Uuid& id, juce::Array<int> entryIndices);
     void setShuffle(const juce::Uuid& id, bool shouldShuffle);
 
     ResolvedPlaylist resolve(const Playlist& playlist) const;

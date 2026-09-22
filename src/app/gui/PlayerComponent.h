@@ -60,6 +60,12 @@ public:
     // unreadable playlist files. Empty text keeps the banner hidden.
     void setWarningBanner(const juce::String& text);
 
+    // Restores the saved mic volume without writing it straight back.
+    void setMicVolume(float volume);
+
+    // Fires when the user moves the Mic slider, for saving it.
+    void setMicVolumeChangedCallback(std::function<void(float)> callback) { onMicVolumeChanged = std::move(callback); }
+
     // Shows the update link. The URL must already have been through
     // inkwyrd::safeReleasePageUrl - this only displays what it's given.
     void setUpdateAvailable(const juce::String& version, const juce::URL& releasePage);
@@ -136,6 +142,11 @@ private:
 
     juce::Label masterVolumeCaption { {}, "Master" };
     juce::Slider masterVolumeSlider;
+
+    // Your voice only - see MasterEngine::setMicGain.
+    juce::Label micVolumeCaption { {}, "Mic" };
+    juce::Slider micVolumeSlider;
+    std::function<void(float)> onMicVolumeChanged;
     std::function<void(float)> onMasterVolumeChanged;
 
     // Every satellite window can be shown or hidden from here. All four

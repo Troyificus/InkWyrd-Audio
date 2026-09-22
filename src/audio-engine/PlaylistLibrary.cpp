@@ -341,6 +341,34 @@ void PlaylistLibrary::removeEntry(const juce::Uuid& id, int entryIndex)
     save(*playlist);
 }
 
+void PlaylistLibrary::removeEntries(const juce::Uuid& id, juce::Array<int> entryIndices)
+{
+    auto* playlist = findById(id);
+    if (playlist == nullptr || entryIndices.isEmpty())
+        return;
+
+    // Highest first, so each removal leaves the indices still to come
+    // pointing at the entries they meant.
+    entryIndices.sort();
+    auto removedAny = false;
+
+    for (int i = entryIndices.size(); --i >= 0;)
+    {
+        auto index = entryIndices[i];
+        if (i + 1 < entryIndices.size() && entryIndices[i + 1] == index)
+            continue; // a repeat - already gone
+
+        if (juce::isPositiveAndBelow(index, playlist->entries.size()))
+        {
+            playlist->entries.remove(index);
+            removedAny = true;
+        }
+    }
+
+    if (removedAny)
+        save(*playlist);
+}
+
 void PlaylistLibrary::setShuffle(const juce::Uuid& id, bool shouldShuffle)
 {
     auto* playlist = findById(id);

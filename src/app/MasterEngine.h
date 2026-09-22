@@ -101,6 +101,18 @@ public:
     void setMasterGain(float gain) { masterGain.store(juce::jlimit(0.0f, 1.0f, gain)); }
     float getMasterGain() const { return masterGain.load(); }
 
+    // The mic's own volume, 0 = silent, 1 = as it comes out of the plugin
+    // chain. Only your VOICE - the music and effects are left alone, so
+    // someone who is too loud in the call can come down without taking
+    // the whole mix with them. Ramped like the master, so moving it
+    // doesn't click.
+    //
+    // Applied AFTER ducking reads the mic, deliberately: ducking asks
+    // "is someone speaking?", and turning yourself down shouldn't change
+    // the answer. Safe from any thread.
+    void setMicGain(float gain) { micGain.store(juce::jlimit(0.0f, 1.0f, gain)); }
+    float getMicGain() const { return micGain.load(); }
+
     // Ducking: how far the music drops while the mic is live, and what
     // counts as live. Safe from any thread - the envelope holds its
     // parameters as atomics.
@@ -156,12 +168,16 @@ private:
     std::atomic<bool> micMuted { false };
     std::atomic<bool> localMonitoring { true };
     std::atomic<float> masterGain { 1.0f };
+    std::atomic<float> micGain { 1.0f };
 
     // Audio thread only - where the gain ramp got to last block.
     float lastMasterGain = 1.0f;
 
     inkwyrd::DuckEnvelope duck;
     float lastDuckGain = 1.0f;
+
+    // Audio thread only - where the mic volume ramp got to last block.
+    float lastMicGain = 1.0f;
 
     juce::AudioBuffer<float> micBuffer, masterBuffer;
     juce::MidiBuffer scratchMidi;

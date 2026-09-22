@@ -134,6 +134,22 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
         lastDuckGain = duckGain;
     }
 
+    // 2c. The mic's own volume - after ducking has read the level above,
+    // so turning yourself down never changes what counts as speaking.
+    // Ramped from where the last block ended, like the master fader.
+    {
+        auto targetMicGain = micGain.load();
+        if (targetMicGain != lastMicGain)
+        {
+            micBuffer.applyGainRamp(0, numSamples, lastMicGain, targetMicGain);
+            lastMicGain = targetMicGain;
+        }
+        else if (targetMicGain != 1.0f)
+        {
+            micBuffer.applyGain(targetMicGain);
+        }
+    }
+
     // 3. Sum processed voice into the same buffer - this is now the
     // final master mix, used for both local output and the Discord send.
     masterBuffer.addFrom(0, 0, micBuffer, 0, 0, numSamples);

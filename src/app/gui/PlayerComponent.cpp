@@ -179,6 +179,25 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     };
     addAndMakeVisible(masterVolumeSlider);
 
+    micVolumeCaption.setJustificationType(juce::Justification::centredRight);
+    addAndMakeVisible(micVolumeCaption);
+
+    micVolumeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    micVolumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 48, 22);
+    micVolumeSlider.setRange(0.0, 100.0, 1.0);
+    micVolumeSlider.setTextValueSuffix("%");
+    micVolumeSlider.setValue(100.0, juce::dontSendNotification);
+    micVolumeSlider.setTooltip("Your voice only. The music and sound effects stay where they are.");
+    micVolumeSlider.onValueChange = [this]
+    {
+        auto gain = (float) (micVolumeSlider.getValue() / 100.0);
+        masterEngine.setMicGain(gain);
+
+        if (onMicVolumeChanged)
+            onMicVolumeChanged(gain);
+    };
+    addAndMakeVisible(micVolumeSlider);
+
     addAndMakeVisible(playlistButton);
     playlistButton.onClick = [this] { if (onTogglePlaylist) onTogglePlaylist(); };
 
@@ -282,6 +301,12 @@ void PlayerComponent::setUpdateAvailable(const juce::String& version, const juce
                         juce::Justification::centredRight);
     updateLink.setVisible(true);
     resized();
+}
+
+void PlayerComponent::setMicVolume(float volume)
+{
+    micVolumeSlider.setValue(juce::jlimit(0.0, 100.0, volume * 100.0), juce::dontSendNotification);
+    masterEngine.setMicGain(volume);
 }
 
 void PlayerComponent::setMasterVolume(float volume)
@@ -494,11 +519,16 @@ void PlayerComponent::resized()
     fadeOutSlider.setBounds(loopRow.removeFromLeft(140));
     area.removeFromTop(8);
 
-    // Row three: master volume on the right.
+    // Row three: your mic's volume on the left, the master on the right -
+    // the two levels someone reaches for mid-session.
     auto volumeRow = area.removeFromTop(28);
     masterVolumeSlider.setBounds(volumeRow.removeFromRight(180));
     volumeRow.removeFromRight(12);
     masterVolumeCaption.setBounds(volumeRow.removeFromRight(56));
+
+    micVolumeCaption.setBounds(volumeRow.removeFromLeft(40));
+    volumeRow.removeFromLeft(8);
+    micVolumeSlider.setBounds(volumeRow.removeFromLeft(juce::jmin(180, volumeRow.getWidth() - 12)));
     area.removeFromTop(8);
 
     // Row four: one activator per satellite window. Every window gets a

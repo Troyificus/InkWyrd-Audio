@@ -213,6 +213,10 @@ track.
 **Master** is the volume of everything Inkwyrd sends out: your speakers
 *and* Discord.
 
+**Mic** (to the left of Master) is the volume of **your voice only** -
+the music and sound effects stay where they are. Turn it down if you're
+too loud in the call.
+
 **The row below** sets how playback behaves. All of it is remembered:
 - **Mic: Live / Muted** - whether your microphone is in the mix.
 - **Monitor: On / Off** - whether the mix also comes out of **your own**
@@ -324,8 +328,18 @@ playlist's linked folder (see below).
 artist and length - in the order they play when Shuffle is off, with the
 playing one marked.
 - **Double-click a track** to jump to it.
-- **Remove from playlist**, or the Delete key, takes a track out.
-- Right-click a track to **Edit tags...** or remove it.
+- **Select several tracks** the usual ways:
+  - **Click and drag** down (or up) the list to select a run of tracks.
+    Drag past the top or bottom and the list scrolls.
+  - **Click one, then Shift+click another** to select everything
+    between them.
+  - **Ctrl+click** to pick tracks one at a time.
+  - **Ctrl+A** selects every track in the playlist.
+- **Remove from playlist**, or the Delete key, takes out everything
+  selected. Removing more than one track asks first, since there's no
+  undo. The files themselves are never deleted, and stay in your
+  library.
+- Right-click a track (or a selection) to **Edit tags...** or remove it.
 - Adding tracks to the playlist that's playing never interrupts it: the
   current track carries on and the new ones join the running order.
 
@@ -502,6 +516,12 @@ nothing.
 Your mic is mixed in with the music and sent to Discord. The **Mic**
 button on the Player (or **M**) turns it on and off, and the setting is
 remembered.
+
+**The Mic slider** on the Player sets how loud your voice is, without
+touching the music or sound effects. It's remembered too. It doesn't
+change what [ducking](#ducking-the-music-while-you-talk) counts as
+speech, so turning yourself down won't stop the music dipping when you
+talk.
 
 The **Voice FX** window shapes how you sound.
 
@@ -803,7 +823,9 @@ tracks.)
 |---|---|---|
 | Library search box | **Esc** | Clear the search |
 | Library track list | **Delete** | Remove the selected tracks from the library |
-| Playlist window | **Delete** | Remove the selected track from the playlist |
+| Playlist window | **Delete** | Remove the selected tracks from the playlist |
+| Playlist window | **Ctrl+A** | Select every track |
+| Playlist window | **Shift+click / Ctrl+click** | Select a range / pick tracks one at a time |
 | Naming a new playlist | **Enter** | Save the name |
 
 Shortcuts only work while Inkwyrd's window has focus. For control while

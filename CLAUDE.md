@@ -1852,6 +1852,41 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Selecting many tracks in a playlist, and a mic volume (beta.29)
+
+**Playlist window multi-select.** `setMultipleSelectionEnabled(true)`
+gives JUCE's own Ctrl+click, Shift+click and Ctrl+A. JUCE has NO
+click-and-drag selection, so `PlaylistTrackListComponent` adds it as a
+mouse listener on the table and its rows (the rows eat their own mouse
+events - same reason the Library's drag lives in PlaylistPanel):
+plain left press records an anchor row, dragging past 4px selects the
+range, dragging past an edge autoscrolls.
+
+- **The trap:** pressing on an ALREADY-selected row makes JUCE's row
+  select just that row on mouse-up (`selectRowOnMouseUp`), collapsing
+  the dragged range. The listener hears the release after the row does,
+  so `mouseUp` re-applies the range. Keep that if touching this.
+- Safe only because the Playlist window has no drag SOURCE of its own.
+  If reordering by drag is ever added, it will compete with this.
+- **Removing a selection** goes through `PlaylistLibrary::removeEntries`
+  - one save, and entries removed HIGHEST INDEX FIRST, since each
+  removal shifts every later index. The check for that was confirmed to
+  fail with a naive lowest-first loop (it removed the wrong tracks, and
+  "remove everything" left some behind).
+- Linked-folder tracks in a selection are left in and explained, as the
+  single-track case always did; the rest are removed. More than one
+  removal asks first - there's no undo, and Ctrl+A then Delete empties a
+  playlist in two keystrokes.
+- Not unit-tested: the drag-select itself (needs synthetic mouse events
+  on private overrides) - by hand only.
+
+**Mic volume** (`MasterEngine::setMicGain`, the Player's **Mic** slider,
+setting `micVolume`). Applied at step 2c of the callback: AFTER ducking
+reads the mic level (turning yourself down must not change what counts
+as speaking) and BEFORE the voice is summed into the mix. Ramped per
+block like the master. Voice only - music and soundboard untouched.
+Separate from Mic mute.
+
 ### First-run library, and a clickable update link (beta.28.1)
 
 **First run never put the Setup music folder's tracks into All Tracks.**
