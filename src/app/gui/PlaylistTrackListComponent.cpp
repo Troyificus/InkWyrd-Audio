@@ -125,6 +125,10 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
     trackTable.setMultipleSelectionEnabled(true);
     trackTable.addMouseListener(this, true);
 
+    // Before the table's own handling, which would move the SELECTION on
+    // Up/Down instead of the tracks.
+    trackTable.addKeyListener(this);
+
     auto& header = trackTable.getHeader();
     header.addColumn("Title",  Model::title,  240, 120, -1, kColumnFlags);
     header.addColumn("Artist", Model::artist, 140, 70,  -1, kColumnFlags);
@@ -230,7 +234,9 @@ int PlaylistTrackListComponent::rowAt(const juce::MouseEvent& e)
 void PlaylistTrackListComponent::mouseDown(const juce::MouseEvent& e)
 {
     dragSelecting = false;
+    dragMoving = false;
     dragSelectAnchorRow = -1;
+    dropIndicatorRow = -1;
 
     // A plain left press only. Ctrl and Shift already mean something to
     // the list, and a right press opens the menu.
@@ -238,6 +244,12 @@ void PlaylistTrackListComponent::mouseDown(const juce::MouseEvent& e)
         return;
 
     dragSelectAnchorRow = rowAt(e);
+
+    // Pressing a row that is already selected means "pick these up":
+    // dragging from here moves them. Anywhere else starts a new
+    // selection. Same rule Explorer uses, and it lets both live on the
+    // left button.
+    dragMoving = dragSelectAnchorRow >= 0 && trackTable.isRowSelected(dragSelectAnchorRow);
 }
 
 void PlaylistTrackListComponent::mouseDrag(const juce::MouseEvent& e)
@@ -246,8 +258,36 @@ void PlaylistTrackListComponent::mouseDrag(const juce::MouseEvent& e)
         return;
 
     // A few pixels first, so a slightly shaky click is still a click.
-    if (! dragSelecting && e.getDistanceFromDragStart() < 4)
+    if (e.getDistanceFromDragStart() < 4)
         return;
+
+    if (dragMoving)
+    {
+        // Between rows, not on one: the line shows where the tracks will
+        // land, and the nearest boundary is what the mouse means.
+        auto inTable = e.getEventRelativeTo(&trackTable).getPosition();
+        if (auto* viewport = trackTable.getViewport())
+            viewport->autoScroll(inTable.x, inTable.y - trackTable.getHeaderHeight(), 20, 8);
+
+        auto row = rowAt(e);
+        auto boundary = row < 0 ? resolvedTracks.files.size() : row;
+
+        // Past the middle of a row means after it.
+        if (row >= 0)
+        {
+            auto rowArea = trackTable.getRowPosition(row, true);
+            if (inTable.y > rowArea.getCentreY())
+                ++boundary;
+        }
+
+        if (boundary != dropIndicatorRow)
+        {
+            dropIndicatorRow = boundary;
+            repaint();
+        }
+
+        return;
+    }
 
     dragSelecting = true;
 
@@ -268,6 +308,21 @@ void PlaylistTrackListComponent::mouseDrag(const juce::MouseEvent& e)
 
 void PlaylistTrackListComponent::mouseUp(const juce::MouseEvent&)
 {
+    if (dragMoving)
+    {
+        auto target = dropIndicatorRow;
+
+        dragMoving = false;
+        dropIndicatorRow = -1;
+        dragSelectAnchorRow = -1;
+        repaint();
+
+        if (target >= 0)
+            moveSelectedTracksTo(target);
+
+        return;
+    }
+
     // Pressing on a row that was ALREADY selected makes the list select
     // that single row when the button comes up, collapsing the range
     // just dragged out. This listener hears the release after the row
@@ -324,6 +379,154 @@ void PlaylistTrackListComponent::showContextMenuForRow(int row)
         else if (result == removeItem)
             removeSelectedTracks();
     });
+}
+
+juce::Array<int> PlaylistTrackListComponent::selectedEntryIndices(bool& anyFromLinkedFolder) const
+{
+    anyFromLinkedFolder = false;
+    juce::Array<int> indices;
+
+    auto* playlist = library.findById(shownId);
+    if (playlist == nullptr)
+        return indices;
+
+    for (int i = 0; i < trackTable.getNumSelectedRows(); ++i)
+    {
+        auto row = trackTable.getSelectedRow(i);
+        if (! juce::isPositiveAndBelow(row, resolvedTracks.sourceEntryIndex.size()))
+            continue;
+
+        auto entryIndex = resolvedTracks.sourceEntryIndex[row];
+        if (! juce::isPositiveAndBelow(entryIndex, playlist->entries.size()))
+            continue;
+
+        if (playlist->entries[entryIndex].kind == PlaylistEntry::Kind::folder)
+            anyFromLinkedFolder = true;
+        else
+            indices.addIfNotAlreadyThere(entryIndex);
+    }
+
+    return indices;
+}
+
+void PlaylistTrackListComponent::explainLinkedFolderOrder()
+{
+    inkwyrd::showMessage(this, juce::MessageBoxIconType::InfoIcon,
+                          "Those tracks come from a linked folder",
+                          "They're in this playlist because the folder is, so they play in the "
+                          "folder's own order and can't be moved one at a time.\n\n"
+                          "Add tracks individually if you want to arrange them yourself.");
+}
+
+void PlaylistTrackListComponent::reselectFiles(const juce::Array<juce::File>& files)
+{
+    trackTable.deselectAllRows();
+
+    auto first = -1;
+    for (int row = 0; row < resolvedTracks.files.size(); ++row)
+    {
+        if (! files.contains(resolvedTracks.files[row]))
+            continue;
+
+        trackTable.selectRow(row, true, first < 0);
+        if (first < 0)
+            first = row;
+    }
+
+    // Keeps a track in view as it is walked up or down the list.
+    if (first >= 0)
+        trackTable.scrollToEnsureRowIsOnscreen(first);
+
+    updateButtons();
+}
+
+void PlaylistTrackListComponent::moveSelectedTracksBy(int delta)
+{
+    auto files = getSelectedFiles();
+    if (files.isEmpty() || library.findById(shownId) == nullptr)
+        return;
+
+    auto anyFromLinkedFolder = false;
+    auto indices = selectedEntryIndices(anyFromLinkedFolder);
+
+    if (indices.isEmpty())
+    {
+        if (anyFromLinkedFolder)
+            explainLinkedFolderOrder();
+
+        return;
+    }
+
+    // A selection that mixes hand-added tracks with folder ones would
+    // move only half of itself, which reads as the list mangling the
+    // selection. Say what's going on instead.
+    if (anyFromLinkedFolder)
+    {
+        explainLinkedFolderOrder();
+        return;
+    }
+
+    if (! library.moveEntriesBy(shownId, indices, delta))
+        return; // already at the end it was heading for
+
+    refresh();
+    reselectFiles(files);
+
+    if (onPlaylistEdited)
+        onPlaylistEdited(shownId);
+}
+
+void PlaylistTrackListComponent::moveSelectedTracksTo(int toRow)
+{
+    auto files = getSelectedFiles();
+    if (files.isEmpty() || library.findById(shownId) == nullptr)
+        return;
+
+    auto anyFromLinkedFolder = false;
+    auto indices = selectedEntryIndices(anyFromLinkedFolder);
+
+    if (indices.isEmpty() || anyFromLinkedFolder)
+    {
+        if (anyFromLinkedFolder)
+            explainLinkedFolderOrder();
+
+        return;
+    }
+
+    // The drop is a ROW, and rows become entries: the entry of the row
+    // dropped on, or one past the last entry when dropped off the end.
+    auto* playlist = library.findById(shownId);
+    auto targetEntry = playlist->entries.size();
+
+    if (juce::isPositiveAndBelow(toRow, resolvedTracks.sourceEntryIndex.size()))
+        targetEntry = resolvedTracks.sourceEntryIndex[toRow];
+
+    if (! library.moveEntriesTo(shownId, indices, targetEntry))
+        return;
+
+    refresh();
+    reselectFiles(files);
+
+    if (onPlaylistEdited)
+        onPlaylistEdited(shownId);
+}
+
+bool PlaylistTrackListComponent::keyPressed(const juce::KeyPress& key, juce::Component*)
+{
+    // Up and Down move the selected tracks, as asked for. The list's own
+    // arrow-key behaviour (moving the SELECTION) is given up for it -
+    // selecting is what the mouse is for here, and a playlist is a thing
+    // people arrange far more often than they walk through.
+    if (key == juce::KeyPress::upKey || key == juce::KeyPress::downKey)
+    {
+        if (trackTable.getNumSelectedRows() > 0)
+        {
+            moveSelectedTracksBy(key == juce::KeyPress::upKey ? -1 : 1);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void PlaylistTrackListComponent::removeSelectedTracks()
@@ -475,6 +678,19 @@ void PlaylistTrackListComponent::filesDropped(const juce::StringArray& files, in
 
 void PlaylistTrackListComponent::paintOverChildren(juce::Graphics& g)
 {
+    // Where a dragged selection would land.
+    if (dropIndicatorRow >= 0)
+    {
+        auto rows = resolvedTracks.files.size();
+        auto row = juce::jlimit(0, juce::jmax(0, rows - 1), dropIndicatorRow);
+        auto rowArea = trackTable.getRowPosition(row, true);
+        auto y = dropIndicatorRow >= rows ? rowArea.getBottom() : rowArea.getY();
+
+        auto line = getLocalArea(&trackTable, juce::Rectangle<int>(0, y - 1, trackTable.getWidth(), 2));
+        g.setColour(inkwyrd::theme::accent);
+        g.fillRect(line);
+    }
+
     if (! dragActive)
         return;
 

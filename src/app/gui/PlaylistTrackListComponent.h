@@ -28,7 +28,8 @@
 // the list lie about what plays next.
 class PlaylistTrackListComponent : public juce::Component,
                                     public juce::FileDragAndDropTarget,
-                                    private juce::Timer
+                                    private juce::Timer,
+                                    private juce::KeyListener
 {
 public:
     PlaylistTrackListComponent(PlaylistLibrary& libraryToUse,
@@ -80,6 +81,28 @@ private:
     void timerCallback() override;
     void removeSelectedTracks();
 
+    // Reordering. The playlist's order is its own - the order it plays in
+    // with Shuffle off - so moving a track rewrites the playlist, not
+    // anything about the files.
+    //
+    // delta: -1 up, +1 down (the Up/Down keys). toRow: drop a dragged
+    // selection before that row (the row count means "at the end").
+    void moveSelectedTracksBy(int delta);
+    void moveSelectedTracksTo(int toRow);
+
+    // The entries behind the selected rows, and whether any of them came
+    // from a linked folder - those can't be reordered on their own, the
+    // same way they can't be removed on their own.
+    juce::Array<int> selectedEntryIndices(bool& anyFromLinkedFolder) const;
+    void explainLinkedFolderOrder();
+
+    // Puts the selection back on these files after a move, and scrolls to
+    // them, so a track can be walked up the list with repeated presses.
+    void reselectFiles(const juce::Array<juce::File>& files);
+
+    // juce::KeyListener: Up/Down on the table move the selected tracks.
+    bool keyPressed(const juce::KeyPress& key, juce::Component* originating) override;
+
     // Every selected track, in list order.
     juce::Array<juce::File> getSelectedFiles() const;
 
@@ -97,6 +120,16 @@ private:
     int dragSelectAnchorRow = -1;
     int dragSelectLastRow = -1;
     bool dragSelecting = false;
+
+    // Dragging a row that is ALREADY selected moves the selection;
+    // dragging anything else rubber-bands a new one. Same rule as
+    // Explorer, and the only way both can live on the left button.
+    bool dragMoving = false;
+
+    // Where a move-drag would drop, as a ROW index (the row count means
+    // after the last row). -1 when no move-drag is happening. Drawn as a
+    // line between rows by paintOverChildren.
+    int dropIndicatorRow = -1;
     void showContextMenuForRow(int row);
     void updateButtons();
 

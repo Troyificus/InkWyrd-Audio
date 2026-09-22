@@ -369,6 +369,84 @@ void PlaylistLibrary::removeEntries(const juce::Uuid& id, juce::Array<int> entry
         save(*playlist);
 }
 
+bool PlaylistLibrary::moveEntriesTo(const juce::Uuid& id, juce::Array<int> entryIndices, int targetIndex)
+{
+    auto* playlist = findById(id);
+    if (playlist == nullptr || entryIndices.isEmpty())
+        return false;
+
+    entryIndices.sort();
+
+    // juce::Array has no removeDuplicates of its own; sorted, a repeat is
+    // always the entry before.
+    for (int i = entryIndices.size(); --i > 0;)
+        if (entryIndices[i] == entryIndices[i - 1])
+            entryIndices.remove(i);
+
+    for (auto index : entryIndices)
+        if (! juce::isPositiveAndBelow(index, playlist->entries.size()))
+            return false;
+
+    targetIndex = juce::jlimit(0, playlist->entries.size(), targetIndex);
+
+    // Where the block lands once the entries being moved are out of the
+    // list: every one of them below the target shifts it up by one.
+    auto insertAt = targetIndex;
+    for (auto index : entryIndices)
+        if (index < targetIndex)
+            --insertAt;
+
+    // Already exactly there: a contiguous block whose first entry is
+    // already at the insertion point has nothing to do, and moving it
+    // anyway would rewrite the file for no change.
+    auto contiguous = entryIndices.getLast() - entryIndices.getFirst() == entryIndices.size() - 1;
+    if (contiguous && entryIndices.getFirst() == insertAt)
+        return false;
+
+    juce::Array<PlaylistEntry> moving;
+    for (auto index : entryIndices)
+        moving.add(playlist->entries.getReference(index));
+
+    for (int i = entryIndices.size(); --i >= 0;)
+        playlist->entries.remove(entryIndices[i]);
+
+    for (int i = 0; i < moving.size(); ++i)
+        playlist->entries.insert(insertAt + i, moving.getReference(i));
+
+    save(*playlist);
+    return true;
+}
+
+bool PlaylistLibrary::moveEntriesBy(const juce::Uuid& id, juce::Array<int> entryIndices, int delta)
+{
+    auto* playlist = findById(id);
+    if (playlist == nullptr || entryIndices.isEmpty() || delta == 0)
+        return false;
+
+    entryIndices.sort();
+
+    // juce::Array has no removeDuplicates of its own; sorted, a repeat is
+    // always the entry before.
+    for (int i = entryIndices.size(); --i > 0;)
+        if (entryIndices[i] == entryIndices[i - 1])
+            entryIndices.remove(i);
+
+    if (delta < 0)
+    {
+        if (entryIndices.getFirst() == 0)
+            return false; // already at the top
+
+        return moveEntriesTo(id, entryIndices, entryIndices.getFirst() - 1);
+    }
+
+    if (entryIndices.getLast() >= playlist->entries.size() - 1)
+        return false; // already at the bottom
+
+    // Past the entry below the block: +2 because the target is "before
+    // the entry at this index", and the block itself is still in the way.
+    return moveEntriesTo(id, entryIndices, entryIndices.getLast() + 2);
+}
+
 void PlaylistLibrary::setShuffle(const juce::Uuid& id, bool shouldShuffle)
 {
     auto* playlist = findById(id);

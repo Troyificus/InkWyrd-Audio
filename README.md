@@ -339,6 +339,17 @@ playing one marked.
   selected. Removing more than one track asks first, since there's no
   undo. The files themselves are never deleted, and stay in your
   library.
+- **Reorder the playlist**, which is the order it plays in with Shuffle
+  off:
+  - **Drag a selected track** (or several) up or down and drop it where
+    you want it. A line shows where it will land. Dragging a track that
+    *isn't* selected starts a selection instead, so select first, then
+    drag.
+  - Or select a track and press the **Up / Down arrow keys** to walk it
+    through the list. The track stays selected, so you can keep going.
+  - Tracks that came from a **linked folder** play in the folder's own
+    order and can't be moved on their own. Add tracks individually if
+    you want to arrange them yourself.
 - Right-click a track (or a selection) to **Edit tags...** or remove it.
 - Adding tracks to the playlist that's playing never interrupts it: the
   current track carries on and the new ones join the running order.
@@ -824,6 +835,7 @@ tracks.)
 | Library search box | **Esc** | Clear the search |
 | Library track list | **Delete** | Remove the selected tracks from the library |
 | Playlist window | **Delete** | Remove the selected tracks from the playlist |
+| Playlist window | **Up / Down** | Move the selected tracks up or down the playlist |
 | Playlist window | **Ctrl+A** | Select every track |
 | Playlist window | **Shift+click / Ctrl+click** | Select a range / pick tracks one at a time |
 | Naming a new playlist | **Enter** | Save the name |

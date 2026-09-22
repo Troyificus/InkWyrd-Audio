@@ -174,6 +174,65 @@ namespace
                 check(file.existsAsFile(), "removing a track from a playlist never deletes the file: "
                                             + file.getFileName());
 
+            {
+                // Reordering (beta.30). A playlist's order IS its entry
+                // order, so moving tracks up and down the Playlist window
+                // is this - and getting the arithmetic wrong here silently
+                // rearranges somebody's session.
+                PlaylistLibrary orderLibrary(formatManager);
+                orderLibrary.setDirectory(removeScratch.getChildFile("order-playlists"));
+                orderLibrary.loadAll();
+
+                auto& ordered = orderLibrary.createPlaylist("Order");
+                auto orderId = ordered.id;
+                orderLibrary.addFiles(orderId, six);
+
+                auto names = [&orderLibrary, orderId]
+                {
+                    juce::StringArray out;
+                    for (const auto& entry : orderLibrary.findById(orderId)->entries)
+                        out.add(entry.path.getFileNameWithoutExtension().fromLastOccurrenceOf("track-", false, false));
+                    return out.joinIntoString(",");
+                };
+
+                check(names() == "0,1,2,3,4,5", "six tracks in the order they were added");
+
+                // One track down, then back up: the pair of moves the
+                // Down and Up keys make.
+                check(orderLibrary.moveEntriesBy(orderId, { 2 }, 1), "a track moves down");
+                check(names() == "0,1,3,2,4,5", "and lands one place later");
+                check(orderLibrary.moveEntriesBy(orderId, { 3 }, -1), "and back up");
+                check(names() == "0,1,2,3,4,5", "to exactly where it was");
+
+                // A block keeps its own order and stays together.
+                check(orderLibrary.moveEntriesBy(orderId, { 0, 1 }, 1), "a block of tracks moves down together");
+                check(names() == "2,0,1,3,4,5", "keeping their order among themselves");
+
+                // The ends.
+                check(! orderLibrary.moveEntriesBy(orderId, { 0 }, -1), "the top track can't go up");
+                check(! orderLibrary.moveEntriesBy(orderId, { 5 }, 1), "the bottom track can't go down");
+                check(names() == "2,0,1,3,4,5", "and neither attempt changes anything");
+
+                // Dropping a dragged selection: before the entry at that
+                // index, whether it comes from above or below.
+                check(orderLibrary.moveEntriesTo(orderId, { 4 }, 0), "a track can be dragged to the top");
+                check(names() == "4,2,0,1,3,5", "landing before everything else");
+                check(orderLibrary.moveEntriesTo(orderId, { 0 }, 6), "and dragged to the very end");
+                check(names() == "2,0,1,3,5,4", "landing after everything else");
+
+                check(! orderLibrary.moveEntriesTo(orderId, { 2 }, 2),
+                       "dropping a track exactly where it already is does nothing");
+                check(! orderLibrary.moveEntriesTo(orderId, { 99 }, 0), "an index that isn't there does nothing");
+
+                PlaylistLibrary reloadedOrder(formatManager);
+                reloadedOrder.setDirectory(removeScratch.getChildFile("order-playlists"));
+                reloadedOrder.loadAll();
+                juce::StringArray saved;
+                for (const auto& entry : reloadedOrder.findById(orderId)->entries)
+                    saved.add(entry.path.getFileNameWithoutExtension().fromLastOccurrenceOf("track-", false, false));
+                check(saved.joinIntoString(",") == "2,0,1,3,5,4", "and the new order is what's saved");
+            }
+
             removeScratch.deleteRecursively();
         }
 

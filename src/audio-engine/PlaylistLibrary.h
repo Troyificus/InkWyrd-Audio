@@ -107,6 +107,22 @@ public:
     // get the order exactly right. Indices out of range, or repeated,
     // are ignored.
     void removeEntries(const juce::Uuid& id, juce::Array<int> entryIndices);
+
+    // Moves entries so they sit immediately before the entry currently at
+    // targetIndex, keeping their order among themselves. targetIndex ==
+    // the number of entries puts them at the end. Saved once.
+    //
+    // A playlist's order IS its entry order (see resolve), so this is
+    // what reordering tracks in the Playlist window comes down to. A
+    // LINKED FOLDER is one entry: it moves as a block, because the files
+    // inside it are the folder's own order, not the playlist's.
+    //
+    // Returns true if anything actually moved.
+    bool moveEntriesTo(const juce::Uuid& id, juce::Array<int> entryIndices, int targetIndex);
+
+    // One step earlier (-1) or later (+1), as the Up/Down keys do. A
+    // block already at the end it's heading for doesn't move.
+    bool moveEntriesBy(const juce::Uuid& id, juce::Array<int> entryIndices, int delta);
     void setShuffle(const juce::Uuid& id, bool shouldShuffle);
 
     ResolvedPlaylist resolve(const Playlist& playlist) const;

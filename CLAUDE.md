@@ -1852,6 +1852,35 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Reordering a playlist (beta.30)
+
+Drag a selected track (or several) to a new place, or press Up/Down.
+
+- **A playlist's order IS its entry order** (see `resolve`), so this is
+  `PlaylistLibrary::moveEntriesTo` / `moveEntriesBy`: move the ENTRIES,
+  save once. `moveEntriesTo` takes "before the entry currently at this
+  index" and works out where the block lands once the moved entries are
+  out of the list (every moved index below the target shifts it up one).
+- **A LINKED FOLDER is one entry**, so its tracks can't be reordered
+  individually - they're in the folder's order, not the playlist's.
+  Selections containing them are refused with a message rather than
+  moving a whole album because one of its tracks was selected. Same
+  reasoning as removal.
+- **Drag conflicts with the drag-SELECT added in beta.29.** Resolved the
+  way Explorer does: dragging a row that is ALREADY selected moves it,
+  dragging anything else rubber-bands a selection. `mouseDown` decides
+  which, `dragMoving` carries it. If either is ever changed, check the
+  other still works.
+- **Up/Down move the tracks, not the selection** - what the user asked
+  for. That means giving up JUCE's own arrow-key navigation in this
+  list; the component is a `juce::KeyListener` on the table, which gets
+  first refusal before the table's own `keyPressed`. Selection follows
+  the moved files (`reselectFiles`), so repeated presses keep walking
+  the same track.
+- 17 checks on the move arithmetic (single, block, both ends, drag to
+  top/end, no-op cases, persistence). The UI half - the drop line, the
+  Explorer-style drag rule - is by hand only.
+
 ### Selecting many tracks in a playlist, and a mic volume (beta.29)
 
 **Playlist window multi-select.** `setMultipleSelectionEnabled(true)`
