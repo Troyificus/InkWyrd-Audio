@@ -35,6 +35,9 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     warningBannerLabel.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
     addAndMakeVisible(warningBannerLabel);
 
+    // Hidden until the update check actually finds something.
+    addChildComponent(updateLink);
+
     monitorHintLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
     addAndMakeVisible(monitorHintLabel);
 
@@ -266,6 +269,21 @@ void PlayerComponent::setDiscordStatus(const juce::String& text)
     discordStatusLabel.setText(text, juce::dontSendNotification);
 }
 
+void PlayerComponent::setUpdateAvailable(const juce::String& version, const juce::URL& releasePage)
+{
+    // HyperlinkButton opens its URL in the default browser when clicked.
+    // The address is on the tooltip too, so it can be read before
+    // clicking - it's a link to a download page, and people should be
+    // able to see where it goes.
+    updateLink.setButtonText("Update available: " + version);
+    updateLink.setURL(releasePage);
+    updateLink.setTooltip("Opens " + releasePage.toString(false) + " in your browser");
+    updateLink.setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::bold)), false,
+                        juce::Justification::centredRight);
+    updateLink.setVisible(true);
+    resized();
+}
+
 void PlayerComponent::setMasterVolume(float volume)
 {
     // dontSendNotification: this is restoring a saved value, not the user
@@ -400,6 +418,13 @@ void PlayerComponent::resized()
     auto headerRow = area.removeFromTop(26);
     settingsButton.setBounds(headerRow.removeFromRight(90));
     headerRow.removeFromRight(8);
+
+    if (updateLink.isVisible())
+    {
+        updateLink.setBounds(headerRow.removeFromRight(juce::jmin(240, headerRow.getWidth() / 2)));
+        headerRow.removeFromRight(8);
+    }
+
     discordStatusLabel.setBounds(headerRow);
     area.removeFromTop(8);
 
@@ -506,5 +531,8 @@ void PlayerComponent::lookAndFeelChanged()
 {
     discordStatusLabel.setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
     warningBannerLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
+
+    // Accent, not warning: an update is good news, not a problem.
+    updateLink.setColour(juce::HyperlinkButton::textColourId, inkwyrd::theme::accent);
     monitorHintLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
 }

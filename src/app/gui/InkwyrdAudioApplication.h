@@ -81,6 +81,10 @@ private:
     // downloads anything - see UpdateCheck.h.
     void startUpdateCheckIfEnabled();
 
+    // Puts the update link on the Player, if the check found something
+    // and the Player exists yet.
+    void showUpdateLinkIfAny();
+
     // Relaunch the app. Only offered when Discord settings genuinely
     // can't be applied to the running session (a connection has already
     // been made this run).
@@ -103,6 +107,12 @@ private:
     // already there rather than the list starting empty next to full
     // playlists.
     void migrateTrackLibraryIfNeeded();
+
+    // Puts the Setup music folder's tracks into the master track library,
+    // once. Called on first run as Setup makes its playlist, and at
+    // startup to repair installs set up before that happened - see
+    // AppSettings::isSetupFolderInLibrary.
+    void addSetupFolderToLibraryIfNeeded();
 
     void activatePlaylist(const juce::Uuid& id);
 
@@ -228,9 +238,9 @@ private:
     // windows to show real titles instead of filenames.
     TrackMetadataStore trackMetadata;
 
-    // Set when the update check finds something newer, so the banner can
-    // say so alongside whatever else it has to report.
-    juce::String updateNotice;
+    // Set when the update check finds something newer. The URL has
+    // already been through safeReleasePageUrl.
+    juce::String updateVersion, updateUrl;
 
     juce::String audioDeviceError; // non-empty if initialiseWithDefaultDevices() failed - see initialise()
 

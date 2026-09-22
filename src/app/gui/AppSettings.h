@@ -105,6 +105,15 @@ public:
     double getDuckThresholdDb() const;
     void setDuckThresholdDb(double thresholdDb);
 
+    // Whether the one-time repair has put the Setup music folder's tracks
+    // into the master track library. Before beta.28.1 first run never did,
+    // so an install set up then has an empty All Tracks. A flag rather
+    // than "is the library empty?", for the same reason as the migration
+    // flags: someone who later removes those tracks on purpose must not
+    // have them put back on every launch.
+    bool isSetupFolderInLibrary() const;
+    void setSetupFolderInLibrary(bool done);
+
     // Whether to ask GitHub, once per launch, if there's a newer
     // release. On by default; it only ever reports.
     bool shouldCheckForUpdates() const;

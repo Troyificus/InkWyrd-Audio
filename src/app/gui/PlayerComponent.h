@@ -60,6 +60,10 @@ public:
     // unreadable playlist files. Empty text keeps the banner hidden.
     void setWarningBanner(const juce::String& text);
 
+    // Shows the update link. The URL must already have been through
+    // inkwyrd::safeReleasePageUrl - this only displays what it's given.
+    void setUpdateAvailable(const juce::String& version, const juce::URL& releasePage);
+
     // Re-reads the engines' current shuffle/mute/monitor state into the
     // button labels, for when something outside this component changes
     // it (connecting to Discord turns local monitoring off).
@@ -102,6 +106,12 @@ private:
     std::unique_ptr<NowPlayingDisplay> nowPlaying;
     juce::Label discordStatusLabel;
     juce::Label warningBannerLabel; // hidden (zero height) unless given non-empty text
+
+    // "Update available", as a real link: the banner it used to be part of
+    // was plain text, so the address could be neither clicked nor copied.
+    // In the header row beside Settings, and only there once there IS an
+    // update, so it costs the window no height.
+    juce::HyperlinkButton updateLink;
     juce::Label monitorHintLabel;   // "Monitor is off" - only while that actually means silence
 
     bool discordConfigured = false;

@@ -351,6 +351,29 @@ void PlaylistLibrary::setShuffle(const juce::Uuid& id, bool shouldShuffle)
     save(*playlist);
 }
 
+juce::Array<juce::File> PlaylistLibrary::tracksLinkedToFolder(const juce::File& folder) const
+{
+    juce::Array<juce::File> tracks;
+
+    for (const auto* playlist : playlists)
+    {
+        auto resolved = resolve(*playlist);
+
+        for (int i = 0; i < resolved.files.size(); ++i)
+        {
+            auto entryIndex = resolved.sourceEntryIndex[i];
+            if (! juce::isPositiveAndBelow(entryIndex, playlist->entries.size()))
+                continue;
+
+            const auto& entry = playlist->entries.getReference(entryIndex);
+            if (entry.kind == PlaylistEntry::Kind::folder && entry.path == folder)
+                tracks.addIfNotAlreadyThere(resolved.files[i]);
+        }
+    }
+
+    return tracks;
+}
+
 ResolvedPlaylist PlaylistLibrary::resolve(const Playlist& playlist) const
 {
     ResolvedPlaylist resolved;

@@ -83,6 +83,31 @@ namespace inkwyrd
     // release of this app so far is one. The first entry is the newest.
     ReleaseInfo parseReleasesJson(const juce::String& json);
 
+    // The page an update link may open. The address comes from GitHub's
+    // reply, and a link in this app must never open anything but this
+    // project's own GitHub pages, whatever that reply says - so anything
+    // else (another site, another repository, plain http, a lookalike
+    // host) becomes the Releases page instead.
+    inline constexpr const char* kReleasesPageUrl = "https://github.com/Troyificus/InkWyrd-Audio/releases";
+
+    inline juce::String safeReleasePageUrl(const juce::String& fromReply)
+    {
+        // The trailing slash matters: without it "InkWyrd-Audio-evil"
+        // would pass as this repository.
+        const juce::String repositoryPrefix = "https://github.com/Troyificus/InkWyrd-Audio/";
+
+        // ".." and backslashes are refused as well: a browser tidies
+        // "InkWyrd-Audio/../../somewhere-else" into a path outside this
+        // repository.
+        auto trimmed = fromReply.trim();
+        if (trimmed.startsWithIgnoreCase(repositoryPrefix)
+            && ! trimmed.containsAnyOf(" \"\r\n<>\\")
+            && ! trimmed.contains(".."))
+            return trimmed;
+
+        return kReleasesPageUrl;
+    }
+
     // Asks GitHub, once, whether anything newer than this build exists,
     // on a background thread.
     //

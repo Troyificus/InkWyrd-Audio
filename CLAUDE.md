@@ -1852,6 +1852,52 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### First-run library, and a clickable update link (beta.28.1)
+
+**First run never put the Setup music folder's tracks into All Tracks.**
+Setup made a linked playlist from the folder and started it playing, but
+`trackLibrary` was only ever seeded by `migrateTrackLibraryIfNeeded`,
+which on a genuine first run runs BEFORE Setup (no playlists yet) and
+then sets its flag for good. So a new user had music playing and an
+empty All Tracks - the only place to preview, search or tag from. It is
+very likely why a tester couldn't find how to preview.
+
+- `PlaylistLibrary::tracksLinkedToFolder(folder)` returns only tracks
+  that reached a playlist through a folder entry for exactly that folder
+  - not files added to the same playlist by hand.
+- `addSetupFolderToLibraryIfNeeded()` registers them, once, behind the
+  `setupFolderTracksInLibrary` flag. Called in `completeSetupAndLaunch`
+  (the fix) and at startup (the REPAIR for installs made before this).
+  It leaves the flag unset when no playlist links the folder yet - on a
+  genuine first run that's the startup call, before Setup exists - so
+  the Setup call still gets to do it.
+- Deliberately NOT extended to "every playlist edit registers its
+  tracks": the library and playlists are separate by design (removing a
+  track from the library must not be undone by the next playlist edit).
+  A linked folder's NEW files after Refresh still don't join All Tracks;
+  noted, not changed.
+
+**The update notice is a real link now.** It was a line of text in the
+warning banner - neither clickable nor copyable. It is a
+`juce::HyperlinkButton` in the Player's header row, beside Settings,
+visible only when there is an update (so it costs no height). Tooltip
+shows the address. `showUpdateLinkIfAny()` runs from both the check's
+callback and `showPlayer`, because on a first run the answer can arrive
+while Setup is still up and no Player exists.
+
+- **`safeReleasePageUrl` decides what the link may open**, because the
+  address comes from GitHub's reply: only
+  `https://github.com/Troyificus/InkWyrd-Audio/...`, with the trailing
+  slash (else `InkWyrd-Audio-evil` passes), no `..` (a browser tidies it
+  out of the repository), no backslashes, quotes, spaces or angle
+  brackets. Anything else becomes the Releases page. 7 checks.
+
+**Test isolation gotcha:** `PlaylistLibrary::loadAll` reads every `.json`
+at the top of its directory as a playlist, and several self-tests point
+it at `scratch` itself. A new test that saved a track-library file into
+`scratch` broke two unrelated playlist checks. Give new tests their own
+subfolder.
+
 ### Length columns (beta.28)
 
 A **Length** column in the Library table (sortable) and the Playlist

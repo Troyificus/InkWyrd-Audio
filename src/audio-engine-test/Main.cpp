@@ -77,6 +77,45 @@ namespace
             return 1;
 
         {
+            // beta.28.1: the Setup music folder's tracks reach All Tracks.
+            // First run used to make the playlist but never put its tracks
+            // in the library - so a new user had music playing and an EMPTY
+            // All Tracks, the only place to preview, search or tag from.
+            // Everything in a folder of its own: the playlist tests below
+            // read every .json at the top of `scratch` as a playlist.
+            auto setupScratch = scratch.getChildFile("setup-folder-test");
+            setupScratch.createDirectory();
+
+            PlaylistLibrary setupLibrary(formatManager);
+            setupLibrary.setDirectory(setupScratch.getChildFile("playlists"));
+            setupLibrary.loadAll();
+
+            auto& fromSetup = setupLibrary.createFromLegacyFolder(musicFolder);
+            check(setupLibrary.tracksLinkedToFolder(musicFolder).size() == folderTracks.size(),
+                   "every track from the Setup music folder's playlist is found for the library");
+
+            // Only what came through THAT folder - a file added to the
+            // same playlist by hand is somebody else's decision.
+            auto elsewhere = setupScratch.getChildFile("elsewhere.wav");
+            folderTracks[0].copyFileTo(elsewhere);
+            setupLibrary.addFiles(fromSetup.id, { elsewhere });
+            check(! setupLibrary.tracksLinkedToFolder(musicFolder).contains(elsewhere),
+                   "a file added to that playlist by hand is not counted as the folder's");
+
+            check(setupLibrary.tracksLinkedToFolder(setupScratch.getChildFile("no-such-folder")).isEmpty(),
+                   "a folder no playlist links to gives nothing");
+
+            TrackLibrary library;
+            library.setFile(setupScratch.getChildFile("track-library.json"));
+            library.load();
+            library.registerTracks(setupLibrary.tracksLinkedToFolder(musicFolder));
+            check(library.getNumTracks() == folderTracks.size(),
+                   "so All Tracks has the Setup folder's music in it");
+
+            setupScratch.deleteRecursively();
+        }
+
+        {
             PlaylistLibrary library(formatManager);
             library.setDirectory(scratch);
             library.loadAll();
@@ -746,6 +785,25 @@ namespace
             check(! inkwyrd::parseReleasesJson("[]").valid, "no releases at all is not a release");
             check(! inkwyrd::parseReleasesJson(R"([{"tag_name":"v9.9.9","draft":true}])").valid,
                    "a draft release is skipped - nobody else can download it");
+
+            // The update LINK: whatever the reply says, it may only open
+            // this project's own GitHub pages.
+            using inkwyrd::safeReleasePageUrl;
+            const juce::String releases = inkwyrd::kReleasesPageUrl;
+            const juce::String real = "https://github.com/Troyificus/InkWyrd-Audio/releases/tag/v0.1.0-beta.29";
+
+            check(safeReleasePageUrl(real) == real, "a real release page is linked to as it is");
+            check(safeReleasePageUrl("https://example.com/download") == releases,
+                   "another site becomes the Releases page instead");
+            check(safeReleasePageUrl("https://github.com.evil.example/Troyificus/InkWyrd-Audio/x") == releases,
+                   "a lookalike host is refused");
+            check(safeReleasePageUrl("https://github.com/Troyificus/InkWyrd-Audio-evil/releases") == releases,
+                   "a lookalike repository name is refused");
+            check(safeReleasePageUrl("http://github.com/Troyificus/InkWyrd-Audio/releases/tag/v1") == releases,
+                   "plain http is refused");
+            check(safeReleasePageUrl("https://github.com/Troyificus/InkWyrd-Audio/../../someone/else") == releases,
+                   "a path that climbs out of the repository is refused");
+            check(safeReleasePageUrl({}) == releases, "no address at all gives the Releases page");
         }
 
         {

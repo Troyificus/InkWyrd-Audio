@@ -104,6 +104,15 @@ public:
 
     ResolvedPlaylist resolve(const Playlist& playlist) const;
 
+    // Every track that reaches any playlist through a folder link to
+    // exactly this folder. Used to put the Setup music folder's tracks
+    // into the master track library - which first run used to skip,
+    // leaving All Tracks empty (and preview, search and tagging out of
+    // reach) while the playlist beside it played fine. Only the tracks
+    // that came through THAT folder's entry, not everything else in the
+    // same playlist.
+    juce::Array<juce::File> tracksLinkedToFolder(const juce::File& folder) const;
+
     // Every mutator above saves immediately - these are rare, user-driven,
     // single small-file writes, and losing an edit to a crash would be
     // worse than the cost of writing.

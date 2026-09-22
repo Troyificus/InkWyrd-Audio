@@ -149,10 +149,10 @@ This gets you from nothing to music playing, without setting up Discord.
 6. **Open the other windows** from the buttons along the bottom of the
    Player: **Playlist**, **Library**, **Voice FX**, **Soundboard**,
    **Scenes**.
-7. **Fill your library.** In the Library window, the lower list is
-   **All Tracks**. If it's empty, click **Add folder...** and choose
-   your music folder. That's where you can search, preview and edit your
-   tracks.
+7. **Look at your library.** In the Library window, the lower list is
+   **All Tracks**: your music folder's tracks are already in it. That's
+   where you search, preview and edit them. Add more music with **Add
+   folder...** or **Add files...**.
 
 When you're ready to play over Discord, follow
 [Connecting to Discord](#connecting-to-discord).
@@ -186,8 +186,11 @@ Inkwyrd is six windows you can arrange however suits your screen:
 **The warning banner** on the Player window is where Inkwyrd tells you
 about anything that would otherwise fail silently: the audio device
 didn't open, a playlist has no playable files, tracks are missing from
-disk, a file couldn't be read, or a newer version of Inkwyrd is
-available.
+disk, or a file couldn't be read.
+
+**When a newer version is out**, an **Update available** link appears
+at the top of the Player window, next to Settings. Click it to open the
+release page in your browser.
 
 ## Playing music
 
@@ -762,9 +765,11 @@ the next time it starts, and it offers to restart. Your version number
 is shown at the bottom right.
 
 **Updates.** With the update check on, Inkwyrd asks GitHub once at
-startup whether a newer release exists, and says so in the Player's
-warning banner with a link. **It never downloads or installs anything**
-- you get the new version from the Releases page yourself.
+startup whether a newer release exists. If one does, an **Update
+available** link appears at the top of the Player window: click it to
+open the release page in your browser, or hover over it to see the
+address first. **It never downloads or installs anything** - you get the
+new version from that page yourself.
 
 **Your files** all live in `%APPDATA%\Inkwyrd Audio` (paste that into
 Explorer's address bar to open it): settings, playlists, the

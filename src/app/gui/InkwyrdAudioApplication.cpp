@@ -113,6 +113,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     trackLibrary.setFile(TrackLibrary::getDefaultFile());
     trackLibrary.load();
     migrateTrackLibraryIfNeeded();
+    addSetupFolderToLibraryIfNeeded();
 
     // Cached tags. Loading is instant; anything new or changed is picked
     // up by the background scan started once the windows exist, so a
@@ -236,6 +237,16 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     startUpdateCheckIfEnabled();
 }
 
+void InkwyrdAudioApplication::showUpdateLinkIfAny()
+{
+    // Also called from showPlayer: on a first run the check can answer
+    // while Setup is still on screen and the Player doesn't exist yet.
+    if (updateVersion.isEmpty() || playerWindow == nullptr)
+        return;
+
+    playerWindow->getPlayerComponent().setUpdateAvailable(updateVersion, juce::URL(updateUrl));
+}
+
 void InkwyrdAudioApplication::applyDuckSettings()
 {
     inkwyrd::DuckSettings duckSettings;
@@ -254,15 +265,15 @@ void InkwyrdAudioApplication::startUpdateCheckIfEnabled()
     inkwyrd::checkForNewerRelease(INKWYRD_VERSION_STRING,
                                    [this](inkwyrd::ReleaseInfo release)
     {
-        // The banner rather than a dialog: a box in the way at startup
-        // is worse than the news is good, and this is news, not a
-        // problem. The link is spelled out because the banner is text.
-        updateNotice = "Inkwyrd Audio " + release.version + " is available - "
-                        + (release.url.isNotEmpty() ? release.url
-                                                     : juce::String("see the GitHub releases page"));
+        // A link on the Player rather than a dialog: a box in the way at
+        // startup is worse than the news is good. It used to be a line of
+        // plain text in the warning banner, where the address could be
+        // neither clicked nor copied.
+        updateVersion = release.version;
+        updateUrl = inkwyrd::safeReleasePageUrl(release.url);
 
         logLine("[Update] newer release available: " + release.version);
-        updateWarningBanner();
+        showUpdateLinkIfAny();
     });
 }
 
@@ -327,6 +338,26 @@ void InkwyrdAudioApplication::migrateTrackLibraryIfNeeded()
 
     settings.setTrackLibraryMigrated(true);
     settings.save(); // AppSettings has no autosave - this call is mandatory
+}
+
+void InkwyrdAudioApplication::addSetupFolderToLibraryIfNeeded()
+{
+    if (settings.isSetupFolderInLibrary() || ! settings.isPlaylistFolderSet())
+        return;
+
+    auto tracks = library.tracksLinkedToFolder(settings.getPlaylistFolder());
+
+    // No playlist linked to it (yet) means nothing to repair - and on a
+    // genuine first run that's the case here, before Setup has made one.
+    // Left unset then, so completeSetupAndLaunch still does it.
+    if (tracks.isEmpty())
+        return;
+
+    auto added = trackLibrary.registerTracks(tracks);
+    logLine("[App] Added " + juce::String(added) + " track(s) from the Setup music folder to the library");
+
+    settings.setSetupFolderInLibrary(true);
+    settings.save();
 }
 
 void InkwyrdAudioApplication::activatePlaylist(const juce::Uuid& id)
@@ -975,6 +1006,7 @@ void InkwyrdAudioApplication::showPlayer()
     }
 
     updateWarningBanner();
+    showUpdateLinkIfAny();
 }
 
 void InkwyrdAudioApplication::updateWarningBanner()
@@ -1015,10 +1047,7 @@ void InkwyrdAudioApplication::updateWarningBanner()
     warnings.addArray(trackGains.getLoadWarnings());
     warnings.addArray(sceneLibrary.getLoadWarnings());
 
-    // Last: it is the one line here that isn't a problem, and it should
-    // not push a real warning out of sight.
-    if (updateNotice.isNotEmpty())
-        warnings.add(updateNotice);
+
 
     player->setWarningBanner(warnings.joinIntoString("  |  "));
 }
@@ -1093,6 +1122,13 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
 
         if (existing == nullptr)
             existing = &library.createFromLegacyFolder(result.playlistFolder);
+
+        // Its tracks go into All Tracks too. First run used to skip this,
+        // so a brand-new user saw a playlist playing and an EMPTY library
+        // beside it - and the library is the only place to preview,
+        // search or tag from. Before the windows are built, so the Library
+        // opens already showing them.
+        addSetupFolderToLibraryIfNeeded();
 
         activatePlaylist(existing->id);
     }
