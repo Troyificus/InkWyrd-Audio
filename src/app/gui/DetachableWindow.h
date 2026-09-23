@@ -181,6 +181,11 @@ private:
 
     // Native drag/resize interception - see the class comment.
     void installNativeHookIfNeeded();
+
+    // INKWYRD_RENDERER=software|direct2d picks JUCE's renderer for this
+    // window; unset leaves JUCE's default (Direct2D). A test switch for the
+    // white resize "ghost" - see applyRendererIfNeeded() in the .cpp.
+    void applyRendererIfNeeded();
     void removeNativeHook();
 
     // Makes this window owned by the master, if it isn't already and

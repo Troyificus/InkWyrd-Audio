@@ -464,6 +464,34 @@ void DetachableWindow::setHiddenByMasterMinimise(bool shouldBeHidden)
         toFront(false); // false: don't steal keyboard focus from the master
 }
 
+void DetachableWindow::applyRendererIfNeeded()
+{
+    // Why this exists: dragging a window's edge showed a white band over
+    // the newly exposed area, and the content lagged at the old size -
+    // in beta.30 too, so not the sprites. JUCE 8's Direct2D renderer
+    // doesn't paint in WM_PAINT; it queues the area and paints on the
+    // next vblank callback, which lags during Windows' modal resize loop.
+    // The software renderer paints synchronously inside WM_PAINT.
+    //
+    // A switch rather than a new default until someone has compared the
+    // two by dragging a real window - a synthetic drag can't reproduce
+    // Windows' own resize loop faithfully, and this can't be judged from
+    // a screenshot.
+    auto requested = juce::SystemStats::getEnvironmentVariable("INKWYRD_RENDERER", "").trim().toLowerCase();
+    if (requested.isEmpty())
+        return;
+
+    auto* peer = getPeer();
+    if (peer == nullptr)
+        return;
+
+    auto engineName = requested == "software" ? "Software Renderer" : "Direct2D";
+    auto index = peer->getAvailableRenderingEngines().indexOf(engineName);
+
+    if (index >= 0 && peer->getCurrentRenderingEngine() != index)
+        peer->setCurrentRenderingEngine(index);
+}
+
 void DetachableWindow::closeButtonPressed()
 {
     setVisible(false);
@@ -501,6 +529,7 @@ void DetachableWindow::visibilityChanged()
     if (isVisible())
     {
         installNativeHookIfNeeded();
+        applyRendererIfNeeded();
 
         // Same reasoning as the hook: the native window only exists once
         // shown, so a satellite reopened later has to be re-owned here
