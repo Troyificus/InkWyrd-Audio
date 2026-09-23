@@ -10,6 +10,11 @@ namespace inkwyrd
         constexpr const char* kFontsKey = "fonts";
         constexpr const char* kMetricsKey = "metrics";
         constexpr const char* kLogoKey = "logo";
+        constexpr const char* kFontFilesKey = "fontFiles";
+
+        // A font file bigger than this is almost certainly not a font - and
+        // it would be read into memory whole.
+        constexpr juce::int64 kMaxFontFileBytes = 8 * 1024 * 1024;
 
         // A skin's whole colour vocabulary, in one table, so parsing and
         // exporting can't drift apart and the README has one list to
@@ -255,6 +260,24 @@ namespace inkwyrd
                 result.logoFile = logo;
             else
                 result.warnings.add("Logo \"" + logoName + "\" wasn't found - using the drawn mark.");
+        }
+
+        if (auto* fontFiles = json.getProperty(kFontFilesKey, {}).getArray())
+        {
+            for (const auto& entry : *fontFiles)
+            {
+                auto fileName = entry.toString().trim();
+                auto file = skinFolder.getChildFile(fileName);
+
+                if (fileName.isEmpty() || ! file.existsAsFile())
+                    result.warnings.add("Font file \"" + fileName + "\" wasn't found - ignored.");
+                else if (! file.hasFileExtension("ttf;otf"))
+                    result.warnings.add("Font file \"" + fileName + "\" isn't a .ttf or .otf - ignored.");
+                else if (file.getSize() > kMaxFontFileBytes)
+                    result.warnings.add("Font file \"" + fileName + "\" is larger than 8 MB - ignored.");
+                else
+                    result.fontFiles.add(file);
+            }
         }
 
         // Sprites never fail the skin: its colours and fonts are still

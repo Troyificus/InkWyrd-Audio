@@ -24,6 +24,7 @@ expanded with what's actually been integrated since.
 | WASAPI | Part of Windows itself | Audio device I/O (chosen over ASIO - see below) |
 | [Elgato Stream Deck SDK](https://docs.elgato.com/streamdeck) (`@elgato/streamdeck`, `@elgato/cli`) | Standard free plugin-distribution terms | Stream Deck integration |
 | [ws](https://github.com/websockets/ws) | MIT | Stream Deck plugin's connection to the app's control server |
+| [Silkscreen](https://github.com/googlefonts/silkscreen) font, Copyright 2001 The Silkscreen Project Authors | SIL Open Font License 1.1 | The pixel font in the Pixel Phosphor example skin. Embedded in the app and written into that skin's folder with its licence as `Silkscreen-OFL.txt`, as the OFL requires; the font is not sold on its own |
 
 ## TagLib - the one copyleft dependency
 

@@ -1,5 +1,7 @@
 #include "PlayerComponent.h"
 
+#include "InkwyrdLookAndFeel.h"
+
 #include <iterator>
 
 #include "InkwyrdTheme.h"
@@ -519,40 +521,92 @@ void PlayerComponent::resized()
         area.removeFromTop(10);
     }
 
+    // Widths are measured from the text, with the old fixed widths as the
+    // minimum. A skin's font can be much wider than Segoe UI (Silkscreen
+    // is), and JUCE squeezes text that doesn't fit rather than clipping it -
+    // which is what made labels look crushed under a pixel font. Every
+    // label a button can show is measured, so the layout doesn't jump when
+    // "Mic: Live" becomes "Mic: Muted". Sliders take what's left.
+    constexpr int rowGap = 8;
+
+    auto fittedButtonWidth = [](int rowHeight, int minimum, std::initializer_list<const char*> texts)
+    {
+        auto font = InkwyrdLookAndFeel::buttonFont(rowHeight);
+        int widest = 0;
+        for (auto* text : texts)
+            widest = juce::jmax(widest, juce::GlyphArrangement::getStringWidthInt(font, text));
+        return juce::jmax(minimum, widest + 20); // drawButtonText insets the text 8px a side
+    };
+
+    auto fittedLabelWidth = [](juce::Label& label, int minimum)
+    {
+        auto font = label.getLookAndFeel().getLabelFont(label);
+        return juce::jmax(minimum, juce::GlyphArrangement::getStringWidthInt(font, label.getText())
+                                    + label.getBorderSize().getLeftAndRight() + 2);
+    };
+
+    // A slider's value box, sized for the longest thing it can say.
+    auto fitValueBox = [](juce::Slider& slider, int minimum, std::initializer_list<const char*> samples)
+    {
+        auto font = InkwyrdLookAndFeel::labelFont(15.0f);
+        int widest = 0;
+        for (auto* sample : samples)
+            widest = juce::jmax(widest, juce::GlyphArrangement::getStringWidthInt(font, sample));
+
+        auto width = juce::jmax(minimum, widest + 12);
+        if (slider.getTextBoxWidth() != width)
+            slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, width, 22);
+        return width;
+    };
+
+    fitValueBox(crossfadeSlider, 52, { "15.0 s" });
+    fitValueBox(loopGapSlider, 60, { "No gap", "10.0 s" });
+    fitValueBox(fadeOutSlider, 52, { "20.0 s" });
+    fitValueBox(masterVolumeSlider, 48, { "100%" });
+    fitValueBox(micVolumeSlider, 48, { "100%" });
+
     // Row one is the transport - the things pressed during a session.
     auto buttonRow = area.removeFromTop(32);
-    playButton.setBounds(buttonRow.removeFromLeft(80));
-    buttonRow.removeFromLeft(8);
-    stopButton.setBounds(buttonRow.removeFromLeft(70));
-    buttonRow.removeFromLeft(8);
-    fadeOutButton.setBounds(buttonRow.removeFromLeft(95));
-    buttonRow.removeFromLeft(8);
-    skipButton.setBounds(buttonRow.removeFromLeft(80));
-    buttonRow.removeFromLeft(8);
-    shuffleButton.setBounds(buttonRow.removeFromLeft(110));
+    auto h1 = buttonRow.getHeight();
+    playButton.setBounds(buttonRow.removeFromLeft(fittedButtonWidth(h1, 80, { "Play", "Pause" })));
+    buttonRow.removeFromLeft(rowGap);
+    stopButton.setBounds(buttonRow.removeFromLeft(fittedButtonWidth(h1, 70, { "Stop" })));
+    buttonRow.removeFromLeft(rowGap);
+    fadeOutButton.setBounds(buttonRow.removeFromLeft(fittedButtonWidth(h1, 95, { "Fade out", "Fading..." })));
+    buttonRow.removeFromLeft(rowGap);
+    skipButton.setBounds(buttonRow.removeFromLeft(fittedButtonWidth(h1, 80, { "Skip" })));
+    buttonRow.removeFromLeft(rowGap);
+    shuffleButton.setBounds(buttonRow.removeFromLeft(fittedButtonWidth(h1, 110, { "Shuffle: On", "Shuffle: Off" })));
 
     area.removeFromTop(8);
 
     // Row two is how the app behaves - set once and mostly left alone.
     auto settingsRow = area.removeFromTop(28);
-    muteButton.setBounds(settingsRow.removeFromLeft(100));
-    settingsRow.removeFromLeft(8);
-    monitorButton.setBounds(settingsRow.removeFromLeft(120));
+    auto h2 = settingsRow.getHeight();
+    muteButton.setBounds(settingsRow.removeFromLeft(fittedButtonWidth(h2, 100, { "Mic: Muted", "Mic: Live" })));
+    settingsRow.removeFromLeft(rowGap);
+    monitorButton.setBounds(settingsRow.removeFromLeft(fittedButtonWidth(h2, 120, { "Monitor: On", "Monitor: Off" })));
     settingsRow.removeFromLeft(18);
-    crossfadeCaption.setBounds(settingsRow.removeFromLeft(68));
-    crossfadeToggle.setBounds(settingsRow.removeFromLeft(46));
+    crossfadeCaption.setBounds(settingsRow.removeFromLeft(fittedLabelWidth(crossfadeCaption, 68)));
+    crossfadeToggle.setBounds(settingsRow.removeFromLeft(fittedButtonWidth(h2, 46, { "On", "Off" })));
     settingsRow.removeFromLeft(4);
-    crossfadeSlider.setBounds(settingsRow.removeFromLeft(140));
+    // Up to the old 140px, so the built-in look is laid out exactly as
+    // before; narrower only when a wider font has taken the room.
+    crossfadeSlider.setBounds(settingsRow.removeFromLeft(juce::jmin(140, settingsRow.getWidth())));
     area.removeFromTop(8);
 
     auto loopRow = area.removeFromTop(28);
-    loopCaption.setBounds(loopRow.removeFromLeft(66));
-    loopToggle.setBounds(loopRow.removeFromLeft(46));
+    loopCaption.setBounds(loopRow.removeFromLeft(fittedLabelWidth(loopCaption, 66)));
+    loopToggle.setBounds(loopRow.removeFromLeft(fittedButtonWidth(loopRow.getHeight(), 46, { "On", "Off" })));
     loopRow.removeFromLeft(4);
-    loopGapSlider.setBounds(loopRow.removeFromLeft(140));
+
+    // The two sliders on this row share what's left after the caption.
+    auto fadeCaptionWidth = fittedLabelWidth(fadeOutCaption, 70);
+    auto eachSlider = juce::jlimit(80, 140, (loopRow.getWidth() - 18 - fadeCaptionWidth) / 2);
+    loopGapSlider.setBounds(loopRow.removeFromLeft(eachSlider));
     loopRow.removeFromLeft(18);
-    fadeOutCaption.setBounds(loopRow.removeFromLeft(70));
-    fadeOutSlider.setBounds(loopRow.removeFromLeft(140));
+    fadeOutCaption.setBounds(loopRow.removeFromLeft(fadeCaptionWidth));
+    fadeOutSlider.setBounds(loopRow.removeFromLeft(eachSlider));
     area.removeFromTop(8);
 
     // Row three: your mic's volume on the left, the master on the right -
@@ -560,10 +614,10 @@ void PlayerComponent::resized()
     auto volumeRow = area.removeFromTop(28);
     masterVolumeSlider.setBounds(volumeRow.removeFromRight(180));
     volumeRow.removeFromRight(12);
-    masterVolumeCaption.setBounds(volumeRow.removeFromRight(56));
+    masterVolumeCaption.setBounds(volumeRow.removeFromRight(fittedLabelWidth(masterVolumeCaption, 56)));
 
-    micVolumeCaption.setBounds(volumeRow.removeFromLeft(40));
-    volumeRow.removeFromLeft(8);
+    micVolumeCaption.setBounds(volumeRow.removeFromLeft(fittedLabelWidth(micVolumeCaption, 40)));
+    volumeRow.removeFromLeft(rowGap);
     micVolumeSlider.setBounds(volumeRow.removeFromLeft(juce::jmin(180, volumeRow.getWidth() - 12)));
     area.removeFromTop(8);
 

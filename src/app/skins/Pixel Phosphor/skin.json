@@ -20,10 +20,14 @@
     "danger": "#e06a5a"
   },
   "fonts": {
-    "title": "Segoe UI Semibold",
-    "label": "Segoe UI",
-    "digits": "Consolas"
+    "title": "Silkscreen",
+    "label": "Silkscreen",
+    "digits": "Silkscreen"
   },
+  "fontFiles": [
+    "Silkscreen-Bold.ttf",
+    "Silkscreen-Regular.ttf"
+  ],
   "metrics": {
     "cornerRadius": 0,
     "titleBarHeight": 40

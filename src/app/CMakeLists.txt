@@ -128,6 +128,9 @@ juce_add_binary_data(InkwyrdSkinData
         "skins/Pixel Phosphor/skin.json"
         "skins/Pixel Phosphor/sprites.png"
         "skins/Pixel Phosphor/logo.png"
+        "skins/Pixel Phosphor/Silkscreen-Regular.ttf"
+        "skins/Pixel Phosphor/Silkscreen-Bold.ttf"
+        "skins/Pixel Phosphor/Silkscreen-OFL.txt"
 )
 
 target_link_libraries(InkwyrdAudioApp PRIVATE

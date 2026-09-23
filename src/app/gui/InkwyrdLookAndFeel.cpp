@@ -252,6 +252,11 @@ juce::Font InkwyrdLookAndFeel::titleFont(float height)
     return makeFont(current().titleFontName, height, juce::Font::bold);
 }
 
+juce::Font InkwyrdLookAndFeel::buttonFont(int buttonHeight)
+{
+    return labelFont((float) juce::jmin(15, buttonHeight - 10));
+}
+
 juce::Font InkwyrdLookAndFeel::labelFont(float height)
 {
     return makeFont(current().labelFontName, height, juce::Font::plain);
@@ -329,6 +334,101 @@ bool InkwyrdLookAndFeel::setSkinLogo(const juce::File& file, juce::String& error
 }
 
 bool InkwyrdLookAndFeel::hasSkinLogo() { return skinLogo != nullptr; }
+
+namespace
+{
+    // Typefaces loaded from the current skin's font files. Static, like the
+    // logo: fonts are resolved from everywhere, not just from painting code
+    // holding a LookAndFeel.
+    std::vector<juce::Typeface::Ptr> skinTypefaces;
+
+    juce::Typeface::Ptr findSkinTypeface(const juce::String& family, bool bold)
+    {
+        juce::Typeface::Ptr anyStyle;
+
+        for (auto& typeface : skinTypefaces)
+        {
+            if (! typeface->getName().equalsIgnoreCase(family))
+                continue;
+
+            if (typeface->getStyle().containsIgnoreCase("bold") == bold)
+                return typeface;
+
+            if (anyStyle == nullptr)
+                anyStyle = typeface;
+        }
+
+        // A bold request for a family that only came in regular still gets
+        // that family - the right face, a little lighter than asked for, is
+        // better than falling back to a different font altogether.
+        return anyStyle;
+    }
+}
+
+juce::StringArray InkwyrdLookAndFeel::setSkinFonts(const juce::Array<juce::File>& files, juce::String& errorMessage)
+{
+    skinTypefaces.clear();
+    juce::StringArray families;
+
+    for (auto& file : files)
+    {
+        juce::MemoryBlock data;
+        juce::Typeface::Ptr typeface;
+
+        if (file.loadFileAsData(data))
+            typeface = juce::Typeface::createSystemTypefaceFor(data.getData(), data.getSize());
+
+        if (typeface == nullptr)
+        {
+            errorMessage << (errorMessage.isEmpty() ? "" : " ")
+                         << "Couldn't read the font " << file.getFileName() << ".";
+            continue;
+        }
+
+        skinTypefaces.push_back(typeface);
+        families.addIfNotAlreadyThere(typeface->getName() + " " + typeface->getStyle());
+    }
+
+    // JUCE caches typefaces by font description; without this a skin change
+    // would keep drawing with whatever each font resolved to before.
+    juce::Typeface::clearTypefaceCache();
+    return families;
+}
+
+juce::Font InkwyrdLookAndFeel::getLabelFont(juce::Label& label)
+{
+    auto font = label.getFont();
+
+    // Only fonts that meant "the default" - a label deliberately given a
+    // specific family keeps it.
+    if (font.getTypefaceName() != juce::Font::getDefaultSansSerifFontName())
+        return font;
+
+    return juce::Font(juce::FontOptions(current().labelFontName, font.getHeight(), font.getStyleFlags()))
+               .withExtraKerningFactor(font.getExtraKerningFactor());
+}
+
+juce::Typeface::Ptr InkwyrdLookAndFeel::getTypefaceForFont(const juce::Font& font)
+{
+    auto family = font.getTypefaceName();
+    auto isDefaultSans = family == juce::Font::getDefaultSansSerifFontName();
+
+    if (isDefaultSans)
+        family = current().labelFontName;
+
+    if (auto skinFace = findSkinTypeface(family, font.isBold()))
+        return skinFace;
+
+    // An installed label font stands in for the default sans too.
+    if (isDefaultSans && family.isNotEmpty())
+    {
+        juce::Font named(font);
+        named.setTypefaceName(family);
+        return juce::Font::getDefaultTypefaceForFont(named);
+    }
+
+    return LookAndFeel_V4::getTypefaceForFont(font);
+}
 
 void InkwyrdLookAndFeel::drawLogo(juce::Graphics& g, juce::Rectangle<float> area,
                                    juce::Colour ink, juce::Colour glow)
@@ -526,7 +626,7 @@ void InkwyrdLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& but
          && sprites().findForState("button", SpriteState::on, button.getComponentID()) != nullptr)
         textColour = accent;
 
-    g.setFont(labelFont((float) juce::jmin(15, button.getHeight() - 10)));
+    g.setFont(buttonFont(button.getHeight()));
     g.setColour(textColour.withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.4f));
 
     g.drawFittedText(button.getButtonText(), button.getLocalBounds().reduced(8, 2),

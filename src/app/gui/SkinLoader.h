@@ -33,6 +33,11 @@ namespace inkwyrd
         // (which is a warning, not a failure - the drawn mark is used).
         juce::File logoFile;
 
+        // Font files the skin carries in its own folder ("fontFiles"), so it
+        // can use a typeface the user doesn't have installed. Its "fonts"
+        // section then names those families like any other.
+        juce::Array<juce::File> fontFiles;
+
         // Per-widget images, from the optional "sprites" section. Empty
         // when the skin has none, or when they couldn't be used - either
         // way every control falls back to the drawn look.

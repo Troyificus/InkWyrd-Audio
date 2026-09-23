@@ -756,10 +756,21 @@ Colours are `#rrggbb`, or `#aarrggbb` for transparency.
 | `warning` | Things needing attention: a missing file, a boosted track |
 | `danger` | The close button when you hover over it |
 
-**Fonts** name a font already installed on the computer; nothing is
-bundled. `title` is for headings, `label` for ordinary text, and
-`digits` for the time readout (a monospaced font stops the numbers
-jumping about). A font that isn't installed falls back to the default.
+**Fonts** name a font family. `title` is for headings, `label` for all
+ordinary text, and `digits` for the time readout (a monospaced font stops
+the numbers jumping about). A font that isn't available falls back to the
+default.
+
+A skin can bring its own font, so it works on computers that don't have
+it installed: put the font files next to your `skin.json` and list them
+in `fontFiles`, then name the family under `fonts` as usual. Include the
+font's licence file with them if it has one. **Pixel Phosphor** does this
+with the Silkscreen pixel font.
+
+```json
+"fontFiles": [ "Silkscreen-Regular.ttf", "Silkscreen-Bold.ttf" ],
+"fonts": { "title": "Silkscreen", "label": "Silkscreen", "digits": "Silkscreen" }
+```
 
 **`cornerRadius`** rounds panels, buttons and fields (`0` for square).
 **`titleBarHeight`** is kept between 28 and 80 pixels, so a window can

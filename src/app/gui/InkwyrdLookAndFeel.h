@@ -118,6 +118,32 @@ public:
     static bool setSkinLogo(const juce::File& file, juce::String& errorMessage);
     static bool hasSkinLogo();
 
+    // Fonts a skin carries as files (its "fontFiles"). Loaded once per skin
+    // change; the skin's "fonts" section then names their families like
+    // any installed font. Pass {} to drop them. Returns the families that
+    // loaded, for the log; anything unreadable is reported in errorMessage
+    // and skipped.
+    static juce::StringArray setSkinFonts(const juce::Array<juce::File>& files, juce::String& errorMessage);
+
+    // Resolves every font the app asks for. Two jobs: a family the skin
+    // brought as a file is found here rather than looked for among the
+    // installed fonts, and JUCE's default sans - which labels, lists and
+    // most hand-painted text use - becomes the skin's "label" font, so a
+    // skin's font reaches all ordinary text rather than only buttons and
+    // titles.
+    juce::Typeface::Ptr getTypefaceForFont(const juce::Font& font) override;
+
+    // Labels (and so slider value boxes and combo boxes, which draw through
+    // one) keep a Font that remembers the typeface it first resolved to -
+    // before any skin font existed. Rebuilt here in the skin's label family
+    // at paint time, keeping the label's own size and style.
+    juce::Font getLabelFont(juce::Label& label) override;
+
+    // The font a TextButton's label is drawn in at a given button height -
+    // one place, so a layout can measure text in exactly the font that will
+    // draw it.
+    static juce::Font buttonFont(int buttonHeight);
+
     static juce::Font titleFont(float height);
     static juce::Font labelFont(float height);
     static juce::Font digitFont(float height);

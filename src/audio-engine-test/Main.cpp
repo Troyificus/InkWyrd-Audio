@@ -877,6 +877,19 @@ namespace
                 check(sheetless.ok && sheetless.sprites.isEmpty() && ! sheetless.warnings.isEmpty(),
                        "a missing sheet still loads the skin's colours, and says the sprites are off");
 
+                // Font files: found ones are passed on, anything else is a
+                // warning rather than a failed skin.
+                folder.getChildFile("real.ttf").replaceWithText("not really a font, but a .ttf that exists");
+                folder.getChildFile("notes.txt").replaceWithText("x");
+                folder.getChildFile("skin.json").replaceWithText(R"({
+                    "fontFiles": [ "real.ttf", "missing.ttf", "notes.txt" ] })");
+                auto withFonts = SkinLoader::loadFromFolder(folder);
+                check(withFonts.ok && withFonts.fontFiles.size() == 1
+                       && withFonts.fontFiles[0].getFileName() == "real.ttf",
+                       "a skin's font files are found in its own folder");
+                check(withFonts.warnings.size() == 2,
+                       "a missing font file and a non-font file are each reported, not fatal");
+
                 auto noSprites = SkinLoader::loadFromFolder(scratch.getChildFile("skins").getChildFile("Exported"));
                 check(noSprites.ok && noSprites.sprites.isEmpty() && noSprites.warnings.isEmpty(),
                        "a skin with no sprites section is exactly what it was before sprites existed");
@@ -2834,6 +2847,11 @@ namespace
 
             inkwyrd::theme::applyPalette(result.palette);
             inkwyrd::setActiveSprites(std::move(result.sprites));
+            juce::String fontError;
+            for (auto& family : InkwyrdLookAndFeel::setSkinFonts(result.fontFiles, fontError))
+                std::cout << "  font: " << family << std::endl;
+            if (fontError.isNotEmpty())
+                std::cout << "  font error: " << fontError << std::endl;
             juce::String logoError;
             if (! InkwyrdLookAndFeel::setSkinLogo(result.logoFile, logoError))
                 std::cout << "  logo: " << logoError << std::endl;
@@ -2844,6 +2862,7 @@ namespace
 
             // Back to the built-in look, so nothing static outlives the run.
             inkwyrd::setActiveSprites({});
+            InkwyrdLookAndFeel::setSkinFonts({}, fontError);
             InkwyrdLookAndFeel::setSkinLogo({}, logoError);
         }
 

@@ -2521,6 +2521,40 @@ the user's own colours), table headers, and deriving layout row heights
 from sprite metrics (short controls shrink corners proportionally
 instead).
 
+### Skin fonts: bundled font files, and Silkscreen in Pixel Phosphor
+
+The standing rule "nothing is bundled - a font is a licensing decision"
+was the right default; the user chose **Silkscreen** (SIL Open Font
+License) for the pixel skin, which permits bundling in a closed-source
+app with the licence alongside. So a skin can now carry font files:
+`"fontFiles": [...]` in skin.json, loaded by
+`InkwyrdLookAndFeel::setSkinFonts()` via `Typeface::createSystemTypefaceFor`.
+The font and `OFL.txt` live in `tools/skin-builder/fonts/Silkscreen`
+(downloaded from google/fonts with the user's OK), are copied into the
+generated skin, embedded, and listed in docs/THIRD_PARTY_LICENSES.md.
+
+Two things about JUCE 8 fonts that cost time:
+- **`getTypefaceForFont()` override** is the one hook every font lookup
+  goes through, so skin families resolve there, and JUCE's default sans
+  maps to the skin's `label` family - which is how a skin font reaches
+  labels, lists and hand-painted text, not just buttons and titles.
+- **...but a `Font` caches the typeface it first resolved to**
+  (`SharedFontInternal::getTypefacePtr`), and a Label's default font never
+  asks again - labels, slider value boxes and combo boxes stayed Segoe UI
+  after the override worked everywhere else. `getLabelFont()` rebuilds a
+  default-family label font in the skin's family at paint time.
+
+**Layout now measures text.** A wide font made JUCE squeeze captions to
+fit fixed widths (that's what looked "crushed"). `PlayerComponent::resized`
+sizes buttons, captions and slider value boxes from their widest possible
+text (`InkwyrdLookAndFeel::buttonFont()` is the one font both drawing and
+measuring use), with the old fixed widths as minimums and sliders capped
+at their old 140px - so the built-in look lays out exactly as before.
+
+Not done: snapping pixel-font sizes to multiples of 8 (Silkscreen is
+sharpest there; at the app's 12-15px it's slightly soft but readable), and
+the same text-measured layout for windows other than the Player.
+
 ### The white band when resizing a window (fixed on `sprite-skin`)
 
 Reported with the sprite skin, but present since the custom title bars

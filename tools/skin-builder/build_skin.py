@@ -30,6 +30,7 @@ import argparse
 import json
 import random
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -533,7 +534,7 @@ def pack(sprites, width=160, gap=1):
     return sheet, items
 
 
-def build(out, textures_dir, name):
+def build(out, textures_dir, name, font_dir=None):
     bases, ids = read_names()
 
     textures = {}
@@ -612,9 +613,29 @@ def build(out, textures_dir, name):
             "outlineFaint": hexa(D2), "warning": hexa(AMBER), "danger": hexa(RED),
         },
         "fonts": {"title": "Segoe UI Semibold", "label": "Segoe UI", "digits": "Consolas"},
+        "fontFiles": [],
         "metrics": {"cornerRadius": 0, "titleBarHeight": 40},
         "sprites": {"sheet": "sprites.png", "scale": 2, "pixelArt": True, "items": items},
     }
+    # The skin's own font, carried as files so it works on machines that
+    # don't have it installed. Its licence travels with it (the SIL Open
+    # Font License requires that when the font is redistributed).
+    if font_dir:
+        from PIL import ImageFont
+        font_dir = Path(font_dir)
+        family = None
+        for ttf in sorted(font_dir.glob("*.[ot]tf")):
+            shutil.copyfile(ttf, out / ttf.name)
+            skin["fontFiles"].append(ttf.name)
+            family = family or ImageFont.truetype(str(ttf), 12).getname()[0]
+        for licence in font_dir.glob("*.txt"):
+            shutil.copyfile(licence, out / f"{family or 'font'}-{licence.name}")
+        if family:
+            skin["fonts"] = {"title": family, "label": family, "digits": family}
+            print(f"  font: {family} ({len(skin['fontFiles'])} file(s))")
+    if not skin["fontFiles"]:
+        del skin["fontFiles"]
+
     (out / "skin.json").write_text(json.dumps(skin, indent=2), encoding="utf-8")
     print(f"Wrote {len(items)} sprites ({sheet.width}x{sheet.height} sheet) to {out}")
 
@@ -624,6 +645,9 @@ def main():
     ap.add_argument("--out", help="skin folder to write")
     ap.add_argument("--name", default="Pixel Phosphor")
     ap.add_argument("--textures", help="folder of textures from comfy_textures.py")
+    ap.add_argument("--font-dir", default=str(Path(__file__).parent / "fonts" / "Silkscreen"),
+                    help="folder of .ttf/.otf files (+ licence .txt) to bundle; default Silkscreen")
+    ap.add_argument("--no-font", action="store_true", help="use installed fonts only")
     ap.add_argument("--check", action="store_true", help="check component ids against SkinSpriteNames.h")
     args = ap.parse_args()
 
@@ -631,7 +655,8 @@ def main():
         sys.exit(0 if check_component_ids() else 1)
     if not args.out:
         ap.error("--out is required unless --check")
-    build(args.out, args.textures, args.name)
+    font_dir = None if args.no_font or not Path(args.font_dir).is_dir() else args.font_dir
+    build(args.out, args.textures, args.name, font_dir)
 
 
 if __name__ == "__main__":

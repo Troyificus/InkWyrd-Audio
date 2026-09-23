@@ -633,6 +633,7 @@ juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
     auto palette = inkwyrd::theme::builtIn();
     juce::File logo;
     inkwyrd::SkinSprites sprites;
+    juce::Array<juce::File> fontFiles;
     juce::String message;
 
     if (skinName.isNotEmpty())
@@ -645,6 +646,7 @@ juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
             palette = result.palette;
             logo = result.logoFile;
             sprites = std::move(result.sprites);
+            fontFiles = result.fontFiles;
             message = result.warnings.joinIntoString(" ");
         }
         else
@@ -669,6 +671,15 @@ juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
         logLine("[Skin] " + juce::String(sprites.size()) + " sprite(s) loaded"
                  + (sprites.hasHiResSheet() ? " with a 2x sheet." : "."));
     inkwyrd::setActiveSprites(std::move(sprites));
+
+    // Before any window repaints: every font lookup after this resolves
+    // through the new skin's files.
+    juce::String fontError;
+    auto families = InkwyrdLookAndFeel::setSkinFonts(fontFiles, fontError);
+    if (! families.isEmpty())
+        logLine("[Skin] fonts loaded: " + families.joinIntoString(", "));
+    if (fontError.isNotEmpty())
+        message = message.isEmpty() ? fontError : message + " " + fontError;
 
     juce::String logoError;
     if (! InkwyrdLookAndFeel::setSkinLogo(logo, logoError))
@@ -793,6 +804,11 @@ void InkwyrdAudioApplication::writeSpriteExampleSkinIfNeeded()
             { "skin.json",   { InkwyrdSkinData::skin_json,   InkwyrdSkinData::skin_jsonSize } },
             { "sprites.png", { InkwyrdSkinData::sprites_png, InkwyrdSkinData::sprites_pngSize } },
             { "logo.png",    { InkwyrdSkinData::logo_png,    InkwyrdSkinData::logo_pngSize } },
+            // Silkscreen, by The Silkscreen Project Authors, under the SIL Open
+            // Font License - which has to travel with the font, hence the .txt.
+            { "Silkscreen-Regular.ttf", { InkwyrdSkinData::SilkscreenRegular_ttf, InkwyrdSkinData::SilkscreenRegular_ttfSize } },
+            { "Silkscreen-Bold.ttf",    { InkwyrdSkinData::SilkscreenBold_ttf,    InkwyrdSkinData::SilkscreenBold_ttfSize } },
+            { "Silkscreen-OFL.txt",     { InkwyrdSkinData::SilkscreenOFL_txt,     InkwyrdSkinData::SilkscreenOFL_txtSize } },
         };
 
         auto created = folder.createDirectory();
