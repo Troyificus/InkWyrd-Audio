@@ -33,6 +33,7 @@
 #include "SceneEditor.h"
 #include "UpdateCheck.h"
 #include "SkinLoader.h"
+#include "SkinSpriteNames.h"
 #include "TagEditor.h"
 #include "PlaylistTrackListComponent.h"
 #include "TrackLibrary.h"
@@ -679,6 +680,218 @@ namespace
                    "a corrupt skin reports an error rather than crashing");
             check(SkinLoader::findSkinFolders(scratch.getChildFile("skins")).size() == 2,
                    "a broken skin is still listed, so its author can see it");
+        }
+
+        {
+            // Skin sprites. Same idea as the palette checks above: these
+            // are the mistakes a skin author makes (a rect off the sheet,
+            // a typo'd name, a slice wider than its sprite), and the
+            // drawing rules that make nine-slice pixel art hold together.
+            using inkwyrd::SkinLoader;
+            using inkwyrd::SkinSprites;
+            using inkwyrd::SpriteState;
+
+            // A 32 x 16 sheet. The left 16 x 16 is a "button": a 4px red
+            // frame round a blue middle. The right half is solid green.
+            juce::Image sheet(juce::Image::ARGB, 32, 16, true);
+            {
+                juce::Graphics g(sheet);
+                g.setColour(juce::Colours::red);
+                g.fillRect(0, 0, 16, 16);
+                g.setColour(juce::Colours::blue);
+                g.fillRect(4, 4, 8, 8);
+                g.setColour(juce::Colours::lime);
+                g.fillRect(16, 0, 16, 16);
+            }
+
+            auto parseSprites = [&](const char* text, const juce::Image& sheet2x, juce::StringArray& warnings)
+            {
+                juce::var parsed;
+                juce::JSON::parse(juce::String(text), parsed);
+                return SkinSprites::parseWithImages(parsed, sheet, sheet2x, warnings);
+            };
+
+            juce::StringArray warnings;
+            auto good = parseSprites(R"({ "items": {
+                    "button":      { "rect": [0, 0, 16, 16], "slice": [4, 4, 4, 4] },
+                    "button@down": { "rect": [16, 0, 16, 16] },
+                    "button.transport.play": { "rect": [16, 0, 8, 8] },
+                    "icon.toggle.shuffle":   { "rect": [16, 0, 4, 4] } } })", {}, warnings);
+
+            check(good.size() == 4 && warnings.isEmpty(), "a well-formed sprite section loads every item, quietly");
+            check(good.find("button") != nullptr && good.find("button")->image1x.getWidth() == 16,
+                   "each sprite is cut out of the sheet at its own size");
+            check(good.find("button")->slice.getLeft() == 4 && good.find("button")->slice.getBottom() == 4,
+                   "and keeps its nine-slice insets");
+
+            // State fallbacks.
+            bool exact = true;
+            check(good.findForState("button", SpriteState::over, {}, &exact) == good.find("button") && ! exact,
+                   "a state with no art of its own falls back to the plain sprite, and says it did");
+            check(good.findForState("button", SpriteState::down, {}, &exact) == good.find("button@down") && exact,
+                   "a state that has art uses it");
+            check(good.findForState("button", SpriteState::onDown) == good.find("button@down"),
+                   "an engaged button being pressed falls back to the pressed art");
+            check(good.findForState("button", SpriteState::down, "transport.play") == good.find("button.transport.play"),
+                   "a control's OWN sprite wins over the generic pressed one");
+            check(good.findForState("button", SpriteState::normal, "transport.stop") == good.find("button"),
+                   "a control with no sprite of its own uses the generic one");
+            check(good.findForState("icon", SpriteState::normal, "toggle.loop") == nullptr,
+                   "an icon is never borrowed from another control");
+
+            // The author's mistakes.
+            warnings.clear();
+            auto bad = parseSprites(R"({ "scale": 20, "items": {
+                    "buton":                 { "rect": [0, 0, 4, 4] },
+                    "button.transport.plya": { "rect": [0, 0, 4, 4] },
+                    "icon":                  { "rect": [0, 0, 4, 4] },
+                    "panel":                 { "rect": [30, 0, 8, 8] },
+                    "well":                  { "rect": [0, 0, 8, 8], "slice": [5, 0, 5, 0] },
+                    "popup":                 { "rect": [0, 0, 2.5, 8] },
+                    "slider.thumb.master@down": { "rect": [0, 0, 4, 4] } } })", {}, warnings);
+
+            check(bad.find("buton") == nullptr && bad.find("button.transport.plya") == nullptr
+                   && bad.find("icon") == nullptr,
+                   "misspelt names - including a misspelt control - are ignored");
+            check(bad.find("panel") == nullptr, "a sprite reaching off the sheet is ignored");
+            check(bad.find("popup") == nullptr, "a sprite at a fractional position is refused, not rounded");
+            check(bad.find("well") != nullptr && bad.find("well")->slice.getLeft() == 0,
+                   "a slice wider than its sprite is dropped, and the sprite stretched whole");
+            check(bad.find("slider.thumb.master@down") != nullptr, "a control's own state variant is recognised");
+            check(juce::approximatelyEqual(bad.getScale(), SkinSprites::kMaxScale), "a silly scale is clamped");
+            check(warnings.size() == 7, "and every one of those mistakes is reported by name");
+
+            warnings.clear();
+            juce::Image wrong2x(juce::Image::ARGB, 60, 32, true);
+            auto mismatched = parseSprites(R"({ "items": { "button": { "rect": [0, 0, 16, 16] } } })", wrong2x, warnings);
+            check(! mismatched.hasHiResSheet() && warnings.size() == 1,
+                   "a 2x sheet that isn't exactly twice the size is ignored, with a warning");
+
+            warnings.clear();
+            auto right2x = sheet.rescaled(64, 32, juce::Graphics::lowResamplingQuality);
+            auto hiRes = parseSprites(R"({ "items": { "button": { "rect": [0, 0, 16, 16] } } })", right2x, warnings);
+            check(hiRes.hasHiResSheet() && hiRes.find("button")->image2x.getWidth() == 32,
+                   "a correct 2x sheet is used, sprite for sprite");
+
+            // Drawing. Nine-slice into 40 x 20 at scale 1: corners keep
+            // their real 4px, the middle stretches, nothing is smoothed.
+            {
+                juce::Image target(juce::Image::ARGB, 40, 20, true);
+                {
+                    // Scoped: on Windows a juce::Image is a Direct2D bitmap,
+                    // and nothing reaches its pixels until the Graphics is
+                    // gone.
+                    juce::Graphics g(target);
+                    good.drawNineSlice(g, *good.find("button"), { 0.0f, 0.0f, 40.0f, 20.0f });
+                }
+
+                check(target.getPixelAt(0, 0) == juce::Colours::red && target.getPixelAt(39, 19) == juce::Colours::red,
+                       "nine-slice keeps the corners");
+                check(target.getPixelAt(3, 10) == juce::Colours::red && target.getPixelAt(36, 10) == juce::Colours::red,
+                       "the frame stays 4px wide however wide the control gets");
+                check(target.getPixelAt(4, 4) == juce::Colours::blue && target.getPixelAt(20, 10) == juce::Colours::blue
+                       && target.getPixelAt(35, 15) == juce::Colours::blue,
+                       "and the middle stretches to fill, with no blending at its edges");
+            }
+
+            {
+                // Smaller than its own corners: they shrink in proportion,
+                // so both ends still show rather than one covering the other.
+                juce::Image target(juce::Image::ARGB, 6, 6, true);
+                {
+                    juce::Graphics g(target);
+                    good.drawNineSlice(g, *good.find("button"), { 0.0f, 0.0f, 6.0f, 6.0f });
+                }
+                check(target.getPixelAt(0, 0) == juce::Colours::red && target.getPixelAt(5, 5) == juce::Colours::red,
+                       "a control smaller than the sprite's corners still gets both ends");
+            }
+
+            {
+                // Scale 2: every sheet pixel becomes a 2 x 2 block.
+                warnings.clear();
+                auto doubled = parseSprites(R"({ "scale": 2, "items": {
+                        "button": { "rect": [0, 0, 16, 16], "slice": [4, 4, 4, 4] } } })", {}, warnings);
+                juce::Image target(juce::Image::ARGB, 40, 40, true);
+                {
+                    juce::Graphics g(target);
+                    doubled.drawNineSlice(g, *doubled.find("button"), { 0.0f, 0.0f, 40.0f, 40.0f });
+                }
+                check(target.getPixelAt(7, 20) == juce::Colours::red && target.getPixelAt(8, 20) == juce::Colours::blue,
+                       "at scale 2 a 4px frame is drawn 8px wide");
+            }
+
+            {
+                // Tiling: a 2-colour stripe repeats along the edge rather
+                // than being smeared across it.
+                // 6 x 3, 2px corners each side; the 2px middle is one
+                // white column then one black.
+                juce::Image stripes(juce::Image::ARGB, 6, 3, true);
+                {
+                    juce::Graphics sg(stripes);
+                    sg.fillAll(juce::Colours::black);
+                    sg.setColour(juce::Colours::white);
+                    sg.fillRect(2, 0, 1, 3);
+                }
+
+                warnings.clear();
+                juce::var parsed;
+                juce::JSON::parse(R"({ "items": { "titlebar": { "rect": [0, 0, 6, 3], "slice": [2, 0, 2, 0], "tile": true } } })",
+                                   parsed);
+                auto tiled = SkinSprites::parseWithImages(parsed, stripes, {}, warnings);
+
+                juce::Image target(juce::Image::ARGB, 14, 3, true);
+                {
+                    juce::Graphics g(target);
+                    tiled.drawNineSlice(g, *tiled.find("titlebar"), { 0.0f, 0.0f, 14.0f, 3.0f });
+                }
+                check(target.getPixelAt(2, 1) == juce::Colours::white && target.getPixelAt(3, 1) == juce::Colours::black
+                       && target.getPixelAt(4, 1) == juce::Colours::white && target.getPixelAt(5, 1) == juce::Colours::black,
+                       "a tiled edge repeats its pattern instead of stretching it");
+            }
+
+            // Through SkinLoader, from real files - the path the app takes.
+            {
+                auto folder = scratch.getChildFile("skins").getChildFile("Sprited");
+                folder.createDirectory();
+
+                juce::PNGImageFormat png;
+                {
+                    juce::FileOutputStream out(folder.getChildFile("sprites.png"));
+                    png.writeImageToStream(sheet, out);
+                }
+
+                folder.getChildFile("skin.json").replaceWithText(R"({
+                    "name": "Sprited",
+                    "colours": { "accent": "#ff0000" },
+                    "sprites": { "sheet": "sprites.png", "scale": 2,
+                                 "items": { "button": { "rect": [0, 0, 16, 16], "slice": [4, 4, 4, 4] } } } })");
+
+                auto loaded = SkinLoader::loadFromFolder(folder);
+                check(loaded.ok && loaded.sprites.size() == 1 && loaded.warnings.isEmpty(),
+                       "a skin folder with a sprite sheet loads its sprites");
+                check(loaded.palette.accent == juce::Colour(0xffff0000),
+                       "alongside its colours");
+
+                folder.getChildFile("sprites.png").deleteFile();
+                auto sheetless = SkinLoader::loadFromFolder(folder);
+                check(sheetless.ok && sheetless.sprites.isEmpty() && ! sheetless.warnings.isEmpty(),
+                       "a missing sheet still loads the skin's colours, and says the sprites are off");
+
+                auto noSprites = SkinLoader::loadFromFolder(scratch.getChildFile("skins").getChildFile("Exported"));
+                check(noSprites.ok && noSprites.sprites.isEmpty() && noSprites.warnings.isEmpty(),
+                       "a skin with no sprites section is exactly what it was before sprites existed");
+            }
+
+            // Every name the app asks for must be accepted, or a skin
+            // could never supply it.
+            bool allKnown = true;
+            for (auto* base : inkwyrd::sprites::kBaseNames)
+                for (auto suffix : { "", "@over", "@down", "@on", "@disabled" })
+                    allKnown = allKnown && SkinSprites::isKnownName(juce::String(base) + suffix);
+            for (auto* id : inkwyrd::sprites::kComponentIds)
+                allKnown = allKnown && SkinSprites::isKnownName("button." + juce::String(id))
+                                    && SkinSprites::isKnownName("icon." + juce::String(id) + "@down");
+            check(allKnown, "every sprite name the app paints with is one a skin can supply");
         }
 
         {
@@ -2334,6 +2547,296 @@ namespace
     // the app or driving anyone's mouse - neither is acceptable while the
     // user may be at the machine. Uses a scratch scenes file, never the
     // real one.
+    // INKWYRD_SKINRENDER=<folder> [INKWYRD_SKIN=<skin folder>]: paints a
+    // gallery of the app's stock widgets - a skinned window with its title
+    // bar, the Player's transport, toggles and sliders by their real
+    // component IDs, plus fields, lists, panels and the display well -
+    // through the real InkwyrdLookAndFeel, once in the built-in look and
+    // once in the given skin, at 1x and 2x.
+    //
+    // For judging sprite art without launching the app: the app shares
+    // %APPDATA% with the user's own session, and a skin under development
+    // changes every few minutes.
+    class SkinGallery : public juce::Component
+    {
+    public:
+        SkinGallery()
+        {
+            auto addButton = [this](juce::TextButton& b, const char* text, const char* id)
+            {
+                b.setButtonText(text);
+                b.setComponentID(id);
+                addAndMakeVisible(b);
+            };
+
+            addButton(play, "Play", "transport.play");
+            addButton(stop, "Stop", "transport.stop");
+            addButton(fade, "Fade out", "transport.fadeout");
+            addButton(skip, "Skip", "transport.skip");
+            addButton(shuffle, "Shuffle: On", "toggle.shuffle");
+            shuffle.setToggleState(true, juce::dontSendNotification);
+
+            addButton(mute, "Mic: Muted", "toggle.mute");
+            mute.setToggleState(true, juce::dontSendNotification);
+            mute.setColour(juce::TextButton::buttonOnColourId, inkwyrd::theme::warning.withAlpha(0.35f));
+            mute.setColour(juce::TextButton::textColourOnId, inkwyrd::theme::warning);
+            addButton(monitor, "Monitor: Off", "toggle.monitor");
+            addButton(crossfadeToggle, "On", "toggle.crossfade");
+            crossfadeToggle.setToggleState(true, juce::dontSendNotification);
+            addButton(loopToggle, "Off", "toggle.loop");
+
+            for (auto* label : { &crossfadeCaption, &loopCaption, &masterCaption, &micCaption })
+                addAndMakeVisible(label);
+
+            auto setUpSlider = [this](juce::Slider& s, const char* id, double value, const char* suffix)
+            {
+                s.setComponentID(id);
+                s.setSliderStyle(juce::Slider::LinearHorizontal);
+                s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 22);
+                s.setRange(0.0, 100.0, 1.0);
+                s.setValue(value, juce::dontSendNotification);
+                s.setTextValueSuffix(suffix);
+                addAndMakeVisible(s);
+            };
+
+            setUpSlider(crossfade, "crossfade", 30.0, " s");
+            setUpSlider(loopGap, "loopgap", 0.0, " s");
+            loopGap.setEnabled(false);
+            setUpSlider(master, "master", 80.0, "%");
+            setUpSlider(mic, "mic", 55.0, "%");
+
+            addButton(openPlaylist, "Playlist", "open.playlist");
+            addButton(openLibrary, "Library", "open.library");
+            addButton(openVoiceFx, "Voice FX", "open.voicefx");
+            addButton(openSoundboard, "Soundboard", "open.soundboard");
+            addButton(openScenes, "Scenes", "open.scenes");
+
+            // One generic button per state, since a snapshot can't hover.
+            const char* stateNames[] = { "Normal", "Hover", "Pressed", "Disabled", "On" };
+            for (int i = 0; i < 5; ++i)
+            {
+                auto* b = stateButtons.add(new juce::TextButton(stateNames[i]));
+                addAndMakeVisible(b);
+            }
+            stateButtons[1]->setState(juce::Button::buttonOver);
+            stateButtons[2]->setState(juce::Button::buttonDown);
+            stateButtons[3]->setEnabled(false);
+            stateButtons[4]->setToggleState(true, juce::dontSendNotification);
+
+            tickOn.setToggleState(true, juce::dontSendNotification);
+            addAndMakeVisible(tickOn);
+            addAndMakeVisible(tickOff);
+
+            field.setText("Tavern ambience");
+            addAndMakeVisible(field);
+
+            combo.addItem("Pixel Phosphor", 1);
+            combo.setSelectedId(1, juce::dontSendNotification);
+            addAndMakeVisible(combo);
+
+            list.setModel(&model);
+            list.setRowHeight(20);
+            addAndMakeVisible(list);
+
+            setSize(760, 470);
+        }
+
+        ~SkinGallery() override { list.setModel(nullptr); }
+
+        void paint(juce::Graphics& g) override
+        {
+            InkwyrdLookAndFeel::drawInsetWell(g, displayArea, "display");
+
+            g.setColour(inkwyrd::theme::accent);
+            g.setFont(InkwyrdLookAndFeel::digitFont(28.0f));
+            g.drawText("01:23", displayArea.reduced(14, 10).removeFromTop(34), juce::Justification::topLeft);
+            g.setFont(InkwyrdLookAndFeel::labelFont(15.0f));
+            g.setColour(inkwyrd::theme::text);
+            g.drawText("The Wyrm's Rest - Hearthfire", displayArea.reduced(14, 10).withTrimmedTop(40),
+                        juce::Justification::topLeft);
+
+            InkwyrdLookAndFeel::drawPanel(g, panelArea, false);
+            InkwyrdLookAndFeel::drawPanel(g, raisedArea, true);
+            InkwyrdLookAndFeel::drawInsetWell(g, wellArea);
+
+            g.setColour(inkwyrd::theme::textDim);
+            g.setFont(InkwyrdLookAndFeel::labelFont(12.0f));
+            g.drawText("panel", panelArea, juce::Justification::centred);
+            g.drawText("panel.raised", raisedArea, juce::Justification::centred);
+            g.drawText("well", wellArea, juce::Justification::centred);
+        }
+
+        void resized() override
+        {
+            auto area = getLocalBounds().reduced(14);
+            auto right = area.removeFromRight(200);
+            area.removeFromRight(14);
+
+            displayArea = area.removeFromTop(86);
+            area.removeFromTop(10);
+
+            auto row = [&area](int h) { auto r = area.removeFromTop(h); area.removeFromTop(8); return r; };
+
+            auto r1 = row(32);
+            for (auto* b : { &play, &stop, &fade, &skip })
+            {
+                b->setBounds(r1.removeFromLeft(72));
+                r1.removeFromLeft(6);
+            }
+            shuffle.setBounds(r1.removeFromLeft(110));
+
+            auto r2 = row(28);
+            mute.setBounds(r2.removeFromLeft(100));
+            r2.removeFromLeft(6);
+            monitor.setBounds(r2.removeFromLeft(110));
+            r2.removeFromLeft(10);
+            crossfadeCaption.setBounds(r2.removeFromLeft(70));
+            crossfadeToggle.setBounds(r2.removeFromLeft(46));
+            r2.removeFromLeft(4);
+            crossfade.setBounds(r2);
+
+            auto r3 = row(28);
+            loopCaption.setBounds(r3.removeFromLeft(70));
+            loopToggle.setBounds(r3.removeFromLeft(46));
+            r3.removeFromLeft(4);
+            loopGap.setBounds(r3.removeFromLeft(200));
+
+            auto r4 = row(28);
+            micCaption.setBounds(r4.removeFromLeft(40));
+            mic.setBounds(r4.removeFromLeft(190));
+            r4.removeFromLeft(10);
+            masterCaption.setBounds(r4.removeFromLeft(56));
+            master.setBounds(r4);
+
+            auto r5 = row(28);
+            auto w = (r5.getWidth() - 4 * 6) / 5;
+            for (auto* b : { &openPlaylist, &openLibrary, &openVoiceFx, &openSoundboard, &openScenes })
+            {
+                b->setBounds(r5.removeFromLeft(w));
+                r5.removeFromLeft(6);
+            }
+
+            auto r6 = row(28);
+            for (auto* b : stateButtons)
+            {
+                b->setBounds(r6.removeFromLeft(w));
+                r6.removeFromLeft(6);
+            }
+
+            auto r7 = area.removeFromTop(64);
+            panelArea = r7.removeFromLeft(r7.getWidth() / 3).reduced(3);
+            raisedArea = r7.removeFromLeft(r7.getWidth() / 2).reduced(3);
+            wellArea = r7.reduced(3);
+
+            tickOn.setBounds(right.removeFromTop(26));
+            tickOff.setBounds(right.removeFromTop(26));
+            right.removeFromTop(8);
+            field.setBounds(right.removeFromTop(28));
+            right.removeFromTop(8);
+            combo.setBounds(right.removeFromTop(28));
+            right.removeFromTop(8);
+            list.setBounds(right);
+        }
+
+    private:
+        struct Model : juce::ListBoxModel
+        {
+            int getNumRows() override { return 40; }
+            void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool) override
+            {
+                g.setColour(row == 2 ? inkwyrd::theme::accent : inkwyrd::theme::text);
+                g.setFont(InkwyrdLookAndFeel::labelFont(13.0f));
+                g.drawText("Track " + juce::String(row + 1), 6, 0, w - 12, h, juce::Justification::centredLeft);
+            }
+        } model;
+
+        juce::TextButton play, stop, fade, skip, shuffle, mute, monitor, crossfadeToggle, loopToggle;
+        juce::TextButton openPlaylist, openLibrary, openVoiceFx, openSoundboard, openScenes;
+        juce::OwnedArray<juce::TextButton> stateButtons;
+        juce::Label crossfadeCaption { {}, "Crossfade" }, loopCaption { {}, "Loop track" };
+        juce::Label masterCaption { {}, "Master" }, micCaption { {}, "Mic" };
+        juce::Slider crossfade, loopGap, master, mic;
+        juce::ToggleButton tickOn { "Tick box, on" }, tickOff { "Tick box, off" };
+        juce::TextEditor field;
+        juce::ComboBox combo;
+        juce::ListBox list;
+        juce::Rectangle<int> displayArea, panelArea, raisedArea, wellArea;
+    };
+
+    class GalleryWindow : public juce::DocumentWindow, public InkwyrdLookAndFeel::TitleBarInfo
+    {
+    public:
+        GalleryWindow()
+            : DocumentWindow("Inkwyrd Audio", inkwyrd::theme::panel, DocumentWindow::allButtons)
+        {
+            setUsingNativeTitleBar(false);
+            setTitleBarHeight(inkwyrd::theme::titleBarHeight);
+            setContentNonOwned(&gallery, true);
+        }
+
+        juce::String getTitleBarSubtitle() const override { return "Audio Player"; }
+
+    private:
+        SkinGallery gallery;
+    };
+
+    int runSkinRender(const juce::File& folder, const juce::File& skinFolder)
+    {
+        juce::ScopedJuceInitialiser_GUI gui;
+        InkwyrdLookAndFeel lookAndFeel;
+        juce::LookAndFeel::setDefaultLookAndFeel(&lookAndFeel);
+        folder.createDirectory();
+
+        auto render = [&folder](const juce::String& name, float scale)
+        {
+            // Built fresh for each look, like a window opened after the
+            // skin was chosen - title bar height is read at construction.
+            GalleryWindow window;
+            auto image = window.createComponentSnapshot(window.getLocalBounds(), true, scale);
+            auto file = folder.getChildFile(name + ".png");
+            file.deleteFile();
+
+            juce::FileOutputStream out(file);
+            auto ok = out.openedOk() && juce::PNGImageFormat().writeImageToStream(image, out);
+            std::cout << (ok ? "" : "FAILED ") << file.getFullPathName() << std::endl;
+            return ok;
+        };
+
+        auto ok = render("gallery-builtin", 1.0f);
+
+        if (skinFolder != juce::File())
+        {
+            auto result = inkwyrd::SkinLoader::loadFromFolder(skinFolder);
+            if (! result.ok)
+            {
+                std::cout << "Skin didn't load: " << result.message << std::endl;
+                return 1;
+            }
+
+            for (auto& warning : result.warnings)
+                std::cout << "  warning: " << warning << std::endl;
+
+            std::cout << "  " << result.sprites.size() << " sprite(s)" << std::endl;
+
+            inkwyrd::theme::applyPalette(result.palette);
+            inkwyrd::setActiveSprites(std::move(result.sprites));
+            juce::String logoError;
+            if (! InkwyrdLookAndFeel::setSkinLogo(result.logoFile, logoError))
+                std::cout << "  logo: " << logoError << std::endl;
+            lookAndFeel.refreshColours();
+
+            ok = render("gallery-skin", 1.0f) && ok;
+            ok = render("gallery-skin@2x", 2.0f) && ok;
+
+            // Back to the built-in look, so nothing static outlives the run.
+            inkwyrd::setActiveSprites({});
+            InkwyrdLookAndFeel::setSkinLogo({}, logoError);
+        }
+
+        juce::LookAndFeel::setDefaultLookAndFeel(nullptr);
+        return ok ? 0 : 1;
+    }
+
     int runSceneSnapshot(const juce::File& folder)
     {
         juce::ScopedJuceInitialiser_GUI gui;
@@ -3150,6 +3653,13 @@ int main(int argc, char* argv[])
     auto sceneSnapshotFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_SCENESNAPSHOT", "");
     if (sceneSnapshotFolder.isNotEmpty())
         return runSceneSnapshot(juce::File(sceneSnapshotFolder));
+
+    auto skinRenderFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_SKINRENDER", "");
+    if (skinRenderFolder.isNotEmpty())
+    {
+        auto skin = juce::SystemStats::getEnvironmentVariable("INKWYRD_SKIN", "");
+        return runSkinRender(juce::File(skinRenderFolder), skin.isNotEmpty() ? juce::File(skin) : juce::File());
+    }
 
     auto iconFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_ICONRENDER", "");
     if (iconFolder.isNotEmpty())

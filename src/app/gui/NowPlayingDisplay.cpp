@@ -134,7 +134,7 @@ void NowPlayingDisplay::resized()
 
 void NowPlayingDisplay::paint(juce::Graphics& g)
 {
-    InkwyrdLookAndFeel::drawInsetWell(g, getLocalBounds());
+    InkwyrdLookAndFeel::drawInsetWell(g, getLocalBounds(), "display");
 
     paintArtSlot(g, artArea);
     paintTrackInfo(g, infoArea);

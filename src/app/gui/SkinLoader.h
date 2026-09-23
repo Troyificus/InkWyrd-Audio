@@ -3,6 +3,7 @@
 #include <juce_core/juce_core.h>
 
 #include "InkwyrdTheme.h"
+#include "SkinSprites.h"
 
 namespace inkwyrd
 {
@@ -31,6 +32,11 @@ namespace inkwyrd
         // Empty when the skin has no logo, or names one that isn't there
         // (which is a warning, not a failure - the drawn mark is used).
         juce::File logoFile;
+
+        // Per-widget images, from the optional "sprites" section. Empty
+        // when the skin has none, or when they couldn't be used - either
+        // way every control falls back to the drawn look.
+        SkinSprites sprites;
 
         // Set when ok == false: why it couldn't be used.
         juce::String message;

@@ -1,0 +1,790 @@
+{
+  "schemaVersion": 1,
+  "name": "Pixel Phosphor",
+  "logo": "logo.png",
+  "colours": {
+    "background": "#040806",
+    "panelDeep": "#040d08",
+    "panel": "#131e18",
+    "panelRaised": "#202f27",
+    "titleBar": "#131e18",
+    "titleBarText": "#4fe08a",
+    "titleBarSubtle": "#2c9c5a",
+    "text": "#9ce8b8",
+    "textDim": "#609c78",
+    "accent": "#4fe08a",
+    "accentSoft": "#185632",
+    "outline": "#32463b",
+    "outlineFaint": "#202f27",
+    "warning": "#e0b24f",
+    "danger": "#e06a5a"
+  },
+  "fonts": {
+    "title": "Segoe UI Semibold",
+    "label": "Segoe UI",
+    "digits": "Consolas"
+  },
+  "metrics": {
+    "cornerRadius": 0,
+    "titleBarHeight": 40
+  },
+  "sprites": {
+    "sheet": "sprites.png",
+    "scale": 2,
+    "pixelArt": true,
+    "items": {
+      "button": {
+        "rect": [
+          140,
+          0,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button@over": {
+        "rect": [
+          136,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button@down": {
+        "rect": [
+          68,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button@on": {
+        "rect": [
+          85,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button@onover": {
+        "rect": [
+          119,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button@ondown": {
+        "rect": [
+          102,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button@disabled": {
+        "rect": [
+          51,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button.toggle.mute@on": {
+        "rect": [
+          0,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button.toggle.mute@onover": {
+        "rect": [
+          34,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "button.toggle.mute@ondown": {
+        "rect": [
+          17,
+          41,
+          16,
+          12
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ]
+      },
+      "titlebutton": {
+        "rect": [
+          24,
+          67,
+          11,
+          11
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "icon.close": {
+        "rect": [
+          144,
+          79,
+          5,
+          5
+        ]
+      },
+      "icon.minimise": {
+        "rect": [
+          24,
+          88,
+          5,
+          5
+        ]
+      },
+      "icon.maximise": {
+        "rect": [
+          6,
+          88,
+          5,
+          5
+        ]
+      },
+      "titlebutton@over": {
+        "rect": [
+          48,
+          67,
+          11,
+          11
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "icon.close@over": {
+        "rect": [
+          0,
+          88,
+          5,
+          5
+        ]
+      },
+      "icon.minimise@over": {
+        "rect": [
+          36,
+          88,
+          5,
+          5
+        ]
+      },
+      "icon.maximise@over": {
+        "rect": [
+          18,
+          88,
+          5,
+          5
+        ]
+      },
+      "titlebutton@down": {
+        "rect": [
+          36,
+          67,
+          11,
+          11
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "icon.close@down": {
+        "rect": [
+          150,
+          79,
+          5,
+          5
+        ]
+      },
+      "icon.minimise@down": {
+        "rect": [
+          30,
+          88,
+          5,
+          5
+        ]
+      },
+      "icon.maximise@down": {
+        "rect": [
+          12,
+          88,
+          5,
+          5
+        ]
+      },
+      "icon.transport.play": {
+        "rect": [
+          136,
+          67,
+          8,
+          8
+        ]
+      },
+      "icon.transport.play@over": {
+        "rect": [
+          9,
+          79,
+          8,
+          8
+        ]
+      },
+      "icon.transport.play@down": {
+        "rect": [
+          0,
+          79,
+          8,
+          8
+        ]
+      },
+      "icon.transport.play@disabled": {
+        "rect": [
+          145,
+          67,
+          8,
+          8
+        ]
+      },
+      "icon.transport.pause": {
+        "rect": [
+          54,
+          79,
+          7,
+          8
+        ]
+      },
+      "icon.transport.pause@over": {
+        "rect": [
+          78,
+          79,
+          7,
+          8
+        ]
+      },
+      "icon.transport.pause@down": {
+        "rect": [
+          70,
+          79,
+          7,
+          8
+        ]
+      },
+      "icon.transport.pause@disabled": {
+        "rect": [
+          62,
+          79,
+          7,
+          8
+        ]
+      },
+      "icon.transport.stop": {
+        "rect": [
+          18,
+          79,
+          8,
+          8
+        ]
+      },
+      "icon.transport.stop@over": {
+        "rect": [
+          45,
+          79,
+          8,
+          8
+        ]
+      },
+      "icon.transport.stop@down": {
+        "rect": [
+          36,
+          79,
+          8,
+          8
+        ]
+      },
+      "icon.transport.stop@disabled": {
+        "rect": [
+          27,
+          79,
+          8,
+          8
+        ]
+      },
+      "icon.transport.skip": {
+        "rect": [
+          60,
+          67,
+          9,
+          8
+        ]
+      },
+      "icon.transport.skip@over": {
+        "rect": [
+          90,
+          67,
+          9,
+          8
+        ]
+      },
+      "icon.transport.skip@down": {
+        "rect": [
+          80,
+          67,
+          9,
+          8
+        ]
+      },
+      "icon.transport.skip@disabled": {
+        "rect": [
+          70,
+          67,
+          9,
+          8
+        ]
+      },
+      "icon.transport.fadeout": {
+        "rect": [
+          100,
+          67,
+          8,
+          8
+        ]
+      },
+      "icon.transport.fadeout@over": {
+        "rect": [
+          127,
+          67,
+          8,
+          8
+        ]
+      },
+      "icon.transport.fadeout@down": {
+        "rect": [
+          118,
+          67,
+          8,
+          8
+        ]
+      },
+      "icon.transport.fadeout@disabled": {
+        "rect": [
+          109,
+          67,
+          8,
+          8
+        ]
+      },
+      "icon.toggle.crossfade": {
+        "rect": [
+          86,
+          79,
+          7,
+          7
+        ]
+      },
+      "icon.toggle.crossfade@on": {
+        "rect": [
+          94,
+          79,
+          7,
+          7
+        ]
+      },
+      "icon.toggle.loop": {
+        "rect": [
+          102,
+          79,
+          7,
+          7
+        ]
+      },
+      "icon.toggle.loop@on": {
+        "rect": [
+          110,
+          79,
+          7,
+          7
+        ]
+      },
+      "checkbox": {
+        "rect": [
+          135,
+          54,
+          11,
+          11
+        ]
+      },
+      "checkbox@over": {
+        "rect": [
+          12,
+          67,
+          11,
+          11
+        ]
+      },
+      "checkbox@on": {
+        "rect": [
+          147,
+          54,
+          11,
+          11
+        ]
+      },
+      "checkbox@onover": {
+        "rect": [
+          0,
+          67,
+          11,
+          11
+        ]
+      },
+      "slider.track": {
+        "rect": [
+          131,
+          79,
+          12,
+          5
+        ],
+        "slice": [
+          3,
+          2,
+          3,
+          2
+        ]
+      },
+      "slider.fill": {
+        "rect": [
+          118,
+          79,
+          12,
+          5
+        ],
+        "slice": [
+          3,
+          2,
+          3,
+          2
+        ]
+      },
+      "slider.thumb": {
+        "rect": [
+          108,
+          0,
+          7,
+          13
+        ]
+      },
+      "slider.thumb@over": {
+        "rect": [
+          132,
+          0,
+          7,
+          13
+        ]
+      },
+      "slider.thumb@down": {
+        "rect": [
+          124,
+          0,
+          7,
+          13
+        ]
+      },
+      "slider.thumb@disabled": {
+        "rect": [
+          116,
+          0,
+          7,
+          13
+        ]
+      },
+      "scrollbar.track": {
+        "rect": [
+          124,
+          54,
+          10,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "scrollbar.thumb": {
+        "rect": [
+          91,
+          54,
+          10,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "scrollbar.thumb@over": {
+        "rect": [
+          113,
+          54,
+          10,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "scrollbar.thumb@down": {
+        "rect": [
+          102,
+          54,
+          10,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "textbox": {
+        "rect": [
+          52,
+          54,
+          12,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "textbox@focus": {
+        "rect": [
+          65,
+          54,
+          12,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "combobox": {
+        "rect": [
+          0,
+          54,
+          12,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "popup": {
+        "rect": [
+          39,
+          54,
+          12,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "panel": {
+        "rect": [
+          13,
+          54,
+          12,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "panel.raised": {
+        "rect": [
+          26,
+          54,
+          12,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "well": {
+        "rect": [
+          78,
+          54,
+          12,
+          12
+        ],
+        "slice": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "display": {
+        "rect": [
+          91,
+          0,
+          16,
+          16
+        ],
+        "slice": [
+          4,
+          4,
+          4,
+          4
+        ],
+        "tile": true
+      },
+      "window": {
+        "rect": [
+          0,
+          0,
+          40,
+          40
+        ],
+        "slice": [
+          6,
+          6,
+          6,
+          6
+        ],
+        "tile": true
+      },
+      "titlebar": {
+        "rect": [
+          41,
+          0,
+          24,
+          23
+        ],
+        "slice": [
+          6,
+          6,
+          6,
+          6
+        ],
+        "tile": true
+      },
+      "titlebar@inactive": {
+        "rect": [
+          66,
+          0,
+          24,
+          23
+        ],
+        "slice": [
+          6,
+          6,
+          6,
+          6
+        ],
+        "tile": true
+      }
+    }
+  }
+}

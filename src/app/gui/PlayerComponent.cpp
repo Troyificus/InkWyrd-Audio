@@ -220,6 +220,31 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
     // without having to click something first.
     setWantsKeyboardFocus(true);
 
+    // What a sprite skin knows each control by - "button.transport.stop",
+    // "icon.toggle.shuffle", "slider.thumb.master". The names are listed
+    // in SkinSpriteNames.h, which the skin-builder tool reads, so a new
+    // control needs adding there too. (Play's id flips to
+    // transport.pause while playing - see updatePlayButtonText().)
+    stopButton.setComponentID("transport.stop");
+    fadeOutButton.setComponentID("transport.fadeout");
+    skipButton.setComponentID("transport.skip");
+    shuffleButton.setComponentID("toggle.shuffle");
+    muteButton.setComponentID("toggle.mute");
+    monitorButton.setComponentID("toggle.monitor");
+    crossfadeToggle.setComponentID("toggle.crossfade");
+    loopToggle.setComponentID("toggle.loop");
+    playlistButton.setComponentID("open.playlist");
+    libraryButton.setComponentID("open.library");
+    voiceFxButton.setComponentID("open.voicefx");
+    soundboardButton.setComponentID("open.soundboard");
+    scenesButton.setComponentID("open.scenes");
+    settingsButton.setComponentID("open.settings");
+    crossfadeSlider.setComponentID("crossfade");
+    loopGapSlider.setComponentID("loopgap");
+    fadeOutSlider.setComponentID("fadeout");
+    masterVolumeSlider.setComponentID("master");
+    micVolumeSlider.setComponentID("mic");
+
     startTimer(500);
 
     // The label colours this component owns. Also re-applied on a
@@ -333,7 +358,9 @@ void PlayerComponent::updatePlayButtonText()
     // "Pause" rather than "Stop" now that a real Stop sits next to it -
     // two buttons both saying Stop, doing different things, would be
     // worse than either.
-    playButton.setButtonText(playlist.isPlaying() && !playlist.isFadingOut() ? "Pause" : "Play");
+    auto showPause = playlist.isPlaying() && !playlist.isFadingOut();
+    playButton.setButtonText(showPause ? "Pause" : "Play");
+    playButton.setComponentID(showPause ? "transport.pause" : "transport.play");
 
     stopButton.setEnabled(playlist.isPlaying());
     fadeOutButton.setEnabled(playlist.isPlaying() && !playlist.isFadingOut());
@@ -343,11 +370,13 @@ void PlayerComponent::updatePlayButtonText()
 void PlayerComponent::updateCrossfadeToggleText()
 {
     crossfadeToggle.setButtonText(playlist.isCrossfadeEnabled() ? "On" : "Off");
+    crossfadeToggle.setToggleState(playlist.isCrossfadeEnabled(), juce::dontSendNotification);
 }
 
 void PlayerComponent::updateLoopToggleText()
 {
     loopToggle.setButtonText(playlist.isLoopEnabled() ? "On" : "Off");
+    loopToggle.setToggleState(playlist.isLoopEnabled(), juce::dontSendNotification);
 }
 
 void PlayerComponent::setPlaybackSettings(bool crossfadeEnabled, double crossfadeSeconds,
@@ -415,16 +444,23 @@ void PlayerComponent::timerCallback()
 void PlayerComponent::updateShuffleButtonText()
 {
     shuffleButton.setButtonText(playlist.isShuffleEnabled() ? "Shuffle: On" : "Shuffle: Off");
+
+    // Real toggle state as well as the words, so a skin can light the
+    // button up ("@on") - the text alone told a sprite nothing.
+    // dontSendNotification: this mirrors the engine, it isn't a click.
+    shuffleButton.setToggleState(playlist.isShuffleEnabled(), juce::dontSendNotification);
 }
 
 void PlayerComponent::updateMuteButtonText()
 {
     muteButton.setButtonText(masterEngine.isMicMuted() ? "Mic: Muted" : "Mic: Live");
+    muteButton.setToggleState(masterEngine.isMicMuted(), juce::dontSendNotification);
 }
 
 void PlayerComponent::updateMonitorButtonText()
 {
     monitorButton.setButtonText(masterEngine.isLocalMonitoring() ? "Monitor: On" : "Monitor: Off");
+    monitorButton.setToggleState(masterEngine.isLocalMonitoring(), juce::dontSendNotification);
 }
 
 void PlayerComponent::refreshToggleStates()
@@ -565,4 +601,10 @@ void PlayerComponent::lookAndFeelChanged()
     // Accent, not warning: an update is good news, not a problem.
     updateLink.setColour(juce::HyperlinkButton::textColourId, inkwyrd::theme::accent);
     monitorHintLabel.setColour(juce::Label::textColourId, inkwyrd::theme::warning);
+
+    // A muted mic lights up as a warning, not in the accent green every
+    // other engaged toggle uses: "muted" is the state someone needs to
+    // notice, not a feature being on.
+    muteButton.setColour(juce::TextButton::buttonOnColourId, inkwyrd::theme::warning.withAlpha(0.35f));
+    muteButton.setColour(juce::TextButton::textColourOnId, inkwyrd::theme::warning);
 }

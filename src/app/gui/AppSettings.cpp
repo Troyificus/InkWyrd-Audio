@@ -29,6 +29,7 @@ namespace
     constexpr const char* kMicVolumeKey = "micVolume";
     constexpr const char* kMicMutedKey = "micMuted";
     constexpr const char* kExampleSkinsWrittenKey = "exampleSkinsWritten";
+    constexpr const char* kSpriteExampleSkinWrittenKey = "spriteExampleSkinWritten";
     constexpr const char* kNoiseSuppressionKey = "noiseSuppressionEnabled";
     constexpr const char* kDiscordAutoMuteKey = "discordAutoMuteEnabled";
     constexpr const char* kDiscordClientSecretKey = "discordClientSecret";
@@ -313,6 +314,16 @@ bool AppSettings::areExampleSkinsWritten() const
 void AppSettings::setExampleSkinsWritten(bool written)
 {
     settings()->setValue(kExampleSkinsWrittenKey, written);
+}
+
+bool AppSettings::isSpriteExampleSkinWritten() const
+{
+    return settings()->getBoolValue(kSpriteExampleSkinWrittenKey, false);
+}
+
+void AppSettings::setSpriteExampleSkinWritten(bool written)
+{
+    settings()->setValue(kSpriteExampleSkinWrittenKey, written);
 }
 
 bool AppSettings::isLibraryFolderView() const

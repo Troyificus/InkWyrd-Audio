@@ -137,6 +137,12 @@ public:
     bool areExampleSkinsWritten() const;
     void setExampleSkinsWritten(bool written);
 
+    // Separate from the flag above so someone who already has the three
+    // palette examples still gets the sprite example once - and, like
+    // them, never again after deleting it.
+    bool isSpriteExampleSkinWritten() const;
+    void setSpriteExampleSkinWritten(bool written);
+
     // Which view the Library window's track pane was last showing:
     // false = the sortable table, true = the folder tree. A view is a
     // preference, so it survives a restart.

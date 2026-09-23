@@ -698,12 +698,14 @@ There's more detail in [streamdeck-plugin/README.md](streamdeck-plugin/README.md
 ## Skins
 
 A skin changes Inkwyrd's colours, fonts, corner rounding, title bar
-height and logo.
+height and logo - and, optionally, draws the buttons, sliders and window
+frames from pictures of your own (see
+[below](#pictures-for-buttons-sliders-and-frames-sprite-skins)).
 
 **To change skin**, open **Settings** and pick one under **Skin**. It
-applies straight away. Three examples are included - **Amber**,
-**Midnight** and **High Contrast** - and **Inkwyrd (built-in)** always
-takes you back.
+applies straight away. Four examples are included - **Amber**,
+**Midnight**, **High Contrast** and the pixel-art **Pixel Phosphor** -
+and **Inkwyrd (built-in)** always takes you back.
 
 **To make your own:**
 1. Pick the skin closest to what you want, then click **Export
@@ -772,6 +774,84 @@ keep them to plain shapes.
 can't read leaves the previous look in place and says why under the
 Skin picker. A single colour it can't understand keeps that one colour
 and uses the rest of your file.
+
+### Pictures for buttons, sliders and frames (sprite skins)
+
+A skin can also replace how the controls themselves are drawn, with
+pictures from one image - a *sprite sheet* - in the skin's folder. The
+**Pixel Phosphor** example skin does this: open its folder and its
+`sprites.png` to see one.
+
+Every picture is optional. Anything you don't draw is drawn the normal
+way in your skin's colours, so you can start with just the buttons.
+
+```json
+"sprites": {
+  "sheet": "sprites.png",
+  "scale": 2,
+  "pixelArt": true,
+  "items": {
+    "button":        { "rect": [0, 0, 16, 12], "slice": [4, 4, 4, 4] },
+    "button@down":   { "rect": [16, 0, 16, 12], "slice": [4, 4, 4, 4] },
+    "icon.transport.play": { "rect": [0, 20, 8, 8] },
+    "window":        { "rect": [40, 0, 40, 40], "slice": [6, 6, 6, 6], "tile": true }
+  }
+}
+```
+
+- **`rect`** is where the picture sits in the sheet: `[x, y, width, height]`
+  in pixels.
+- **`slice`** keeps the edges from stretching: `[left, top, right, bottom]`.
+  The corners stay their real size and only the middle stretches, so one
+  small picture fits a button of any width and a window of any size.
+- **`tile`** repeats the edges and middle instead of stretching them - good
+  for textures and patterned frames.
+- **`scale`** is how many screen pixels each sheet pixel becomes (1-8).
+  Pixel art drawn small looks right at `2` or `3`.
+- **`pixelArt`** keeps pixels sharp and square when scaled (the default).
+  Set it to `false` for smooth artwork.
+- **`sheet2x`** (optional) names a second sheet at exactly twice the size,
+  used on high-resolution screens.
+
+**What you can draw.** Add `@over`, `@down`, `@on`, `@onover`, `@ondown`
+or `@disabled` to a name for that state; anything missing falls back to
+the plain picture, and a disabled control with no picture of its own is
+dimmed.
+
+| Name | What it is |
+|---|---|
+| `window` | A window's whole background |
+| `titlebar` (+ `@inactive`) | The bar across the top; the title is written over it |
+| `titlebutton` | Behind the minimise and close buttons |
+| `button` | Every button |
+| `checkbox` | A tick box, at its own size (`@on` when ticked) |
+| `slider.track`, `slider.fill`, `slider.thumb` | A slider's groove, the filled part, and the knob |
+| `scrollbar.track`, `scrollbar.thumb` | Scroll bars |
+| `textbox` (+ `@focus`), `combobox`, `popup` | Text fields, drop-downs, menus |
+| `panel`, `panel.raised`, `well` | Framed and recessed areas |
+| `display` | The Player's now-playing screen |
+
+**One control only.** Add a control's name after a dot to give just that
+control its own picture: `button.transport.stop`, `slider.thumb.master`.
+An **`icon.`** picture is drawn at its own size in place of the button's
+words: `icon.transport.play`. The Player's controls are
+`transport.play`, `transport.pause`, `transport.stop`, `transport.fadeout`,
+`transport.skip`, `toggle.shuffle`, `toggle.mute`, `toggle.monitor`,
+`toggle.crossfade`, `toggle.loop`, `open.playlist`, `open.library`,
+`open.voicefx`, `open.soundboard`, `open.scenes`, `open.settings`, and the
+sliders `crossfade`, `loopgap`, `fadeout`, `master` and `mic`. The title
+bar's own glyphs are `icon.close`, `icon.minimise` and `icon.maximise`.
+Toggles are lit (`@on`) while their option is on.
+
+A misspelt name, a picture that reaches outside the sheet, or a slice
+wider than its picture is listed under the Skin picker and skipped - the
+rest of the skin still loads.
+
+**Export current...** saves colours, fonts and sizes only. To start from
+a sprite skin, copy its whole folder instead.
+
+For making sheets, `tools/skin-builder` in the source code generates a
+complete sprite skin you can then redraw by hand.
 
 ## Settings, updates and your files
 

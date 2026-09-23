@@ -13,6 +13,11 @@
 // (soundboard pads, playlist rows, volume bars) read the same palette
 // from InkwyrdTheme.h so they can't drift.
 //
+// SPRITES. A skin can also supply per-widget images (SkinSprites.h). Every
+// method below checks for one first and falls back to drawing in code, so
+// a skin with only a few sprites still paints everything else exactly as
+// before - and the built-in look, which has none, is untouched.
+//
 // TITLE BARS ARE OURS NOW. The five layout windows used to use native
 // Windows captions; the mockup's title bar - logo, "INKWYRD" over a
 // subtitle, custom controls - can't be drawn on one, since Windows only
@@ -81,10 +86,20 @@ public:
 
     void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override;
 
+    // Only so a skin's "window" sprite can sit behind everything.
+    void fillResizableWindowBackground(juce::Graphics& g, int w, int h,
+                                        const juce::BorderSize<int>& border,
+                                        juce::ResizableWindow& window) override;
+
     // Panels and framed blocks, for the components that lay themselves
     // out by hand. Here rather than duplicated in five files.
     static void drawPanel(juce::Graphics& g, juce::Rectangle<int> area, bool raised = false);
-    static void drawInsetWell(juce::Graphics& g, juce::Rectangle<int> area);
+    //
+    // A skin with sprites can replace either: "panel" / "panel.raised",
+    // and "well" - or a more specific name for one particular well (the
+    // Player's screen asks for "display"), falling back to "well".
+    static void drawInsetWell(juce::Graphics& g, juce::Rectangle<int> area,
+                               const char* spriteName = "well");
 
     // The ink-bottle mark from the mockup, drawn as vectors.
     //

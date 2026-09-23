@@ -1,9 +1,67 @@
 #include "InkwyrdLookAndFeel.h"
 
+#include "SkinSprites.h"
+
 using namespace inkwyrd::theme;
 
 namespace
 {
+    using inkwyrd::SpriteState;
+
+    const inkwyrd::SkinSprites& sprites() { return inkwyrd::activeSprites(); }
+
+    SpriteState stateFor(const juce::Button& button, bool isOver, bool isDown)
+    {
+        if (! button.isEnabled())
+            return SpriteState::disabled;
+
+        auto on = button.getToggleState();
+
+        if (isDown)
+            return on ? SpriteState::onDown : SpriteState::down;
+        if (isOver)
+            return on ? SpriteState::onOver : SpriteState::over;
+
+        return on ? SpriteState::on : SpriteState::normal;
+    }
+
+    // A control that is disabled but whose skin drew no disabled art of
+    // its own is dimmed, the same way the drawn look dims its text -
+    // otherwise a greyed-out Stop button would look pressable.
+    constexpr float kDisabledAlpha = 0.4f;
+
+    float alphaFor(SpriteState state, bool exactState)
+    {
+        return state == SpriteState::disabled && ! exactState ? kDisabledAlpha : 1.0f;
+    }
+
+    // Stretched nine-slice for `base` in `state`, if the skin has one.
+    bool drawSprite(juce::Graphics& g, const char* base, SpriteState state,
+                     const juce::String& componentId, juce::Rectangle<float> area)
+    {
+        bool exact = false;
+        if (auto* item = sprites().findForState(base, state, componentId, &exact))
+        {
+            sprites().drawNineSlice(g, *item, area, alphaFor(state, exact));
+            return true;
+        }
+
+        return false;
+    }
+
+    // At its own size, centred - icons, tick boxes, thumbs.
+    bool drawSpriteNatural(juce::Graphics& g, const char* base, SpriteState state,
+                            const juce::String& componentId, juce::Rectangle<float> area)
+    {
+        bool exact = false;
+        if (auto* item = sprites().findForState(base, state, componentId, &exact))
+        {
+            sprites().drawNatural(g, *item, area, alphaFor(state, exact));
+            return true;
+        }
+
+        return false;
+    }
     // The mockup's headings are a geometric sans with generous letter
     // spacing; its numbers are monospaced. Nothing is bundled - a font
     // is a licensing decision, not a styling one - so these pick the
@@ -32,6 +90,22 @@ namespace
         void paintButton(juce::Graphics& g, bool isOver, bool isDown) override
         {
             auto area = getLocalBounds().toFloat();
+            auto state = stateFor(*this, isOver, isDown);
+            auto id = spriteId();
+
+            // Sprites: a background and/or a glyph. Either can be present
+            // without the other - a skin that only restyles the glyphs
+            // keeps the drawn hover wash, and vice versa.
+            auto drewBackground = drawSprite(g, "titlebutton", state, id, area);
+
+            if (drawSpriteNatural(g, "icon", state, id, area.reduced(2.0f)))
+                return;
+
+            if (drewBackground)
+            {
+                paintGlyph(g, area, false);
+                return;
+            }
 
             if (isOver || isDown)
             {
@@ -43,8 +117,26 @@ namespace
                 g.fillRect(area);
             }
 
+            paintGlyph(g, area, kind == Kind::close && (isOver || isDown));
+        }
+
+    private:
+        juce::String spriteId() const
+        {
+            switch (kind)
+            {
+                case Kind::minimise: return "minimise";
+                case Kind::maximise: return "maximise";
+                case Kind::close:    return "close";
+            }
+
+            return {};
+        }
+
+        void paintGlyph(juce::Graphics& g, juce::Rectangle<float> area, bool onRedWash)
+        {
             auto glyph = area.withSizeKeepingCentre(10.0f, 10.0f);
-            g.setColour(kind == Kind::close && (isOver || isDown) ? titleBar : titleBarText);
+            g.setColour(onRedWash ? titleBar : titleBarText);
 
             switch (kind)
             {
@@ -280,12 +372,29 @@ void InkwyrdLookAndFeel::drawDocumentWindowTitleBar(juce::DocumentWindow& window
 
     juce::Rectangle<float> bar(0.0f, 0.0f, (float) w, (float) h);
 
-    // Rounded at the top only - the bar meets the window body squarely.
-    juce::Path shape;
-    shape.addRoundedRectangle(bar.getX(), bar.getY(), bar.getWidth(), bar.getHeight() + cornerRadius,
-                               cornerRadius, cornerRadius, true, true, false, false);
-    g.setColour(titleBar);
-    g.fillPath(shape);
+    // A skin's own bar, if it has one - "titlebar@inactive" for a window
+    // that doesn't have focus, when the skin draws that too. The logo and
+    // text still go on top: the bar stretches with the window, so words
+    // baked into it would smear.
+    const inkwyrd::SpriteItem* barSprite = nullptr;
+    if (! window.isActiveWindow())
+        barSprite = sprites().find("titlebar@inactive");
+    if (barSprite == nullptr)
+        barSprite = sprites().find("titlebar");
+
+    if (barSprite != nullptr)
+    {
+        sprites().drawNineSlice(g, *barSprite, bar);
+    }
+    else
+    {
+        // Rounded at the top only - the bar meets the window body squarely.
+        juce::Path shape;
+        shape.addRoundedRectangle(bar.getX(), bar.getY(), bar.getWidth(), bar.getHeight() + cornerRadius,
+                                   cornerRadius, cornerRadius, true, true, false, false);
+        g.setColour(titleBar);
+        g.fillPath(shape);
+    }
 
     auto content = bar.reduced(10.0f, 6.0f);
 
@@ -333,15 +442,34 @@ juce::Button* InkwyrdLookAndFeel::createDocumentWindowButton(int buttonType)
 void InkwyrdLookAndFeel::drawPanel(juce::Graphics& g, juce::Rectangle<int> area, bool raised)
 {
     auto r = area.toFloat();
+
+    if (auto* sprite = sprites().find(raised ? "panel.raised" : "panel"))
+    {
+        sprites().drawNineSlice(g, *sprite, r);
+        return;
+    }
+
     g.setColour(raised ? panelRaised : panelDeep);
     g.fillRoundedRectangle(r, cornerRadius);
     g.setColour(outlineFaint);
     g.drawRoundedRectangle(r.reduced(0.5f), cornerRadius, 1.0f);
 }
 
-void InkwyrdLookAndFeel::drawInsetWell(juce::Graphics& g, juce::Rectangle<int> area)
+void InkwyrdLookAndFeel::drawInsetWell(juce::Graphics& g, juce::Rectangle<int> area,
+                                        const char* spriteName)
 {
     auto r = area.toFloat();
+
+    auto* sprite = sprites().find(spriteName);
+    if (sprite == nullptr)
+        sprite = sprites().find("well");
+
+    if (sprite != nullptr)
+    {
+        sprites().drawNineSlice(g, *sprite, r);
+        return;
+    }
+
     g.setColour(background);
     g.fillRoundedRectangle(r, cornerRadius);
     g.setColour(outline.withAlpha(0.6f));
@@ -353,10 +481,17 @@ void InkwyrdLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
                                                bool shouldDrawButtonAsHighlighted,
                                                bool shouldDrawButtonAsDown)
 {
+    if (drawSprite(g, "button", stateFor(button, shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown),
+                    button.getComponentID(), button.getLocalBounds().toFloat()))
+        return;
+
     auto area = button.getLocalBounds().toFloat().reduced(0.5f);
     auto on = button.getToggleState();
 
-    auto fill = on ? accentSoft : backgroundColour;
+    // The "on" colour is read from the BUTTON, so one toggle can light up
+    // differently from the rest - Mic muted lights up as a warning rather
+    // than the accent green every other engaged option uses.
+    auto fill = on ? button.findColour(juce::TextButton::buttonOnColourId) : backgroundColour;
     if (shouldDrawButtonAsDown)      fill = fill.brighter(0.25f);
     else if (shouldDrawButtonAsHighlighted) fill = fill.brighter(0.12f);
 
@@ -368,12 +503,31 @@ void InkwyrdLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
 }
 
 void InkwyrdLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button,
-                                         bool, bool)
+                                         bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
 {
+    // A control with a picture of its own draws that instead of its label.
+    // The label text stays set on the button, so screen readers and the
+    // UI Automation the launch tests drive it by still find it by name.
+    if (button.getComponentID().isNotEmpty()
+         && drawSpriteNatural(g, "icon",
+                              stateFor(button, shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown),
+                              button.getComponentID(), button.getLocalBounds().toFloat().reduced(4.0f)))
+        return;
+
+    auto on = button.getToggleState();
+    auto textColour = button.findColour(on ? juce::TextButton::textColourOnId
+                                            : juce::TextButton::textColourOffId);
+
+    // The drawn look lights an engaged button with a bright fill and puts
+    // DARK text on it. A sprite's lit face is the skin's own art and is
+    // usually dark, so the same dark text would vanish into it - use the
+    // accent instead, unless the button chose its own "on" colour.
+    if (on && ! button.isColourSpecified(juce::TextButton::textColourOnId)
+         && sprites().findForState("button", SpriteState::on, button.getComponentID()) != nullptr)
+        textColour = accent;
+
     g.setFont(labelFont((float) juce::jmin(15, button.getHeight() - 10)));
-    g.setColour(button.findColour(button.getToggleState() ? juce::TextButton::textColourOnId
-                                                           : juce::TextButton::textColourOffId)
-                     .withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.4f));
+    g.setColour(textColour.withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.4f));
 
     g.drawFittedText(button.getButtonText(), button.getLocalBounds().reduced(8, 2),
                       juce::Justification::centred, 2);
@@ -383,6 +537,23 @@ void InkwyrdLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton&
                                            bool shouldDrawButtonAsHighlighted, bool)
 {
     auto area = button.getLocalBounds();
+
+    bool exact = false;
+    auto boxState = stateFor(button, shouldDrawButtonAsHighlighted, false);
+    if (auto* box = sprites().findForState("checkbox", boxState, button.getComponentID(), &exact))
+    {
+        auto natural = sprites().naturalBounds(*box);
+        auto boxArea = area.removeFromLeft(juce::roundToInt(natural.getWidth()) + 6).toFloat();
+        sprites().drawNatural(g, *box, boxArea, alphaFor(boxState, exact));
+
+        g.setColour(button.findColour(juce::ToggleButton::textColourId)
+                         .withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.4f));
+        g.setFont(labelFont((float) juce::jmin(15, button.getHeight() - 6)));
+        g.drawFittedText(button.getButtonText(), area.reduced(4, 0),
+                          juce::Justification::centredLeft, 2);
+        return;
+    }
+
     auto boxSize = juce::jmin(18, area.getHeight() - 2);
     auto box = area.removeFromLeft(boxSize + 6).withSizeKeepingCentre(boxSize, boxSize).toFloat();
 
@@ -433,15 +604,63 @@ void InkwyrdLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int w
     juce::Rectangle<float> track((float) x, centreY - trackThickness * 0.5f,
                                   (float) width, trackThickness);
 
-    g.setColour(panelDeep);
-    g.fillRoundedRectangle(track, trackThickness * 0.5f);
+    // Sprites, piece by piece: a skin can supply any of the groove, the
+    // filled part and the knob, and whatever it leaves out is drawn.
+    auto id = slider.getComponentID();
+    auto enabled = slider.isEnabled();
+    auto grooveState = enabled ? SpriteState::normal : SpriteState::disabled;
+    auto thumbState = ! enabled                        ? SpriteState::disabled
+                      : slider.isMouseButtonDown()     ? SpriteState::down
+                      : slider.isMouseOverOrDragging() ? SpriteState::over
+                                                       : SpriteState::normal;
 
-    auto filled = track.withRight(sliderPos);
-    g.setColour(slider.isEnabled() ? accent : outline);
-    g.fillRoundedRectangle(filled, trackThickness * 0.5f);
+    // The groove is as tall as its art, centred - not the full height of
+    // the slider, which is sized for the knob.
+    auto grooveFor = [&](const inkwyrd::SpriteItem& item)
+    {
+        auto h = sprites().naturalBounds(item).getHeight();
+        return juce::Rectangle<float>((float) x, centreY - h * 0.5f, (float) width, h);
+    };
+
+    bool exact = false;
+    if (auto* groove = sprites().findForState("slider.track", grooveState, id, &exact))
+    {
+        sprites().drawNineSlice(g, *groove, grooveFor(*groove), alphaFor(grooveState, exact));
+    }
+    else
+    {
+        g.setColour(panelDeep);
+        g.fillRoundedRectangle(track, trackThickness * 0.5f);
+    }
+
+    if (auto* fill = sprites().findForState("slider.fill", grooveState, id, &exact))
+    {
+        // Clipped rather than squeezed: the fill is the SAME art as a full
+        // groove, revealed up to the value, so its end caps don't crush
+        // together near zero.
+        juce::Graphics::ScopedSaveState saved(g);
+        g.reduceClipRegion(juce::Rectangle<float>((float) x, (float) y, sliderPos - (float) x, (float) height)
+                               .getSmallestIntegerContainer());
+        sprites().drawNineSlice(g, *fill, grooveFor(*fill), alphaFor(grooveState, exact));
+    }
+    else
+    {
+        auto filled = track.withRight(sliderPos);
+        g.setColour(enabled ? accent : outline);
+        g.fillRoundedRectangle(filled, trackThickness * 0.5f);
+    }
+
+    if (auto* thumb = sprites().findForState("slider.thumb", thumbState, id, &exact))
+    {
+        auto natural = sprites().naturalBounds(*thumb);
+        sprites().drawNatural(g, *thumb,
+                               natural.withCentre({ sliderPos, centreY }).expanded(1.0f),
+                               alphaFor(thumbState, exact));
+        return;
+    }
 
     auto knobRadius = juce::jmin(9.0f, (float) height * 0.42f);
-    g.setColour(slider.isEnabled() ? accent : outline);
+    g.setColour(enabled ? accent : outline);
     g.fillEllipse(sliderPos - knobRadius, centreY - knobRadius, knobRadius * 2.0f, knobRadius * 2.0f);
 
     // A dark core, so the knob reads as a ring against a filled track
@@ -454,6 +673,14 @@ void InkwyrdLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int w
 void InkwyrdLookAndFeel::fillTextEditorBackground(juce::Graphics& g, int width, int height,
                                                     juce::TextEditor& editor)
 {
+    auto state = ! editor.isEnabled()            ? SpriteState::disabled
+                 : editor.hasKeyboardFocus(true) ? SpriteState::focus
+                                                 : SpriteState::normal;
+
+    if (drawSprite(g, "textbox", state, editor.getComponentID(),
+                    { 0.0f, 0.0f, (float) width, (float) height }))
+        return;
+
     g.setColour(editor.findColour(juce::TextEditor::backgroundColourId));
     g.fillRoundedRectangle(juce::Rectangle<float>(0.0f, 0.0f, (float) width, (float) height),
                             cornerRadius);
@@ -462,7 +689,8 @@ void InkwyrdLookAndFeel::fillTextEditorBackground(juce::Graphics& g, int width, 
 void InkwyrdLookAndFeel::drawTextEditorOutline(juce::Graphics& g, int width, int height,
                                                 juce::TextEditor& editor)
 {
-    if (! editor.isEnabled())
+    // A sprite field carries its own frame, focus state included.
+    if (! editor.isEnabled() || sprites().find("textbox") != nullptr)
         return;
 
     g.setColour(editor.hasKeyboardFocus(true)
@@ -512,8 +740,12 @@ void InkwyrdLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar&,
                                         bool isScrollbarVertical, int thumbStartPosition,
                                         int thumbSize, bool isMouseOver, bool isMouseDown)
 {
-    g.setColour(panelDeep);
-    g.fillRect(x, y, width, height);
+    if (! drawSprite(g, "scrollbar.track", SpriteState::normal, {},
+                      juce::Rectangle<int>(x, y, width, height).toFloat()))
+    {
+        g.setColour(panelDeep);
+        g.fillRect(x, y, width, height);
+    }
 
     if (thumbSize <= 0)
         return;
@@ -521,6 +753,15 @@ void InkwyrdLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar&,
     juce::Rectangle<int> thumb = isScrollbarVertical
         ? juce::Rectangle<int>(x + 2, thumbStartPosition, width - 4, thumbSize)
         : juce::Rectangle<int>(thumbStartPosition, y + 2, thumbSize, height - 4);
+
+    // A sprite thumb gets the bar's full width: the 2px inset above is
+    // breathing room for the drawn pill, and taking it off pixel art
+    // squeezes a bevelled thumb down to a sliver.
+    auto thumbState = isMouseDown ? SpriteState::down : (isMouseOver ? SpriteState::over : SpriteState::normal);
+    auto fullThumb = isScrollbarVertical ? juce::Rectangle<int>(x, thumbStartPosition, width, thumbSize)
+                                         : juce::Rectangle<int>(thumbStartPosition, y, thumbSize, height);
+    if (drawSprite(g, "scrollbar.thumb", thumbState, {}, fullThumb.toFloat()))
+        return;
 
     g.setColour(isMouseDown ? accent : (isMouseOver ? accentSoft.brighter(0.2f) : accentSoft));
     g.fillRoundedRectangle(thumb.toFloat(), (float) juce::jmin(thumb.getWidth(), thumb.getHeight()) * 0.5f);
@@ -531,11 +772,15 @@ void InkwyrdLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, 
 {
     juce::Rectangle<float> area(0.0f, 0.0f, (float) width, (float) height);
 
-    g.setColour(box.findColour(juce::ComboBox::backgroundColourId));
-    g.fillRoundedRectangle(area, cornerRadius);
+    if (! drawSprite(g, "combobox", box.isEnabled() ? SpriteState::normal : SpriteState::disabled,
+                      box.getComponentID(), area))
+    {
+        g.setColour(box.findColour(juce::ComboBox::backgroundColourId));
+        g.fillRoundedRectangle(area, cornerRadius);
 
-    g.setColour(box.findColour(juce::ComboBox::outlineColourId));
-    g.drawRoundedRectangle(area.reduced(0.5f), cornerRadius, 1.0f);
+        g.setColour(box.findColour(juce::ComboBox::outlineColourId));
+        g.drawRoundedRectangle(area.reduced(0.5f), cornerRadius, 1.0f);
+    }
 
     juce::Path arrow;
     auto centre = juce::Point<float>((float) width - 14.0f, (float) height * 0.5f);
@@ -547,9 +792,28 @@ void InkwyrdLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, 
     g.fillPath(arrow);
 }
 
+void InkwyrdLookAndFeel::fillResizableWindowBackground(juce::Graphics& g, int w, int h,
+                                                        const juce::BorderSize<int>&,
+                                                        juce::ResizableWindow& window)
+{
+    // The plain fill first, always: a sprite with see-through corners
+    // would otherwise show whatever the window last had behind it.
+    g.fillAll(window.getBackgroundColour());
+
+    if (auto* sprite = sprites().find("window"))
+        sprites().drawNineSlice(g, *sprite, { 0.0f, 0.0f, (float) w, (float) h });
+}
+
 void InkwyrdLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, int height)
 {
     juce::Rectangle<float> area(0.0f, 0.0f, (float) width, (float) height);
+
+    if (auto* sprite = sprites().find("popup"))
+    {
+        sprites().drawNineSlice(g, *sprite, area);
+        return;
+    }
+
     g.setColour(panelRaised);
     g.fillRoundedRectangle(area, cornerRadius);
     g.setColour(outline);

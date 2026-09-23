@@ -7,6 +7,7 @@
 
 #include "Dialogs.h"
 #include "SkinLoader.h"
+#include "InkwyrdSkinData.h"
 
 #include <ixwebsocket/IXNetSystem.h>
 #include <sodium.h>
@@ -63,6 +64,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     // background colour and title bar height at construction, so applying
     // a skin afterwards would leave the first frame on the old palette.
     writeExampleSkinsIfNeeded();
+    writeSpriteExampleSkinIfNeeded();
     auto skinMessage = applySkin(settings.getSkinName());
     if (skinMessage.isNotEmpty())
         logLine("[Skin] " + skinMessage);
@@ -630,6 +632,7 @@ juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
 {
     auto palette = inkwyrd::theme::builtIn();
     juce::File logo;
+    inkwyrd::SkinSprites sprites;
     juce::String message;
 
     if (skinName.isNotEmpty())
@@ -641,6 +644,7 @@ juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
         {
             palette = result.palette;
             logo = result.logoFile;
+            sprites = std::move(result.sprites);
             message = result.warnings.joinIntoString(" ");
         }
         else
@@ -658,6 +662,13 @@ juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
     }
 
     inkwyrd::theme::applyPalette(palette);
+
+    // Read at paint time, like the palette, so the repaints below are all
+    // it takes - an empty set puts every control back on the drawn look.
+    if (! sprites.isEmpty())
+        logLine("[Skin] " + juce::String(sprites.size()) + " sprite(s) loaded"
+                 + (sprites.hasHiResSheet() ? " with a 2x sheet." : "."));
+    inkwyrd::setActiveSprites(std::move(sprites));
 
     juce::String logoError;
     if (! InkwyrdLookAndFeel::setSkinLogo(logo, logoError))
@@ -761,6 +772,54 @@ void InkwyrdAudioApplication::writeExampleSkinsIfNeeded()
     logLine("[Skin] Wrote example skins to " + folder.getFullPathName());
 
     settings.setExampleSkinsWritten(true);
+    settings.save(); // AppSettings has no autosave
+}
+
+void InkwyrdAudioApplication::writeSpriteExampleSkinIfNeeded()
+{
+    // A skin that uses per-widget images, so there is a working sprite
+    // sheet to open and redraw rather than only the README's description
+    // of the format. Built by tools/skin-builder and embedded in the exe.
+    if (settings.isSpriteExampleSkinWritten())
+        return;
+
+    auto folder = inkwyrd::SkinLoader::getDefaultFolder().getChildFile("Pixel Phosphor");
+
+    // Someone may already have a skin by that name - never overwrite it.
+    if (! folder.getChildFile(inkwyrd::SkinLoader::kSkinFileName).existsAsFile())
+    {
+        const std::pair<const char*, std::pair<const char*, int>> files[] =
+        {
+            { "skin.json",   { InkwyrdSkinData::skin_json,   InkwyrdSkinData::skin_jsonSize } },
+            { "sprites.png", { InkwyrdSkinData::sprites_png, InkwyrdSkinData::sprites_pngSize } },
+            { "logo.png",    { InkwyrdSkinData::logo_png,    InkwyrdSkinData::logo_pngSize } },
+        };
+
+        auto created = folder.createDirectory();
+        auto ok = created.wasOk();
+
+        for (const auto& file : files)
+        {
+            if (! ok)
+                break;
+
+            // Atomic, like every other file this app writes.
+            juce::TemporaryFile temp(folder.getChildFile(file.first));
+            ok = temp.getFile().replaceWithData(file.second.first, (size_t) file.second.second)
+                  && temp.overwriteTargetFileWithTemporary();
+        }
+
+        if (! ok)
+        {
+            // Not marked as written, so the next launch tries again.
+            logLine("[Skin] Couldn't write the Pixel Phosphor example skin to " + folder.getFullPathName());
+            return;
+        }
+
+        logLine("[Skin] Wrote the Pixel Phosphor sprite skin to " + folder.getFullPathName());
+    }
+
+    settings.setSpriteExampleSkinWritten(true);
     settings.save(); // AppSettings has no autosave
 }
 
@@ -1062,6 +1121,16 @@ void InkwyrdAudioApplication::updateWarningBanner()
 
 void InkwyrdAudioApplication::applyDiscordRpcSettings()
 {
+    // INKWYRD_NO_DISCORD means NO Discord - the local client's RPC too, not
+    // just the bot. A launch test reads the user's real settings, and left
+    // on, this would mute or unmute their actual Discord and spend their
+    // RPC refresh token from a throwaway test instance.
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_NO_DISCORD", "").isNotEmpty())
+    {
+        discordRpc.setEnabled(false);
+        return;
+    }
+
     // No separate client-id field: the bot token is issued by the same
     // Discord application, and its first segment IS that application's
     // id. Asking the user to find and paste it a second time would be

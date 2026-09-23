@@ -18,6 +18,7 @@ target_sources(AudioEngineTest PRIVATE
     # actually hit (missing keys, typos, a newer schema) are covered here
     # rather than by opening Settings and looking.
     ../app/gui/SkinLoader.cpp
+    ../app/gui/SkinSprites.cpp
     ../app/gui/SoundboardGridComponent.cpp
     ../app/gui/Dialogs.cpp
     # Pure geometry, no Component/peer needed - covers the magnetic-snap

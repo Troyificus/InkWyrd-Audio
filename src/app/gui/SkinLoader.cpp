@@ -257,6 +257,11 @@ namespace inkwyrd
                 result.warnings.add("Logo \"" + logoName + "\" wasn't found - using the drawn mark.");
         }
 
+        // Sprites never fail the skin: its colours and fonts are still
+        // worth having if the sheet is missing or wrong.
+        result.sprites = SkinSprites::parse(json.getProperty(SkinSprites::kSpritesKey, {}),
+                                             skinFolder, result.warnings);
+
         result.ok = true;
         return result;
     }
