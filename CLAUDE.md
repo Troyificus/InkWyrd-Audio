@@ -2548,6 +2548,15 @@ them right before, because it takes over their mouse. The header of that
 file records three measurement traps, each of which gave a confident
 wrong answer first.
 
+**Same function, second fix - the "gap" between docked windows.** Docked
+windows are exactly flush (GetWindowRect and the DWM visible bounds
+agree to the pixel), but Windows 11 draws a 1px semi-transparent border
+just INSIDE every window, so a join showed two of them: a 2px grey line.
+`DWMWA_BORDER_COLOR = DWMWA_COLOR_NONE` removes it (`INKWYRD_RESIZETEST=seam`
+measures two flush test windows; the real Player/Playlist join was
+checked the same way). Corners follow the skin: `cornerRadius` 0 ->
+`DWMWCP_DONOTROUND`, so a square pixel skin docks without notches.
+
 Also learned: Debug builds paint ~10x slower than Release (46 vs 5 ms for
 a full Player paint), which makes any resize artifact look far worse -
 judge UI smoothness on Release.

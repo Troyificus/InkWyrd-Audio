@@ -54,10 +54,28 @@ namespace
     // Three things that looked like the answer and measured as NOTHING, so
     // nobody re-tries them: a dark window-class background brush, filling
     // WM_ERASEBKGND dark, and switching to JUCE's software renderer.
+    //
+    // It also turns off the 1px border Windows 11 draws just INSIDE every
+    // window's edge. Two docked windows put two of those side by side, which
+    // read as a grey gap between them even though the windows were exactly
+    // flush (measured: INKWYRD_RESIZETEST=seam - a 2px grey line with the
+    // border, none without). The skin draws its own frame, and the drop
+    // shadow is unaffected.
+    //
+    // And corners follow the skin: a skin with cornerRadius 0 gets square
+    // window corners, so a docked group doesn't show notches at the top and
+    // bottom of every join. Rounded skins keep Windows' own rounding.
     void applyCompositorTheme(HWND hwnd)
     {
         BOOL dark = inkwyrd::theme::panel.getPerceivedBrightness() < 0.5f ? TRUE : FALSE;
         DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+
+        COLORREF noBorder = 0xFFFFFFFE; // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &noBorder, sizeof(noBorder));
+
+        int corners = inkwyrd::theme::cornerRadius <= 0.0f ? 1 /* DWMWCP_DONOTROUND */
+                                                             : 0 /* DWMWCP_DEFAULT */;
+        DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corners, sizeof(corners));
     }
 
     juce::Rectangle<int> toRectangle(const RECT& r)

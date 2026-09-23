@@ -614,6 +614,80 @@ int runResizeDragAppTest()
     return 0;
 }
 
+// INKWYRD_RESIZETEST=seam: two test windows placed exactly flush, and the
+// pixels across the join printed - for the "gap between docked windows"
+// report. No mouse involved.
+int runSeamTest()
+{
+#if JUCE_WINDOWS
+    juce::ScopedJuceInitialiser_GUI gui;
+
+    // 0 = nothing set, 1 = dark mode, 2 = dark mode + no border,
+    // 3 = dark mode + no border + square corners
+    for (int variant = 0; variant < 4; ++variant)
+    {
+        TestWindow left(false), right(false);
+        left.setBounds(120, 120, 300, 220);
+        right.setBounds(420, 120, 300, 220);
+        left.setAlwaysOnTop(true);
+        right.setAlwaysOnTop(true);
+        left.setVisible(true);
+        right.setVisible(true);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil(300);
+
+        auto l = (HWND) left.getWindowHandle(), r = (HWND) right.getWindowHandle();
+
+        for (auto h : { l, r })
+        {
+            if (variant >= 1)
+            {
+                BOOL dark = TRUE;
+                DwmSetWindowAttribute(h, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+            }
+            if (variant >= 2)
+            {
+                COLORREF none = 0xFFFFFFFE; // DWMWA_COLOR_NONE
+                DwmSetWindowAttribute(h, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+            }
+            if (variant >= 3)
+            {
+                int square = 1; // DWMWCP_DONOTROUND
+                DwmSetWindowAttribute(h, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &square, sizeof(square));
+            }
+        }
+
+        // Exactly flush, in physical pixels - what the snapping produces.
+        RECT lr {};
+        GetWindowRect(l, &lr);
+        SetWindowPos(r, nullptr, lr.right, lr.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil(400);
+
+        RECT rr {};
+        GetWindowRect(r, &rr);
+        RECT strip { lr.right - 4, lr.top, lr.right + 4, lr.bottom };
+        auto frame = grabScreen(strip);
+
+        const char* names[] = { "nothing set", "dark mode", "dark mode + no border", "dark + no border + square" };
+        std::cout << names[variant] << "   (left ends x=" << lr.right << ", right starts x=" << rr.left << ")" << std::endl;
+        for (int y : { 30, 110, 190 })
+        {
+            std::cout << "   y+" << y << ":";
+            for (int x = 0; x < 8; ++x)
+            {
+                auto c = frame.getPixelAt(x, y);
+                std::cout << (x == 4 ? " | " : " ") << (int) c.getRed() << "," << (int) c.getGreen() << "," << (int) c.getBlue();
+            }
+            std::cout << std::endl;
+        }
+
+        left.setVisible(false);
+        right.setVisible(false);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil(200);
+    }
+#endif
+    return 0;
+}
+
 int runResizeDragTest()
 {
 #if JUCE_WINDOWS
