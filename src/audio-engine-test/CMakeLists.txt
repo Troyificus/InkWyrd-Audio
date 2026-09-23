@@ -4,6 +4,8 @@ juce_add_console_app(AudioEngineTest
 
 target_sources(AudioEngineTest PRIVATE
     Main.cpp
+    # INKWYRD_RESIZETEST: its own file so windows.h stays out of Main.cpp.
+    ResizeFlashTest.cpp
     # The real PlaylistPanel, so the self-test can drive its Explorer
     # drag-and-drop path directly. A JUCE Component doesn't need to be on
     # screen to be laid out and have filesDropped() called on it, and
@@ -59,6 +61,7 @@ target_compile_definitions(AudioEngineTest PRIVATE
 )
 
 target_link_libraries(AudioEngineTest PRIVATE
+    comctl32
     AudioEngine
     juce::juce_gui_basics
 )

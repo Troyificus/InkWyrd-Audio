@@ -3628,6 +3628,8 @@ static int runUpdateCheck()
     return 0;
 }
 
+int runResizeFlashTest(); // ResizeFlashTest.cpp
+
 int main(int argc, char* argv[])
 {
     juce::ignoreUnused(argc, argv);
@@ -3667,6 +3669,9 @@ int main(int argc, char* argv[])
     auto sceneSnapshotFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_SCENESNAPSHOT", "");
     if (sceneSnapshotFolder.isNotEmpty())
         return runSceneSnapshot(juce::File(sceneSnapshotFolder));
+
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RESIZETEST", "").isNotEmpty())
+        return runResizeFlashTest();
 
     auto skinRenderFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_SKINRENDER", "");
     if (skinRenderFolder.isNotEmpty())
