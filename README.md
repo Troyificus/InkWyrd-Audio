@@ -83,7 +83,9 @@ Inspired by Kenku FM and Winamp.
   out, the Killswitch and scenes.
 - Keyboard shortcuts on the Player window.
 - Six windows that snap together and remember where you left them.
-- **Skins**: change the colours, fonts and logo, or write your own.
+- **Skins**: change the colours, fonts and logo, or go further and draw
+  the buttons, sliders and window frames from your own pixel art - the
+  **Pixel Phosphor** skin shows how.
 
 **Under the hood**
 - Plays WAV, AIFF, FLAC, Ogg Vorbis, MP3, AAC/M4A and WMA.
