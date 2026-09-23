@@ -2793,6 +2793,20 @@ namespace
             // skin was chosen - title bar height is read at construction.
             GalleryWindow window;
             auto image = window.createComponentSnapshot(window.getLocalBounds(), true, scale);
+
+            // Paint cost, at the size of a real Player window. A live
+            // resize repaints on every mouse move, and Windows shows blank
+            // (white) new area until the paint lands - so a slow paint IS
+            // the resize "ghost". Software renderer, so a relative number:
+            // compare looks, not absolute milliseconds.
+            window.setSize(800, 750);
+            constexpr int runs = 20;
+            auto start = juce::Time::getMillisecondCounterHiRes();
+            for (int i = 0; i < runs; ++i)
+                window.createComponentSnapshot(window.getLocalBounds(), true, scale);
+            std::cout << "  " << name << ": " << juce::String((juce::Time::getMillisecondCounterHiRes() - start) / runs, 1)
+                      << " ms per full paint at 800x750" << std::endl;
+
             auto file = folder.getChildFile(name + ".png");
             file.deleteFile();
 
