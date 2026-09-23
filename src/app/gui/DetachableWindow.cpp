@@ -44,48 +44,6 @@ namespace
     // dark fill below is even on the path the white "ghost" comes from.
     int erasesThisGesture = 0;
 
-    // The WINDOW CLASS's background brush - what the desktop compositor
-    // fills a window's newly exposed area with the moment it grows, before
-    // the app gets any message about it. JUCE registers its class with no
-    // brush, which the compositor shows as WHITE: the white band on every
-    // resize, whatever the renderer. (Filling WM_ERASEBKGND dark was tried
-    // first and logged 50-190 erases per drag with no visible change - it
-    // arrives after the white is already on screen.) Chromium/Electron
-    // fix the same flash on frameless windows the same way.
-    //
-    // All JUCE windows share one class, so this also darkens dialogs and
-    // plugin editors for that instant - harmless, they paint straight over
-    // it. One brush for the class; replaced when a skin changes the colour.
-    HBRUSH classBackgroundBrush = nullptr;
-    COLORREF classBackgroundColour = 0;
-
-    void applyClassBackground(HWND hwnd)
-    {
-        auto colour = inkwyrd::theme::panel;
-        auto wanted = RGB(colour.getRed(), colour.getGreen(), colour.getBlue());
-
-        if (classBackgroundBrush != nullptr && wanted == classBackgroundColour)
-        {
-            // Same brush; still set it, in case this is the first window
-            // of a class that was re-registered.
-            SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(classBackgroundBrush));
-            return;
-        }
-
-        auto* brush = CreateSolidBrush(wanted);
-        if (brush == nullptr)
-            return;
-
-        SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(brush));
-
-        // Only safe to free once the class no longer points at it.
-        if (classBackgroundBrush != nullptr)
-            DeleteObject(classBackgroundBrush);
-
-        classBackgroundBrush = brush;
-        classBackgroundColour = wanted;
-    }
-
     juce::Rectangle<int> toRectangle(const RECT& r)
     {
         return juce::Rectangle<int>::leftTopRightBottom(r.left, r.top, r.right, r.bottom);
@@ -249,8 +207,6 @@ void DetachableWindow::installNativeHookIfNeeded()
     if (SetWindowSubclass((HWND) handle, detachableWindowSubclassProc, kSubclassId,
                            reinterpret_cast<DWORD_PTR>(this)))
         hookedWindowHandle = handle;
-
-    applyClassBackground((HWND) handle);
 #endif
 }
 
@@ -513,16 +469,6 @@ void DetachableWindow::applyThemeMetricsToAll()
     // that changes it has to reach every window that already exists.
     // Everything else in the palette is read at paint time and needs only
     // a repaint.
-   #if JUCE_WINDOWS
-    // A skin can change the body colour, and the resize fill should match.
-    for (auto* window : activeWindows)
-        if (auto* handle = window->getWindowHandle())
-        {
-            applyClassBackground((HWND) handle);
-            break; // one class for every window - once is enough
-        }
-   #endif
-
     for (auto* window : activeWindows)
     {
         window->setTitleBarHeight(inkwyrd::theme::titleBarHeight);
