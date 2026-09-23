@@ -1,7 +1,6 @@
 ﻿#include "DetachableWindow.h"
 
 #include "InkwyrdTheme.h"
-#include "Log.h"
 #include "WindowLayoutStore.h"
 #include "WindowSnapping.h"
 
@@ -38,11 +37,6 @@ namespace
 
 #if JUCE_WINDOWS
     constexpr UINT_PTR kSubclassId = 1;
-
-    // How many times Windows asked a window to erase its background during
-    // the current drag or resize - logged when it ends. Tells whether the
-    // dark fill below is even on the path the white "ghost" comes from.
-    int erasesThisGesture = 0;
 
     juce::Rectangle<int> toRectangle(const RECT& r)
     {
@@ -94,34 +88,7 @@ static LRESULT CALLBACK detachableWindowSubclassProc(HWND hwnd, UINT message,
 
             case WM_EXITSIZEMOVE:
                 window->endNativeDragFromHook();
-                logLine("[Window] resize/move of \"" + window->getWindowId() + "\" ended: "
-                         + juce::String(erasesThisGesture) + " background erase(s) filled dark");
-                erasesThisGesture = 0;
                 break;
-
-            // Growing a window exposes a strip nobody has drawn yet. JUCE
-            // answers this with "done" WITHOUT drawing anything, so that
-            // strip shows white until the next paint lands a frame later -
-            // the white "ghost" on every resize, in every renderer, since
-            // beta.10 at least. Windows sends this synchronously as part of
-            // the resize itself, before any paint, so filling it with the
-            // window's own background colour here turns the ghost dark.
-            // The DC is clipped to the newly exposed area, so nothing
-            // already drawn is covered.
-            case WM_ERASEBKGND:
-            {
-                RECT client {};
-                GetClientRect(hwnd, &client);
-                auto colour = inkwyrd::theme::panel;
-                if (auto brush = CreateSolidBrush(RGB(colour.getRed(), colour.getGreen(), colour.getBlue())))
-                {
-                    FillRect(reinterpret_cast<HDC>(wParam), &client, brush);
-                    DeleteObject(brush);
-                }
-
-                ++erasesThisGesture;
-                return 1;
-            }
 
             // These two are ANSWERED here, not passed on. Letting JUCE
             // also process them re-runs its own physical<->logical border
