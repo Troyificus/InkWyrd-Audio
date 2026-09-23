@@ -2521,6 +2521,37 @@ the user's own colours), table headers, and deriving layout row heights
 from sprite metrics (short controls shrink corners proportionally
 instead).
 
+### The white band when resizing a window (fixed on `sprite-skin`)
+
+Reported with the sprite skin, but present since the custom title bars
+(beta.30 did it too): dragging a window's corner showed a white band at
+the growing edges before the content caught up.
+
+**Cause:** while a window is being resized, Windows 11's compositor fills
+any area the app hasn't drawn yet itself, in a colour taken from the
+window's light/dark theme - and an unset theme means light.
+**Fix:** `DWMWA_USE_IMMERSIVE_DARK_MODE` on every layout window
+(`applyCompositorTheme()` in DetachableWindow.cpp), following the skin:
+dark for a dark `panel` colour, light for a light one, re-applied when the
+skin changes. Real Player, real drag: white on 10/24 moves -> 0/24, with
+JUCE's Direct2D renderer left as it was.
+
+**Three fixes that looked right and measured as nothing** - don't re-try:
+a dark window-class background brush (`GCLP_HBRBACKGROUND`), filling
+`WM_ERASEBKGND` dark, and JUCE's software renderer. Each was shipped to the
+user for a hand test first, which is how a day went: after the third, the
+flash was measured instead - `INKWYRD_RESIZETEST` (see
+`src/audio-engine-test/ResizeFlashTest.cpp`), which found the answer in
+two runs. `=dragapp` drags a RUNNING Inkwyrd window with the real mouse:
+back up `%APPDATA%\Inkwyrd Audio` first, get the user's go-ahead, and tell
+them right before, because it takes over their mouse. The header of that
+file records three measurement traps, each of which gave a confident
+wrong answer first.
+
+Also learned: Debug builds paint ~10x slower than Release (46 vs 5 ms for
+a full Player paint), which makes any resize artifact look far worse -
+judge UI smoothness on Release.
+
 ### Not yet built
 
 - **Dragging from the folder tree onto the Playlist window.** The table

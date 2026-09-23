@@ -1,13 +1,14 @@
 ﻿#include "DetachableWindow.h"
 
 #include "InkwyrdTheme.h"
-#include "Log.h"
 #include "WindowLayoutStore.h"
 #include "WindowSnapping.h"
 
 #if JUCE_WINDOWS
  #include <windows.h>
  #include <commctrl.h>
+ #include <dwmapi.h>
+ #pragma comment(lib, "dwmapi.lib")
 #endif
 
 juce::Array<DetachableWindow*> DetachableWindow::activeWindows;
@@ -39,10 +40,25 @@ namespace
 #if JUCE_WINDOWS
     constexpr UINT_PTR kSubclassId = 1;
 
-    // How many times Windows asked a window to erase its background during
-    // the current drag or resize - logged when it ends. Tells whether the
-    // dark fill below is even on the path the white "ghost" comes from.
-    int erasesThisGesture = 0;
+    // Tells Windows whether this window is light or dark, from the skin.
+    //
+    // THE CAUSE OF THE WHITE BAND ON RESIZE: while a window is being
+    // resized, Windows 11's compositor itself fills any area the app hasn't
+    // drawn yet, in a colour taken from this setting - and unset means
+    // light, so every drag showed a near-white strip at the growing edges,
+    // in every build since the custom title bars. Measured with
+    // INKWYRD_RESIZETEST=dragapp (a real corner drag on the real Player,
+    // screen grabbed every move): white on 10 of 24 moves without this,
+    // 0 of 24 with it, under both of JUCE's renderers.
+    //
+    // Three things that looked like the answer and measured as NOTHING, so
+    // nobody re-tries them: a dark window-class background brush, filling
+    // WM_ERASEBKGND dark, and switching to JUCE's software renderer.
+    void applyCompositorTheme(HWND hwnd)
+    {
+        BOOL dark = inkwyrd::theme::panel.getPerceivedBrightness() < 0.5f ? TRUE : FALSE;
+        DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    }
 
     juce::Rectangle<int> toRectangle(const RECT& r)
     {
@@ -94,34 +110,7 @@ static LRESULT CALLBACK detachableWindowSubclassProc(HWND hwnd, UINT message,
 
             case WM_EXITSIZEMOVE:
                 window->endNativeDragFromHook();
-                logLine("[Window] resize/move of \"" + window->getWindowId() + "\" ended: "
-                         + juce::String(erasesThisGesture) + " background erase(s) filled dark");
-                erasesThisGesture = 0;
                 break;
-
-            // Growing a window exposes a strip nobody has drawn yet. JUCE
-            // answers this with "done" WITHOUT drawing anything, so that
-            // strip shows white until the next paint lands a frame later -
-            // the white "ghost" on every resize, in every renderer, since
-            // beta.10 at least. Windows sends this synchronously as part of
-            // the resize itself, before any paint, so filling it with the
-            // window's own background colour here turns the ghost dark.
-            // The DC is clipped to the newly exposed area, so nothing
-            // already drawn is covered.
-            case WM_ERASEBKGND:
-            {
-                RECT client {};
-                GetClientRect(hwnd, &client);
-                auto colour = inkwyrd::theme::panel;
-                if (auto brush = CreateSolidBrush(RGB(colour.getRed(), colour.getGreen(), colour.getBlue())))
-                {
-                    FillRect(reinterpret_cast<HDC>(wParam), &client, brush);
-                    DeleteObject(brush);
-                }
-
-                ++erasesThisGesture;
-                return 1;
-            }
 
             // These two are ANSWERED here, not passed on. Letting JUCE
             // also process them re-runs its own physical<->logical border
@@ -207,6 +196,8 @@ void DetachableWindow::installNativeHookIfNeeded()
     if (SetWindowSubclass((HWND) handle, detachableWindowSubclassProc, kSubclassId,
                            reinterpret_cast<DWORD_PTR>(this)))
         hookedWindowHandle = handle;
+
+    applyCompositorTheme((HWND) handle);
 #endif
 }
 
@@ -471,6 +462,12 @@ void DetachableWindow::applyThemeMetricsToAll()
     // a repaint.
     for (auto* window : activeWindows)
     {
+       #if JUCE_WINDOWS
+        // A light skin wants a light resize fill, a dark one dark.
+        if (auto* handle = window->getWindowHandle())
+            applyCompositorTheme((HWND) handle);
+       #endif
+
         window->setTitleBarHeight(inkwyrd::theme::titleBarHeight);
         window->sendLookAndFeelChange();
         window->resized();
@@ -495,34 +492,6 @@ void DetachableWindow::setHiddenByMasterMinimise(bool shouldBeHidden)
     // between "they all came back" and "most of them did".
     if (! shouldBeHidden)
         toFront(false); // false: don't steal keyboard focus from the master
-}
-
-void DetachableWindow::applyRendererIfNeeded()
-{
-    // Why this exists: dragging a window's edge showed a white band over
-    // the newly exposed area, and the content lagged at the old size -
-    // in beta.30 too, so not the sprites. JUCE 8's Direct2D renderer
-    // doesn't paint in WM_PAINT; it queues the area and paints on the
-    // next vblank callback, which lags during Windows' modal resize loop.
-    // The software renderer paints synchronously inside WM_PAINT.
-    //
-    // A switch rather than a new default until someone has compared the
-    // two by dragging a real window - a synthetic drag can't reproduce
-    // Windows' own resize loop faithfully, and this can't be judged from
-    // a screenshot.
-    auto requested = juce::SystemStats::getEnvironmentVariable("INKWYRD_RENDERER", "").trim().toLowerCase();
-    if (requested.isEmpty())
-        return;
-
-    auto* peer = getPeer();
-    if (peer == nullptr)
-        return;
-
-    auto engineName = requested == "software" ? "Software Renderer" : "Direct2D";
-    auto index = peer->getAvailableRenderingEngines().indexOf(engineName);
-
-    if (index >= 0 && peer->getCurrentRenderingEngine() != index)
-        peer->setCurrentRenderingEngine(index);
 }
 
 void DetachableWindow::closeButtonPressed()
@@ -562,7 +531,6 @@ void DetachableWindow::visibilityChanged()
     if (isVisible())
     {
         installNativeHookIfNeeded();
-        applyRendererIfNeeded();
 
         // Same reasoning as the hook: the native window only exists once
         // shown, so a satellite reopened later has to be re-owned here

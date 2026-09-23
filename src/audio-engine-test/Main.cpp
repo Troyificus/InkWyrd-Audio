@@ -3629,6 +3629,8 @@ static int runUpdateCheck()
 }
 
 int runResizeFlashTest(); // ResizeFlashTest.cpp
+int runResizeDragTest();  // ResizeFlashTest.cpp - moves the real mouse
+int runResizeDragAppTest(); // ResizeFlashTest.cpp - drags a running Inkwyrd window
 
 int main(int argc, char* argv[])
 {
@@ -3669,6 +3671,12 @@ int main(int argc, char* argv[])
     auto sceneSnapshotFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_SCENESNAPSHOT", "");
     if (sceneSnapshotFolder.isNotEmpty())
         return runSceneSnapshot(juce::File(sceneSnapshotFolder));
+
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RESIZETEST", "") == "dragapp")
+        return runResizeDragAppTest();
+
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RESIZETEST", "") == "drag")
+        return runResizeDragTest();
 
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RESIZETEST", "").isNotEmpty())
         return runResizeFlashTest();
