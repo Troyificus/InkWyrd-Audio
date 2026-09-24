@@ -2,9 +2,9 @@ Inkwyrd Audio - Third-Party Software Notices
 ==============================================
 
 Inkwyrd Audio uses the following third-party software. Every component
-listed is permissively licensed (no copyleft, no royalty). The full
-checklist with reasoning is in docs/THIRD_PARTY_LICENSES.md in the
-project repository.
+listed is permissively licensed (no copyleft, no royalty) except TagLib,
+which is described below the list. The full checklist with reasoning is
+in docs/THIRD_PARTY_LICENSES.md in the project repository.
 
   JUCE                    Free "Starter" tier (juce.com)
   VST3 SDK                MIT (bundled inside JUCE)
@@ -20,6 +20,12 @@ project repository.
   WASAPI                  Part of Windows (audio device I/O)
   Elgato Stream Deck SDK  Standard free plugin-distribution terms
   ws                      MIT (Stream Deck plugin only)
-  Silkscreen font         SIL Open Font License 1.1 (Pixel Phosphor skin)
+  Silkscreen font         SIL Open Font License 1.1 (the pixel-art skins)
+  TagLib                  LGPL-2.1-only OR MPL-1.1 (see below)
+
+TagLib (reading and writing track tags) is used unmodified, as the
+separate library tag.dll installed alongside the program, as its
+licence allows. Its source code is available from https://taglib.org/
+and https://github.com/taglib/taglib.
 
 Click Next to continue installing Inkwyrd Audio.
