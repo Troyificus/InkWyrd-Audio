@@ -12,6 +12,9 @@ namespace
     constexpr const char* kKeyGainDb = "gainDb";
     constexpr const char* kKeyImage = "image";
     constexpr const char* kKeyLoop = "loop";
+    constexpr const char* kKeyFadeIn = "fadeIn";
+    constexpr const char* kKeyFadeOut = "fadeOut";
+    constexpr double kMaxFadeSeconds = 10.0;
 }
 
 SoundboardLayout::SoundboardLayout(juce::AudioFormatManager& formatManagerToUse)
@@ -104,6 +107,8 @@ void SoundboardLayout::load()
                                         (float) (double) slotVar.getProperty(kKeyGainDb, 0.0));
 
             slot.loop = slotVar.getProperty(kKeyLoop, false);
+            slot.fadeInSeconds = juce::jlimit(0.0, kMaxFadeSeconds, (double) slotVar.getProperty(kKeyFadeIn, 0.0));
+            slot.fadeOutSeconds = juce::jlimit(0.0, kMaxFadeSeconds, (double) slotVar.getProperty(kKeyFadeOut, 0.0));
 
             auto imagePath = slotVar.getProperty(kKeyImage, "").toString();
             if (imagePath.isNotEmpty())
@@ -316,6 +321,18 @@ void SoundboardLayout::setLoop(int index, bool shouldLoop)
     save();
 }
 
+void SoundboardLayout::setFades(int index, double fadeInSeconds, double fadeOutSeconds)
+{
+    if (!isValidIndex(index))
+        return;
+
+    auto slot = slots.getReference(index);
+    slot.fadeInSeconds = juce::jlimit(0.0, kMaxFadeSeconds, fadeInSeconds);
+    slot.fadeOutSeconds = juce::jlimit(0.0, kMaxFadeSeconds, fadeOutSeconds);
+    slots.set(index, slot);
+    save();
+}
+
 bool SoundboardLayout::swapSlots(int a, int b)
 {
     if (!isValidIndex(a) || !isValidIndex(b) || a == b)
@@ -457,6 +474,11 @@ void SoundboardLayout::save()
 
         if (slot.loop)
             slotObject->setProperty(kKeyLoop, true);
+
+        if (slot.fadeInSeconds > 0.0)
+            slotObject->setProperty(kKeyFadeIn, slot.fadeInSeconds);
+        if (slot.fadeOutSeconds > 0.0)
+            slotObject->setProperty(kKeyFadeOut, slot.fadeOutSeconds);
 
         slotVars.add(juce::var(slotObject.get()));
     }

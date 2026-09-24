@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <map>
+#include <vector>
 
 #include <juce_core/juce_core.h>
 
@@ -17,6 +19,38 @@
 //     given what is playing right now. Every rule that makes scenes feel
 //     right lives there - see its comment - and the app only carries out
 //     the plan it returns.
+
+// How one sound fades when a scene starts or stops it. A scene keeps its
+// own copy per sound, so the same rain can swell in slowly in "Storm" and
+// cut in at once in "Combat".
+struct SceneFades
+{
+    // "Use the scene transition" - the one length every scene used before
+    // per-sound fades existed, and still the default for a loop whose
+    // button has no fade of its own. Resolved by the app at press time.
+    static constexpr double kSceneTransition = -1.0;
+
+    double fadeInSeconds = kSceneTransition;
+    double fadeOutSeconds = kSceneTransition;
+
+    bool operator==(const SceneFades& other) const
+    {
+        return juce::approximatelyEqual(fadeInSeconds, other.fadeInSeconds)
+                && juce::approximatelyEqual(fadeOutSeconds, other.fadeOutSeconds);
+    }
+};
+
+// A one-shot the scene sets playing randomly - the seagull over the waves.
+struct SceneRandom
+{
+    juce::String name;
+    int frequency = 2; // 1 low, 2 medium, 3 high - RandomFrequency's values
+
+    bool operator==(const SceneRandom& other) const
+    {
+        return name == other.name && frequency == other.frequency;
+    }
+};
 
 struct Scene
 {
@@ -39,6 +73,22 @@ struct Scene
     // COMPLETE set: pressing the scene stops any loop not listed.
     juce::StringArray loops;
 
+    // One-shots this scene plays randomly, and how often. Like loops, the
+    // COMPLETE set: pressing the scene switches random play off for any
+    // sound not listed.
+    std::vector<SceneRandom> randoms;
+
+    // Per sound (loops and randoms alike), how it fades. A sound with no
+    // entry uses the scene transition both ways - which is also exactly
+    // how every scene saved before this existed behaves.
+    std::map<juce::String, SceneFades> soundFades;
+
+    SceneFades fadesFor(const juce::String& soundName) const
+    {
+        auto it = soundFades.find(soundName);
+        return it == soundFades.end() ? SceneFades {} : it->second;
+    }
+
     // Optional, and off by default: the master fader is also what Discord
     // hears, so a scene only moves it when told to.
     bool setsVolume = false;
@@ -56,6 +106,10 @@ struct ScenePlan
 
     juce::StringArray loopsToStart, loopsToStop;
 
+    // Random play to switch on (or change the pace of), and to switch off.
+    std::vector<SceneRandom> randomsToStart;
+    juce::StringArray randomsToStop;
+
     bool setVolume = false;
     float volume = 1.0f;
 
@@ -67,7 +121,8 @@ struct ScenePlan
     bool changesAnything() const
     {
         return switchPlaylist || fadeOutMusic || ! loopsToStart.isEmpty()
-                || ! loopsToStop.isEmpty() || setVolume;
+                || ! loopsToStop.isEmpty() || ! randomsToStart.empty()
+                || ! randomsToStop.isEmpty() || setVolume;
     }
 };
 
@@ -86,6 +141,9 @@ struct SceneContext
     // Looping soundboard sounds running now, NOT counting ones already
     // fading out (SoundboardEngine::getPlayingLoopNames).
     juce::StringArray runningLoops;
+
+    // Sounds playing randomly right now, and how often.
+    std::vector<SceneRandom> runningRandoms;
 
     // Every name on the board that is set to loop, and every name on the
     // board at all - the difference is how "isn't a loop any more" is
@@ -107,6 +165,10 @@ struct SceneContext
 //   - Pressing the scene already in effect PUTS IT BACK: anything that
 //     has drifted (a loop killed by the Killswitch, music stopped) is
 //     restored, and anything already right is left alone.
+//   - Random play follows the same "complete set" rule: sounds the scene
+//     lists start playing randomly (or change pace); any other sound
+//     playing randomly is switched off. One already at the right pace is
+//     left alone, so re-pressing a scene doesn't reset its timing.
 //   - Anything missing is skipped and reported; the rest still happens.
 ScenePlan planScene(const Scene& scene, const SceneContext& context);
 
@@ -150,13 +212,15 @@ public:
     void move(const juce::Uuid& id, int delta);
 
     // A soundboard button was renamed. Every scene that used the old name
-    // follows it, so renaming a button never quietly breaks a scene.
+    // follows it - loops, random sounds and fade settings alike - so
+    // renaming a button never quietly breaks a scene.
     // Returns how many scenes changed.
     int renameLoop(const juce::String& oldName, const juce::String& newName);
 
     bool isNameTaken(const juce::String& name, const juce::Uuid& exceptId) const;
 
-    static constexpr int kCurrentSchemaVersion = 1;
+    // 2 adds random sounds and per-sound fades.
+    static constexpr int kCurrentSchemaVersion = 2;
 
 private:
     juce::String makeUniqueName(const juce::String& desired, const juce::Uuid& exceptId) const;

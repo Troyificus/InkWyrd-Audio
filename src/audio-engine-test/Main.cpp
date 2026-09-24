@@ -1813,11 +1813,12 @@ namespace
             }
 
             // Trims and pictures took the schema to 2; the loop flag
-            // took it to 3. An older build must refuse the file rather
-            // than rewrite it without what it doesn't understand.
-            check(SoundboardLayout::kCurrentSchemaVersion == 3,
+            // took it to 3; fade in / fade out to 4. An older build must
+            // refuse the file rather than rewrite it without what it
+            // doesn't understand.
+            check(SoundboardLayout::kCurrentSchemaVersion == 4,
                    "the soundboard schema version was bumped for the new fields");
-            check(boardFile2.loadFileAsString().contains("\"schemaVersion\": 3"),
+            check(boardFile2.loadFileAsString().contains("\"schemaVersion\": 4"),
                    "the new schema version is what actually gets written");
         }
 
@@ -2120,6 +2121,237 @@ namespace
                 wait(200);
                 engine.stopAllVoices();
                 check(! engine.isPlaying("Rain"), "the Killswitch still stops a loop at once, even mid-fade");
+            }
+
+            {
+                // Per-sound fades and random play - the engine half. Fades
+                // only move while audio is being pulled (a transport's
+                // position doesn't advance otherwise), so a background
+                // thread pulls in real time, locked to the wall clock like
+                // the playlist checks further down.
+                auto shortSfx = scratch.getChildFile("sfx-two-seconds.wav");
+                {
+                    juce::WavAudioFormat wav;
+                    std::unique_ptr<juce::FileOutputStream> stream(shortSfx.createOutputStream());
+                    std::unique_ptr<juce::AudioFormatWriter> writer(
+                        stream != nullptr ? wav.createWriterFor(stream.get(), 44100.0, 1, 16, {}, 0) : nullptr);
+                    if (writer != nullptr)
+                    {
+                        stream.release();
+                        juce::AudioBuffer<float> tone(1, 44100 * 2);
+                        for (int i = 0; i < tone.getNumSamples(); ++i)
+                            tone.setSample(0, i, 0.35f * (float) std::sin(2.0 * juce::MathConstants<double>::pi * 440.0 * i / 44100.0));
+                        writer->writeFromAudioSampleBuffer(tone, 0, tone.getNumSamples());
+                    }
+                }
+                check(shortSfx.getSize() > 1000, "a two-second test sound was written");
+
+                SoundboardEngine engine(formatManager);
+                engine.prepareToPlay(512, 44100.0);
+                engine.registerSound("Gull", shortSfx, 1.0f, false, SoundFades { 0.5, 0.5 });
+                engine.registerSound("Surf", folderTracks[0], 1.0f, true, SoundFades { 0.0, 1.0 });
+                engine.registerSound("Rain", folderTracks[0], 1.0f, true); // no fades of its own
+
+                std::atomic<bool> pulling { true };
+                std::thread puller([&]
+                {
+                    juce::AudioBuffer<float> buffer(2, 512);
+                    auto startTime = std::chrono::steady_clock::now();
+                    juce::int64 pulled = 0;
+                    while (pulling.load())
+                    {
+                        auto owed = (juce::int64) (std::chrono::duration<double>(
+                                        std::chrono::steady_clock::now() - startTime).count() * 44100.0);
+                        while (pulled < owed && pulling.load())
+                        {
+                            buffer.clear();
+                            juce::AudioSourceChannelInfo info(&buffer, 0, 512);
+                            engine.getNextAudioBlock(info);
+                            pulled += 512;
+                        }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    }
+                });
+                auto wait = [](int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); };
+
+                engine.trigger("Gull");
+                check(engine.isPlaying("Gull") && engine.getFadeLevel("Gull") < 0.2f,
+                       "a sound set to fade in starts from silence when pressed");
+                wait(750);
+                check(juce::approximatelyEqual(engine.getFadeLevel("Gull"), 1.0f), "and fades all the way in");
+                wait(1000); // ~1.75 s into a 2 s sound: inside its last half second
+                check(engine.isPlaying("Gull") && engine.getFadeLevel("Gull") < 0.95f,
+                       "a one-shot set to fade out fades as it nears its own end");
+                wait(900);
+                check(! engine.isPlaying("Gull"), "and finishes");
+
+                engine.trigger("Surf");
+                check(juce::approximatelyEqual(engine.getFadeLevel("Surf"), 1.0f),
+                       "a loop with no fade-in starts at full volume");
+                wait(200);
+                engine.trigger("Surf");
+                wait(300);
+                check(engine.isPlaying("Surf") && engine.getFadeLevel("Surf") < 1.0f,
+                       "pressing a loop set to fade out fades it rather than cutting it");
+                wait(1100);
+                check(! engine.isPlaying("Surf"), "and then it stops");
+
+                // Scenes stopping loops.
+                engine.trigger("Rain"); // started by hand, button has no fade
+                check(! engine.wasStartedByScene("Rain"), "a loop started by a click is marked as such");
+                engine.stopLoopForScene("Rain", 0.5);
+                check(engine.isPlaying("Rain"),
+                       "a scene stopping a hand-started loop with no fade of its own still eases it out");
+                wait(800);
+                check(! engine.isPlaying("Rain"), "over the scene transition");
+
+                engine.startLoop("Rain", SoundFades { 0.0, 0.0 });
+                check(engine.wasStartedByScene("Rain") && engine.getFades("Rain") == SoundFades { 0.0, 0.0 },
+                       "a loop a scene started remembers that, and its fades");
+                engine.stopLoopForScene("Rain", 2.0);
+                check(! engine.isPlaying("Rain"), "a scene's deliberate cut stays a cut");
+
+                // Random play, on a clock the test controls.
+                double fakeNow = 1000.0;
+                engine.setClockForTesting([&] { return fakeNow; });
+                engine.setRandomSeedForTesting(42);
+
+                engine.startRandom("Surf", RandomFrequency::high);
+                check(engine.getRandomFrequency("Surf") == RandomFrequency::off,
+                       "a loop can't be set to play randomly");
+
+                engine.startRandom("Gull", RandomFrequency::high);
+                auto first = engine.getNextRandomTime("Gull");
+                check(engine.getRandomFrequency("Gull") == RandomFrequency::high
+                       && first >= 1000.0 + 15.0 * 0.25 && first <= 1000.0 + 15.0,
+                       "the first random play comes within the shortest gap, not minutes later");
+
+                engine.runRandomScheduler();
+                check(! engine.isPlaying("Gull"), "nothing plays before its time");
+
+                fakeNow = first + 0.01;
+                engine.runRandomScheduler();
+                check(engine.isPlaying("Gull"), "it plays when its time comes");
+                auto second = engine.getNextRandomTime("Gull");
+                check(second >= fakeNow + 15.0 && second <= fakeNow + 45.0,
+                       "and the next gap is within High's range (15-45 s)");
+
+                fakeNow = second + 0.01; // due again while the last one is still playing
+                engine.runRandomScheduler();
+                check(engine.countPlaying("Gull") == 1, "a random sound never plays over itself");
+
+                auto before = engine.getNextRandomTime("Gull");
+                engine.startRandom("Gull", RandomFrequency::high);
+                check(juce::approximatelyEqual(engine.getNextRandomTime("Gull"), before),
+                       "switching it on again at the same pace keeps its timing");
+
+                engine.startRandom("Gull", RandomFrequency::low);
+                check(engine.getRandomFrequency("Gull") == RandomFrequency::low
+                       && engine.getNextRandomTime("Gull") <= fakeNow + 120.0,
+                       "changing the pace reschedules it");
+
+                engine.stopAllVoices();
+                check(engine.getRandomSounds().empty() && ! engine.isPlaying("Gull"),
+                       "the Killswitch silences everything and switches random play off too");
+
+                check(randomFrequencyFromName(randomFrequencyName(RandomFrequency::medium)) == RandomFrequency::medium
+                       && randomFrequencyFromName("nonsense") == RandomFrequency::off,
+                       "random frequencies read back from their names, and nonsense is off");
+
+                engine.setClockForTesting({});
+                pulling = false;
+                puller.join();
+            }
+
+            {
+                // Fades on the board, and random play and fades in scenes:
+                // saved, reloaded, planned and renamed.
+                SoundboardLayout board(formatManager);
+                board.setFile(scratch.getChildFile("fades-board.json"));
+                board.load();
+                board.assign(0, folderTracks[0], "Waves");
+                board.setFades(0, 2.0, 99.0);
+
+                SoundboardLayout reloadedBoard(formatManager);
+                reloadedBoard.setFile(scratch.getChildFile("fades-board.json"));
+                reloadedBoard.load();
+                check(juce::approximatelyEqual(reloadedBoard.getSlot(0).fadeInSeconds, 2.0)
+                       && juce::approximatelyEqual(reloadedBoard.getSlot(0).fadeOutSeconds, 10.0),
+                       "a button's fades survive a restart, and an absurd length is clamped");
+
+                auto scenesFile = scratch.getChildFile("random-scenes.json");
+                scenesFile.deleteFile();
+
+                SceneLibrary scenes;
+                scenes.setFile(scenesFile);
+                scenes.load();
+
+                Scene ocean;
+                ocean.name = "Ocean";
+                ocean.loops.add("Waves");
+                ocean.randoms.push_back({ "Gull", 3 });
+                ocean.soundFades["Waves"] = { 4.0, SceneFades::kSceneTransition };
+                ocean.soundFades["Gull"] = { 0.0, 1.0 };
+                auto oceanId = scenes.add(ocean);
+
+                SceneLibrary reloadedScenes;
+                reloadedScenes.setFile(scenesFile);
+                reloadedScenes.load();
+                auto* back = reloadedScenes.findById(oceanId);
+                check(back != nullptr && back->randoms.size() == 1 && back->randoms[0].name == "Gull"
+                       && back->randoms[0].frequency == 3,
+                       "a scene's random sounds and their pace survive a restart");
+                check(back != nullptr && back->fadesFor("Waves") == SceneFades { 4.0, SceneFades::kSceneTransition }
+                       && back->fadesFor("Gull") == SceneFades { 0.0, 1.0 },
+                       "and so do its per-sound fades, a deliberate 'off' included");
+                check(back != nullptr && back->fadesFor("Something else") == SceneFades {},
+                       "a sound with no fades of its own uses the scene transition");
+
+                SceneContext context;
+                context.boardNames = { "Waves", "Gull", "Thunder", "Rain" };
+                context.loopingNames = { "Waves", "Rain" };
+                context.runningRandoms.push_back({ "Thunder", 1 });
+
+                auto plan = planScene(ocean, context);
+                check(plan.randomsToStart.size() == 1 && plan.randomsToStart[0].name == "Gull",
+                       "pressing a scene starts its random sounds");
+                check(plan.randomsToStop.contains("Thunder"),
+                       "and switches off any other sound playing randomly");
+
+                context.runningRandoms = { { "Gull", 3 } };
+                plan = planScene(ocean, context);
+                check(plan.randomsToStart.empty() && plan.randomsToStop.isEmpty(),
+                       "a sound already playing randomly at the right pace is left alone");
+
+                context.runningRandoms = { { "Gull", 1 } };
+                plan = planScene(ocean, context);
+                check(plan.randomsToStart.size() == 1 && plan.randomsToStart[0].frequency == 3,
+                       "one at the wrong pace is changed to the scene's");
+
+                Scene broken;
+                broken.name = "Broken";
+                broken.randoms = { { "Rain", 2 }, { "Kraken", 2 } };
+                plan = planScene(broken, context);
+                check(plan.randomsToStart.empty() && plan.problems.size() == 2,
+                       "a random sound that's now a loop, or gone from the board, is skipped and reported");
+
+                check(reloadedScenes.renameLoop("Gull", "Seagull") == 1, "renaming a button reaches scenes using it randomly");
+                back = reloadedScenes.findById(oceanId);
+                check(back != nullptr && back->randoms[0].name == "Seagull"
+                       && back->fadesFor("Seagull") == SceneFades { 0.0, 1.0 }
+                       && back->soundFades.count("Gull") == 0,
+                       "and its random setting and fades follow the new name");
+
+                // A scenes.json from before version 2: no randoms, no fades.
+                auto oldFile = scratch.getChildFile("v1-scenes.json");
+                oldFile.replaceWithText(R"({ "schemaVersion": 1, "scenes": [ { "id": "{12345678-1234-1234-1234-123456789012}",
+                    "name": "Storm", "music": "leave", "loops": [ "Rain" ] } ] })");
+                SceneLibrary oldScenes;
+                oldScenes.setFile(oldFile);
+                oldScenes.load();
+                check(oldScenes.getNumScenes() == 1 && oldScenes.getScene(0)->randoms.empty()
+                       && oldScenes.getScene(0)->fadesFor("Rain") == SceneFades {},
+                       "a scene saved before this still fades its loops over the scene transition, as it did");
             }
 
             {
@@ -3059,7 +3291,14 @@ namespace
                                                                    { tavernList, "Tavern Night" },
                                                                    { juce::Uuid(), "Exploration" } };
 
-            SceneEditor editor(captured, playlists, juce::StringArray { "Fire", "Crowd", "Rain", "Wind" }, {});
+            SceneEditor::Board board;
+            board.loopingNames = { "Fire", "Crowd", "Rain", "Wind" };
+            board.oneShotNames = { "Seagull", "Thunder", "Door creak" };
+            board.buttonFades["Seagull"] = { 0.5, 1.0 };
+            captured.randoms.push_back({ "Seagull", 3 });
+            captured.soundFades["Seagull"] = { 0.5, 1.0 };
+            captured.soundFades["Rain"] = { 5.0, SceneFades::kSceneTransition };
+            SceneEditor editor(captured, playlists, board, {});
             okCount += write(editor, "scene-editor") ? 1 : 0;
         }
 
@@ -3067,7 +3306,7 @@ namespace
             // And with no looping buttons at all, where the hint shows.
             Scene blank;
             blank.name = "Scene 1";
-            SceneEditor editor(blank, {}, {}, {});
+            SceneEditor editor(blank, {}, SceneEditor::Board {}, {});
             okCount += write(editor, "scene-editor-no-loops") ? 1 : 0;
         }
 

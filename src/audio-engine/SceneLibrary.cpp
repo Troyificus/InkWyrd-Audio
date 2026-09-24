@@ -10,6 +10,35 @@ namespace
     constexpr const char* kKeyMusic = "music";
     constexpr const char* kKeyPlaylist = "playlistId";
     constexpr const char* kKeyLoops = "loops";
+    constexpr const char* kKeyRandoms = "randoms";
+    constexpr const char* kKeyFrequency = "frequency";
+    constexpr const char* kKeyFades = "fades";
+    constexpr const char* kKeyFadeIn = "in";
+    constexpr const char* kKeyFadeOut = "out";
+
+    const char* const kFrequencyNames[] = { "off", "low", "medium", "high" };
+
+    juce::String frequencyToString(int frequency)
+    {
+        return kFrequencyNames[juce::jlimit(1, 3, frequency)];
+    }
+
+    int frequencyFromString(const juce::String& text)
+    {
+        for (int i = 1; i <= 3; ++i)
+            if (text == kFrequencyNames[i])
+                return i;
+        return 0;
+    }
+
+    // -1 (scene transition) or a length in 0..10 seconds.
+    double readFade(const juce::var& value)
+    {
+        if (value.isVoid() || value.isUndefined())
+            return SceneFades::kSceneTransition;
+        auto seconds = (double) value;
+        return seconds < 0.0 ? SceneFades::kSceneTransition : juce::jlimit(0.0, 10.0, seconds);
+    }
     constexpr const char* kKeySetsVolume = "setsVolume";
     constexpr const char* kKeyVolume = "volume";
 
@@ -87,6 +116,37 @@ ScenePlan planScene(const Scene& scene, const SceneContext& context)
     for (const auto& name : context.runningLoops)
         if (! wanted.contains(name))
             plan.loopsToStop.add(name);
+
+    // --- Random sounds ---------------------------------------------------
+    juce::StringArray wantedRandom;
+
+    for (const auto& random : scene.randoms)
+    {
+        if (! context.boardNames.contains(random.name))
+        {
+            plan.problems.add("\"" + random.name + "\" isn't on the soundboard any more");
+            continue;
+        }
+
+        if (context.loopingNames.contains(random.name))
+        {
+            plan.problems.add("\"" + random.name + "\" is set to loop now, so it can't play randomly");
+            continue;
+        }
+
+        wantedRandom.addIfNotAlreadyThere(random.name);
+
+        auto running = std::find_if(context.runningRandoms.begin(), context.runningRandoms.end(),
+                                    [&](const SceneRandom& r) { return r.name == random.name; });
+
+        // Already playing randomly at this pace: leave its timing alone.
+        if (running == context.runningRandoms.end() || running->frequency != random.frequency)
+            plan.randomsToStart.push_back(random);
+    }
+
+    for (const auto& running : context.runningRandoms)
+        if (! wantedRandom.contains(running.name))
+            plan.randomsToStop.add(running.name);
 
     // --- Volume ----------------------------------------------------------
     if (scene.setsVolume)
@@ -168,6 +228,32 @@ void SceneLibrary::load()
                 if (loop.toString().isNotEmpty())
                     scene.loops.addIfNotAlreadyThere(loop.toString());
 
+        if (auto* randoms = entry.getProperty(kKeyRandoms, juce::var()).getArray())
+        {
+            for (const auto& random : *randoms)
+            {
+                SceneRandom r;
+                r.name = random.getProperty(kKeyName, "").toString();
+                r.frequency = frequencyFromString(random.getProperty(kKeyFrequency, "").toString());
+
+                auto duplicate = std::any_of(scene.randoms.begin(), scene.randoms.end(),
+                                             [&](const SceneRandom& x) { return x.name == r.name; });
+                if (r.name.isNotEmpty() && r.frequency > 0 && ! duplicate)
+                    scene.randoms.push_back(r);
+            }
+        }
+
+        if (auto* fades = entry.getProperty(kKeyFades, juce::var()).getDynamicObject())
+        {
+            for (const auto& soundFade : fades->getProperties())
+            {
+                SceneFades f;
+                f.fadeInSeconds = readFade(soundFade.value.getProperty(kKeyFadeIn, juce::var()));
+                f.fadeOutSeconds = readFade(soundFade.value.getProperty(kKeyFadeOut, juce::var()));
+                scene.soundFades[soundFade.name.toString()] = f;
+            }
+        }
+
         scene.setsVolume = entry.getProperty(kKeySetsVolume, false);
         scene.volume = juce::jlimit(0.0f, 1.0f, (float) (double) entry.getProperty(kKeyVolume, 1.0));
 
@@ -201,6 +287,37 @@ void SceneLibrary::save()
         for (const auto& loop : scene.loops)
             loops.add(loop);
         object->setProperty(kKeyLoops, loops);
+
+        if (! scene.randoms.empty())
+        {
+            juce::Array<juce::var> randoms;
+            for (const auto& random : scene.randoms)
+            {
+                juce::DynamicObject::Ptr r = new juce::DynamicObject();
+                r->setProperty(kKeyName, random.name);
+                r->setProperty(kKeyFrequency, frequencyToString(random.frequency));
+                randoms.add(juce::var(r.get()));
+            }
+            object->setProperty(kKeyRandoms, randoms);
+        }
+
+        // Only what differs from "scene transition", so a scene that never
+        // touched fades reads exactly as it did before they existed.
+        juce::DynamicObject::Ptr fades = new juce::DynamicObject();
+        for (const auto& [soundName, f] : scene.soundFades)
+        {
+            if (f == SceneFades {})
+                continue;
+
+            juce::DynamicObject::Ptr entry = new juce::DynamicObject();
+            if (f.fadeInSeconds >= 0.0)
+                entry->setProperty(kKeyFadeIn, f.fadeInSeconds);
+            if (f.fadeOutSeconds >= 0.0)
+                entry->setProperty(kKeyFadeOut, f.fadeOutSeconds);
+            fades->setProperty(soundName, juce::var(entry.get()));
+        }
+        if (! fades->getProperties().isEmpty())
+            object->setProperty(kKeyFades, juce::var(fades.get()));
 
         object->setProperty(kKeySetsVolume, scene.setsVolume);
         object->setProperty(kKeyVolume, (double) scene.volume);
@@ -334,13 +451,35 @@ int SceneLibrary::renameLoop(const juce::String& oldName, const juce::String& ne
 
     for (auto& scene : scenes)
     {
-        auto index = scene.loops.indexOf(oldName);
-        if (index < 0)
-            continue;
+        auto touched = false;
 
-        scene.loops.set(index, newName);
-        scene.loops.removeDuplicates(false);
-        ++changed;
+        auto index = scene.loops.indexOf(oldName);
+        if (index >= 0)
+        {
+            scene.loops.set(index, newName);
+            scene.loops.removeDuplicates(false);
+            touched = true;
+        }
+
+        for (auto& random : scene.randoms)
+        {
+            if (random.name == oldName)
+            {
+                random.name = newName;
+                touched = true;
+            }
+        }
+
+        auto fades = scene.soundFades.find(oldName);
+        if (fades != scene.soundFades.end())
+        {
+            scene.soundFades[newName] = fades->second;
+            scene.soundFades.erase(oldName);
+            touched = true;
+        }
+
+        if (touched)
+            ++changed;
     }
 
     if (changed > 0)

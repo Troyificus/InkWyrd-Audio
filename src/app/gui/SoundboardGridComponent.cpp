@@ -15,6 +15,9 @@ namespace
     constexpr int kHintHeight = 18;
     constexpr int kSlotStep = 8; // how many slots the +/- buttons add or remove
 
+    // The fade lengths offered on a button's menu. 0 is "Off".
+    constexpr double kFadeChoices[] = { 0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 10.0 };
+
     constexpr int kVolumeBarHeight = 6;
     constexpr int kVolumeBarBottomInset = 6;
     constexpr int kVolumeBarSideInset = 8;
@@ -79,6 +82,15 @@ public:
           onVolumeClick(std::move(onVolumeClickToUse)),
           onDragStart(std::move(onDragStartToUse))
     {
+    }
+
+    void setRandomState(bool isRandom)
+    {
+        if (random == isRandom)
+            return;
+
+        random = isRandom;
+        repaint();
     }
 
     void setLoopState(bool slotLoops, bool loopIsPlaying)
@@ -171,6 +183,18 @@ public:
             g.fillRect(mark.getCentreX() - 1.0f, mark.getY() - 1.0f, 4.0f, 2.2f);
         }
 
+        if (random)
+        {
+            // The random mark: a small die in the top-RIGHT (the loop mark
+            // has the left), in the accent colour - it's live, like a
+            // running loop.
+            auto die = juce::Rectangle<float>((float) getWidth() - 17.0f, 5.0f, 11.0f, 11.0f);
+            g.setColour(inkwyrd::theme::accent);
+            g.drawRoundedRectangle(die, 2.0f, 1.3f);
+            for (auto [dx, dy] : { std::pair { 0.28f, 0.28f }, std::pair { 0.5f, 0.5f }, std::pair { 0.72f, 0.72f } })
+                g.fillEllipse(die.getX() + die.getWidth() * dx - 1.1f, die.getY() + die.getHeight() * dy - 1.1f, 2.2f, 2.2f);
+        }
+
         auto textArea = getLocalBounds().reduced(6);
         if (showVolume)
             textArea.removeFromBottom(kVolumeBarHeight + kVolumeBarBottomInset);
@@ -245,7 +269,7 @@ public:
 private:
     int index;
     std::function<void(int)> onRightClick, onVolumeClick, onDragStart;
-    bool loops = false, playing = false;
+    bool loops = false, playing = false, random = false;
 
     // Whether this press turned into a drag, so mouseUp knows not to
     // treat it as a click.
@@ -277,8 +301,8 @@ SoundboardGridComponent::SoundboardGridComponent(SoundboardEngine& soundboardToU
 
     hint.setText("Click an empty button to assign a sound, or drag files in. Drag a button onto "
                   "another to swap them. Click a button's volume bar to adjust it. Right-click to "
-                  "rename, recolour, loop, add a picture or clear. Killswitch (or Esc on the Player) "
-                  "silences every soundboard sound; the music keeps playing.",
+                  "rename, recolour, loop, fade, play randomly, add a picture or clear. Killswitch "
+                  "(or Esc on the Player) silences every soundboard sound; the music keeps playing.",
                   juce::dontSendNotification);
     hint.setFont(juce::Font(juce::FontOptions(12.0f)));
     addAndMakeVisible(hint);
@@ -342,6 +366,7 @@ void SoundboardGridComponent::applyAppearance(int index)
 
     auto missing = !slot.file.existsAsFile();
     button->setLoopState(slot.loop && ! missing, slot.loop && soundboard.isPlaying(slot.name));
+    button->setRandomState(! missing && soundboard.getRandomFrequency(slot.name) != RandomFrequency::off);
 
     // Say so on the button itself. A sound that silently does nothing
     // when pressed mid-session is the worst outcome here.
@@ -442,6 +467,33 @@ void SoundboardGridComponent::slotRightClicked(int index)
         menu.addItem(6, "Volume...");
         menu.addItem(7, "Loop this sound", true, slot.loop);
 
+        // Fades: preset lengths, the current one ticked. Off is 0.
+        auto fadeMenu = [](int firstId, double current)
+        {
+            juce::PopupMenu fades;
+            for (int i = 0; i < (int) std::size(kFadeChoices); ++i)
+            {
+                auto seconds = kFadeChoices[i];
+                fades.addItem(firstId + i,
+                              seconds <= 0.0 ? juce::String("Off") : juce::String(seconds, seconds < 1.0 ? 1 : 0) + " s",
+                              true, juce::approximatelyEqual(seconds, current));
+            }
+            return fades;
+        };
+        menu.addSubMenu("Fade in", fadeMenu(200, slot.fadeInSeconds));
+        menu.addSubMenu(slot.loop ? "Fade out" : "Fade out (at its end)", fadeMenu(300, slot.fadeOutSeconds));
+
+        // Random play is for one-shots: a loop never finishes, so there's
+        // nothing to repeat.
+        auto current = soundboard.getRandomFrequency(slot.name);
+        juce::PopupMenu randomMenu;
+        const char* frequencyLabels[] = { "Off", "Low - every 2-5 min", "Medium - every 45 s-2 min",
+                                          "High - every 15-45 s" };
+        for (int f = 0; f < 4; ++f)
+            randomMenu.addItem(400 + f, frequencyLabels[f], true, (int) current == f);
+        menu.addSubMenu("Play randomly", randomMenu, ! slot.loop && slot.file.existsAsFile(),
+                        std::unique_ptr<juce::Drawable>(), current != RandomFrequency::off);
+
         juce::PopupMenu colours;
         for (int i = 0; i < numPresets; ++i)
             colours.addItem(100 + i, kPresetColours[i].name);
@@ -480,6 +532,30 @@ void SoundboardGridComponent::slotRightClicked(int index)
         else if (result == 7)
         {
             toggleLoop(index);
+        }
+        else if (result >= 200 && result < 200 + (int) std::size(kFadeChoices))
+        {
+            const auto& s = layout.getSlot(index);
+            layout.setFades(index, kFadeChoices[result - 200], s.fadeOutSeconds);
+            notifyChanged(); // fades are part of what the engine registers
+        }
+        else if (result >= 300 && result < 300 + (int) std::size(kFadeChoices))
+        {
+            const auto& s = layout.getSlot(index);
+            layout.setFades(index, s.fadeInSeconds, kFadeChoices[result - 300]);
+            notifyChanged();
+        }
+        else if (result >= 400 && result < 404)
+        {
+            const auto& s = layout.getSlot(index);
+            auto frequency = (RandomFrequency) (result - 400);
+
+            if (frequency == RandomFrequency::off)
+                soundboard.stopRandom(s.name);
+            else
+                soundboard.startRandom(s.name, frequency);
+
+            applyAppearance(index);
         }
         else if (result >= 100 && result < 100 + numPresets)
         {
@@ -561,6 +637,9 @@ void SoundboardGridComponent::renameSlot(int index)
         if (result != 1 || safeThis == nullptr)
             return;
 
+        auto oldName = layout.getSlot(index).name;
+        auto randomFrequency = soundboard.getRandomFrequency(oldName);
+
         if (!layout.rename(index, owned->getTextEditorContents("name")))
         {
             inkwyrd::showMessage(safeThis, juce::MessageBoxIconType::WarningIcon,
@@ -573,12 +652,20 @@ void SoundboardGridComponent::renameSlot(int index)
 
         // The name IS the engine's key, so this genuinely has to
         // re-register rather than just repaint.
+        soundboard.stopRandom(oldName);
         notifyChanged();
+
+        // Random play follows the button to its new name.
+        if (randomFrequency != RandomFrequency::off)
+            soundboard.startRandom(layout.getSlot(index).name, randomFrequency);
     }));
 }
 
 void SoundboardGridComponent::clearSlot(int index)
 {
+    if (layout.isValidIndex(index))
+        soundboard.stopRandom(layout.getSlot(index).name);
+
     layout.clearSlot(index);
     notifyChanged();
 }
@@ -741,6 +828,11 @@ void SoundboardGridComponent::toggleLoop(int index)
     if (! nowLooping && soundboard.isPlaying(slot.name))
         soundboard.stop(slot.name);
 
+    // A loop can't play randomly (it never finishes), so becoming one ends
+    // random play.
+    if (nowLooping)
+        soundboard.stopRandom(slot.name);
+
     layout.setLoop(index, nowLooping);
     notifyChanged(); // the engine keys looping per registered sound
 }
@@ -750,10 +842,16 @@ void SoundboardGridComponent::timerCallback()
     // A loop can stop for reasons this component never sees: the panic
     // button, a Stream Deck press, or the Voice FX window's own Stop.
     auto playingNow = soundboard.getPlayingLoopNames();
-    if (playingNow == playingLoops)
+
+    juce::StringArray randomNow;
+    for (const auto& random : soundboard.getRandomSounds())
+        randomNow.add(random.name);
+
+    if (playingNow == playingLoops && randomNow == randomSounds)
         return;
 
     playingLoops = playingNow;
+    randomSounds = randomNow;
 
     for (int i = 0; i < buttons.size() && layout.isValidIndex(i); ++i)
         applyAppearance(i);

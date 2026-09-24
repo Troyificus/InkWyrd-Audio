@@ -30,6 +30,8 @@ Inspired by Kenku FM and Winamp.
   - [Editing tags and cover art](#editing-tags-and-cover-art)
   - [The soundboard](#the-soundboard)
   - [Looping ambience](#looping-ambience)
+  - [Fading sounds in and out](#fading-sounds-in-and-out)
+  - [Sounds that play by themselves](#sounds-that-play-by-themselves)
   - [Scenes](#scenes)
   - [Your microphone](#your-microphone)
   - [Ducking the music while you talk](#ducking-the-music-while-you-talk)
@@ -439,14 +441,19 @@ including its name, so Stream Deck keys keep working.
   image onto a button that already has a sound. The picture is dimmed so
   the name stays readable.
 - **Loop this sound** - see [Looping ambience](#looping-ambience).
+- **Fade in** / **Fade out** - see
+  [Fading sounds in and out](#fading-sounds-in-and-out).
+- **Play randomly** - see
+  [Sounds that play by themselves](#sounds-that-play-by-themselves).
 - **Replace** the sound or **Clear** the button.
 
 **+** and **-** at the top add or remove buttons. A button with a sound
 on it is never removed.
 
 **Killswitch** (top of the window, or **Esc** on the Player) instantly
-silences every sound effect playing, loops included. It never touches
-the music: use **Stop** or **Fade out** on the Player for that.
+silences every sound effect playing, loops included, and switches off
+any sound set to play randomly. It never touches the music: use **Stop**
+or **Fade out** on the Player for that.
 
 A button whose file has gone missing says **(file missing)** rather than
 silently doing nothing.
@@ -468,20 +475,70 @@ ambience bed quietly under the music and leave it.
 
 Loops are what [scenes](#scenes) switch on and off.
 
+## Fading sounds in and out
+
+Any button can fade in when it starts and fade out when it stops,
+instead of starting and stopping at full volume. Right-click it and
+choose a length under **Fade in** and **Fade out** (from half a second
+to ten seconds), or **Off**.
+
+- **Fade in** happens every time the sound starts: a click, a Stream
+  Deck key, a random play or a scene.
+- **Fade out** happens when a loop is stopped. On a sound that plays
+  once, it fades the last part of the sound as it ends, so a long tail
+  dies away instead of cutting off.
+- The **Killswitch** ignores fades and stops everything at once.
+
+[Scenes](#scenes) keep their own fade settings for each sound, so the
+same rain can swell in slowly in one scene and cut in at once in
+another.
+
+## Sounds that play by themselves
+
+A sound effect can play on its own every so often - a seagull over the
+waves, distant thunder, a creak in an old house - while the rest of the
+scene carries on.
+
+1. **Right-click** the button and choose **Play randomly**.
+2. Pick how often:
+   - **Low** - every 2 to 5 minutes
+   - **Medium** - every 45 seconds to 2 minutes
+   - **High** - every 15 to 45 seconds
+
+   Each gap is picked at random within its range, so it never falls
+   into a pattern. The first one comes sooner, so you can tell it's on.
+3. A small **die** appears in the button's top corner while it's playing
+   randomly.
+
+**Clicking the button still plays it straight away**, whenever you
+like. It never plays over itself: if one is still playing when the next
+is due, that turn is skipped. To stop it, choose **Play randomly ->
+Off**, or press the Killswitch.
+
+Random play is for sounds that play once. A looping button can't play
+randomly, since it never finishes. It also doesn't switch itself on when
+Inkwyrd starts, the same as loops: save it in a [scene](#scenes) and
+pressing the scene switches it on.
+
 ## Scenes
 
 A scene is one press that sets the whole room: **which playlist plays,
-which looping sounds are running, and (if you choose) the master
-volume.** For example "Tavern", "Road", "Combat" or "Storm".
+which looping sounds are running, which sounds play randomly, and (if
+you choose) the master volume.** For example "Tavern", "Road", "Combat" or "Storm".
 
 Open the **Scenes** window from the **Scenes** button on the Player.
 
 **To make a scene:**
 1. Set the room up the way you want it: play the playlist, start the
-   looping sounds, set the volume.
+   looping sounds, switch on any sounds that should play randomly, set
+   the volume.
 2. In the Scenes window, click **+ Save current as scene**.
 3. A dialog opens, already filled in from what's playing. Give it a
-   name, untick anything you don't want in it, and pick a colour.
+   name, untick anything you don't want in it, and pick a colour. Each
+   sound also has **In** and **Out** fades for this scene, taken from
+   its button - change them here without changing the button. **Scene
+   transition** means the scene's normal change time; **Off** cuts
+   straight in or out.
 4. Choose what it does to the music:
    - **Play a playlist** - the usual choice.
    - **Fade the music out** - for a deliberately quiet scene.
@@ -501,7 +558,10 @@ Open the **Scenes** window from the **Scenes** button on the Player.
   on from Road into Storm.
 - If the scene sets the volume, it glides there. Grab the Master slider
   yourself and the glide stops.
-- Sound effects that aren't loops are never touched.
+- The scene's random sounds switch on (at the scene's pace), and any
+  other sound playing randomly switches off. One already playing
+  randomly at the right pace carries on undisturbed.
+- Other sound effects are never touched.
 - **Pressing the scene you're already in puts it back.** If the
   Killswitch stopped the ambience, one press brings it back without
   restarting anything that's still right.

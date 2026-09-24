@@ -1305,6 +1305,9 @@ SceneContext InkwyrdAudioApplication::buildSceneContext()
     context.playlistExists = [this](const juce::Uuid& id) { return library.findById(id) != nullptr; };
     context.runningLoops = soundboard.getPlayingLoopNames();
 
+    for (const auto& random : soundboard.getRandomSounds())
+        context.runningRandoms.push_back({ random.name, (int) random.frequency });
+
     for (const auto& slot : soundboardLayout.getFilledSlots())
     {
         context.boardNames.add(slot.name);
@@ -1342,11 +1345,25 @@ void InkwyrdAudioApplication::activateScene(const juce::Uuid& id)
     if (plan.fadeOutMusic)
         playlist.fadeOutAndStop(settings.getFadeOutSeconds());
 
+    // A scene's per-sound fades, with "scene transition" filled in.
+    auto resolve = [seconds](SceneFades fades)
+    {
+        return SoundFades { fades.fadeInSeconds < 0.0 ? seconds : fades.fadeInSeconds,
+                            fades.fadeOutSeconds < 0.0 ? seconds : fades.fadeOutSeconds };
+    };
+
     for (const auto& name : plan.loopsToStop)
-        soundboard.stopLoop(name, seconds);
+        soundboard.stopLoopForScene(name, seconds);
 
     for (const auto& name : plan.loopsToStart)
-        soundboard.startLoop(name, seconds);
+        soundboard.startLoop(name, resolve(scene->fadesFor(name)));
+
+    for (const auto& name : plan.randomsToStop)
+        soundboard.stopRandom(name);
+
+    for (const auto& random : plan.randomsToStart)
+        soundboard.startRandom(random.name, (RandomFrequency) random.frequency,
+                               resolve(scene->fadesFor(random.name)));
 
     if (plan.setVolume)
         volumeGlide.start(masterEngine.getMasterGain(), plan.volume, seconds);
@@ -1385,6 +1402,33 @@ Scene InkwyrdAudioApplication::captureCurrentScene(Scene base)
     }
 
     base.loops = soundboard.getPlayingLoopNames();
+
+    // Each sound's fades as they are right now - a scene keeps its own
+    // copy. A loop YOU started takes its button's fades, where "off" means
+    // "no fade of its own" and so becomes the scene transition: otherwise
+    // every scene saved from buttons nobody has set up would cut its
+    // ambience dead. A loop a scene started keeps that scene's fades
+    // exactly, a deliberate cut included.
+    base.soundFades.clear();
+    for (const auto& name : base.loops)
+    {
+        auto fades = soundboard.getFades(name);
+        auto exact = soundboard.wasStartedByScene(name);
+        auto toScene = [exact](double seconds)
+        {
+            return exact || seconds > 0.0 ? seconds : SceneFades::kSceneTransition;
+        };
+        base.soundFades[name] = { toScene(fades.fadeInSeconds), toScene(fades.fadeOutSeconds) };
+    }
+
+    // Random sounds, with the fades each random play uses. Taken exactly:
+    // a seagull isn't a scene transition, so off really is off.
+    base.randoms.clear();
+    for (const auto& random : soundboard.getRandomSounds())
+    {
+        base.randoms.push_back({ random.name, (int) random.frequency });
+        base.soundFades[random.name] = { random.fades.fadeInSeconds, random.fades.fadeOutSeconds };
+    }
 
     // The level is always captured, so ticking "set the volume" later
     // starts from what it was when the scene was made. Whether the scene
@@ -1470,7 +1514,19 @@ void InkwyrdAudioApplication::openSceneEditor(const Scene& scene, bool isNew)
         if (auto* entry = library.getPlaylist(i))
             choices.push_back({ entry->id, entry->name });
 
-    auto editor = std::make_unique<SceneEditor>(scene, std::move(choices), buildSceneContext().loopingNames,
+    // What the editor offers: each button as a loop or as a one-shot that
+    // can play randomly, with its own fades to start a newly ticked sound
+    // from. A button whose file has gone can't be started, so isn't offered.
+    SceneEditor::Board board;
+    for (const auto& slot : soundboardLayout.getFilledSlots())
+    {
+        if (! slot.file.existsAsFile())
+            continue;
+        (slot.loop ? board.loopingNames : board.oneShotNames).add(slot.name);
+        board.buttonFades[slot.name] = { slot.fadeInSeconds, slot.fadeOutSeconds };
+    }
+
+    auto editor = std::make_unique<SceneEditor>(scene, std::move(choices), std::move(board),
         [this, isNew](const Scene& edited) -> juce::String
     {
         if (sceneLibrary.isNameTaken(edited.name, isNew ? juce::Uuid::null() : edited.id))
@@ -1538,6 +1594,7 @@ void InkwyrdAudioApplication::registerSoundboardLayout()
         if (slot.file.existsAsFile())
             soundboard.registerSound(slot.name, slot.file,
                                       juce::Decibels::decibelsToGain(slot.gainDb),
-                                      slot.loop);
+                                      slot.loop,
+                                      SoundFades { slot.fadeInSeconds, slot.fadeOutSeconds });
     }
 }

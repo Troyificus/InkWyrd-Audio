@@ -45,6 +45,12 @@ struct SoundboardSlot
     // ambience bed rather than an effect. See SoundboardEngine::trigger.
     bool loop = false;
 
+    // How it fades in when started and out when stopped (or, for a
+    // one-shot, as it reaches its own end). 0 = off. See SoundFades in
+    // SoundboardEngine.h, which these become.
+    double fadeInSeconds = 0.0;
+    double fadeOutSeconds = 0.0;
+
     bool isEmpty() const { return file == juce::File(); }
 };
 
@@ -102,6 +108,9 @@ public:
 
     void setLoop(int index, bool shouldLoop);
 
+    // Either can be 0 (off); clamped to 0..10 seconds.
+    void setFades(int index, double fadeInSeconds, double fadeOutSeconds);
+
     // Swaps two slots, contents and all. Moving a button is a swap
     // rather than an insert so nothing else on the board shifts - a
     // board is arranged by where things ARE, and a rearranging insert
@@ -140,10 +149,10 @@ public:
     juce::Array<SoundboardSlot> getFilledSlots() const;
 
     // 2 adds per-button gain and background images; 3 adds the loop
-    // flag. An older build reads this as "newer version", leaves the
+    // flag; 4 adds fade in / fade out. An older build reads this as "newer version", leaves the
     // file strictly alone and reports it, rather than rewriting it and
     // silently dropping what it doesn't understand.
-    static constexpr int kCurrentSchemaVersion = 3;
+    static constexpr int kCurrentSchemaVersion = 4;
     static constexpr int kDefaultSlotCount = 24;
     static constexpr int kMaxSlotCount = 256;
 

@@ -1859,6 +1859,47 @@ row. Decisions worth keeping:
   `TreeView::selectedItemBackgroundColourId` (`ItemComponent::paint`),
   so the items' own `paintItem` draws no selection.
 
+### Soundboard fades and random play (after beta.32)
+
+Two features, designed with the user's answers (don't re-ask):
+
+- **Fade in / fade out per button**, each Off or 0.5-10 s, from the
+  button's right-click menu (preset lengths). Fade in applies to EVERY
+  start (click, Stream Deck, random play, scene). Fade out applies to a
+  loop being stopped and to a one-shot's own ending (its last N seconds
+  fade - the engine's fade timer watches one-shots with a fade-out until
+  they get there). The Killswitch ignores fades.
+- **Play randomly** per one-shot: Low 2-5 min, Medium 45 s-2 min, High
+  15-45 s, a fresh random gap each time; the first play comes within the
+  shortest gap (quarter-to-whole of it) so switching it on is answered
+  soon. Clicking still plays it at once. Never overlaps itself (a due
+  play is skipped while the last is still going). Loops can't be random.
+  Runtime state only - doesn't switch itself on at launch, like loops -
+  so it's NOT in soundboard.json; scenes carry it. A die mark in the
+  button's top-right shows it. The Killswitch (`stopAllVoices`) switches
+  random play off too.
+- **Scenes keep their own per-sound fades** (`Scene::soundFades`, by
+  sound name) and a `randoms` list with each one's pace, both following
+  the "complete set" rule like loops. scenes.json went to schema 2;
+  soundboard.json to 4.
+
+**The compatibility rule that shaped the fade model:** every existing
+button starts with fades Off, and scenes always faded loops over the
+scene transition. So in a scene a loop's fade is "Scene transition"
+(`SceneFades::kSceneTransition`, -1, the default and what old scenes
+read as), "Off" (a deliberate cut) or a length. A button's own Off means
+"no fade of its own", so capturing a scene turns a hand-started loop's 0
+into Scene transition - otherwise every scene saved from unconfigured
+buttons would cut its ambience dead. The engine records per voice
+whether a SCENE started it (`startedByScene`): `stopLoopForScene()`
+uses a scene-started loop's fade exactly (a cut stays a cut) and a
+hand-started one's button fade-out, or the transition if it has none.
+
+Random play is testable without waiting minutes:
+`setClockForTesting()` / `setRandomSeedForTesting()` /
+`runRandomScheduler()`. The one-shot end-fade and "never over itself"
+checks were seen to FAIL against sabotaged code before being trusted.
+
 ### Reordering a playlist (beta.30)
 
 Drag a selected track (or several) to a new place, or press Up/Down.

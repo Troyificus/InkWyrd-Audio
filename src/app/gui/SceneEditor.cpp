@@ -8,14 +8,170 @@ namespace
 {
     enum MusicItem { leaveItem = 1, playItem, fadeOutItem };
 
-    constexpr int kToggleHeight = 24;
+    constexpr int kRowHeight = 28;
+    constexpr int kHeadingHeight = 24;
+
+    // Fade choices: "Scene transition" (the scene's one length - what every
+    // scene used before per-sound fades), "Off" (a deliberate cut), or a
+    // length. Item ids: 1 transition, 2 off, 3.. the lengths.
+    constexpr double kFadeLengths[] = { 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 10.0 };
+
+    void fillFadeBox(juce::ComboBox& box)
+    {
+        box.addItem("Scene transition", 1);
+        box.addItem("Off", 2);
+        for (int i = 0; i < (int) std::size(kFadeLengths); ++i)
+            box.addItem(juce::String(kFadeLengths[i], kFadeLengths[i] < 1.0 ? 1 : 0) + " s", 3 + i);
+    }
+
+    int fadeToId(double seconds)
+    {
+        if (seconds < 0.0)
+            return 1;
+        if (seconds <= 0.0)
+            return 2;
+
+        // The nearest length offered, so a hand-edited 2.5 still shows.
+        auto best = 0;
+        for (int i = 1; i < (int) std::size(kFadeLengths); ++i)
+            if (std::abs(kFadeLengths[i] - seconds) < std::abs(kFadeLengths[best] - seconds))
+                best = i;
+        return 3 + best;
+    }
+
+    double idToFade(int id)
+    {
+        if (id == 1)
+            return SceneFades::kSceneTransition;
+        if (id == 2 || ! juce::isPositiveAndBelow(id - 3, (int) std::size(kFadeLengths)))
+            return 0.0;
+        return kFadeLengths[id - 3];
+    }
 }
 
+//==============================================================================
+struct SceneEditor::SoundRow : public juce::Component
+{
+    SoundRow(const juce::String& soundName, bool isLoop, bool missing, bool included,
+             int frequency, SceneFades fades)
+        : name(soundName), loop(isLoop)
+    {
+        auto display = missing ? soundName + "  (not on the board" + juce::String(isLoop ? " as a loop)" : ")")
+                               : soundName;
+
+        if (loop)
+        {
+            tick.setButtonText(display);
+            tick.setToggleState(included, juce::dontSendNotification);
+            tick.onClick = [this] { changed(); };
+            addAndMakeVisible(tick);
+        }
+        else
+        {
+            label.setText(display, juce::dontSendNotification);
+            addAndMakeVisible(label);
+
+            randomBox.addItem("Not random", 1);
+            randomBox.addItem("Randomly - low", 2);
+            randomBox.addItem("Randomly - medium", 3);
+            randomBox.addItem("Randomly - high", 4);
+            randomBox.setSelectedId(included ? juce::jlimit(1, 3, frequency) + 1 : 1, juce::dontSendNotification);
+            randomBox.onChange = [this] { changed(); };
+            addAndMakeVisible(randomBox);
+        }
+
+        for (auto* box : { &fadeInBox, &fadeOutBox })
+        {
+            fillFadeBox(*box);
+            addAndMakeVisible(*box);
+        }
+        fadeInBox.setSelectedId(fadeToId(fades.fadeInSeconds), juce::dontSendNotification);
+        fadeOutBox.setSelectedId(fadeToId(fades.fadeOutSeconds), juce::dontSendNotification);
+
+        for (auto* caption : { &inCaption, &outCaption })
+        {
+            caption->setJustificationType(juce::Justification::centredRight);
+            addAndMakeVisible(*caption);
+        }
+
+        updateEnablement();
+    }
+
+    bool isIncluded() const { return loop ? tick.getToggleState() : randomBox.getSelectedId() > 1; }
+    int frequency() const { return juce::jmax(0, randomBox.getSelectedId() - 1); }
+
+    SceneFades fades() const
+    {
+        return { idToFade(fadeInBox.getSelectedId()), idToFade(fadeOutBox.getSelectedId()) };
+    }
+
+    // A sound switched on here that the scene didn't have yet starts from
+    // its button's own fades - what saving from the board would capture.
+    void setFadesIfNew(SceneFades fades)
+    {
+        fadeInBox.setSelectedId(fadeToId(fades.fadeInSeconds), juce::dontSendNotification);
+        fadeOutBox.setSelectedId(fadeToId(fades.fadeOutSeconds), juce::dontSendNotification);
+    }
+
+    void resized() override
+    {
+        auto area = getLocalBounds().reduced(0, 2);
+        auto boxWidth = 118, captionWidth = 32;
+
+        fadeOutBox.setBounds(area.removeFromRight(boxWidth));
+        outCaption.setBounds(area.removeFromRight(captionWidth + 4).withTrimmedRight(4));
+        fadeInBox.setBounds(area.removeFromRight(boxWidth));
+        inCaption.setBounds(area.removeFromRight(captionWidth + 4).withTrimmedRight(4));
+        area.removeFromRight(8);
+
+        if (loop)
+        {
+            tick.setBounds(area);
+        }
+        else
+        {
+            randomBox.setBounds(area.removeFromRight(150));
+            area.removeFromRight(6);
+            label.setBounds(area);
+        }
+    }
+
+    const juce::String name;
+    const bool loop;
+    bool wasIncludedAtStart = false;
+    std::function<void(SoundRow&)> onIncludedChanged;
+
+private:
+    void changed()
+    {
+        updateEnablement();
+        if (onIncludedChanged)
+            onIncludedChanged(*this);
+    }
+
+    void updateEnablement()
+    {
+        // Fades only mean something for a sound the scene uses.
+        fadeInBox.setEnabled(isIncluded());
+        fadeOutBox.setEnabled(isIncluded());
+        inCaption.setEnabled(isIncluded());
+        outCaption.setEnabled(isIncluded());
+    }
+
+    juce::ToggleButton tick;
+    juce::Label label;
+    juce::ComboBox randomBox;
+    juce::ComboBox fadeInBox, fadeOutBox;
+    juce::Label inCaption { {}, "In" }, outCaption { {}, "Out" };
+};
+
+//==============================================================================
 SceneEditor::SceneEditor(const Scene& sceneToEdit,
                           std::vector<PlaylistChoice> playlistsToOffer,
-                          juce::StringArray loopingNames,
+                          Board boardToUse,
                           SaveCallback onSaveToUse)
-    : scene(sceneToEdit), playlists(std::move(playlistsToOffer)), onSave(std::move(onSaveToUse))
+    : scene(sceneToEdit), playlists(std::move(playlistsToOffer)), board(std::move(boardToUse)),
+      onSave(std::move(onSaveToUse))
 {
     addAndMakeVisible(nameCaption);
     nameEditor.setText(scene.name, false);
@@ -55,32 +211,80 @@ SceneEditor::SceneEditor(const Scene& sceneToEdit,
                                                 : "Choose a playlist");
     addAndMakeVisible(playlistBox);
 
-    addAndMakeVisible(loopsCaption);
+    addAndMakeVisible(soundsCaption);
 
-    // Every looping button, plus anything this scene lists that the board
-    // no longer has - kept ticked and marked, so Edit never drops it.
-    juce::StringArray names(loopingNames);
-    for (const auto& name : scene.loops)
-        names.addIfNotAlreadyThere(name);
-
-    for (const auto& name : names)
+    // A button's own fades, as a scene would capture them: for a loop, a
+    // button with no fade of its own gets the scene transition (so the
+    // scene still eases it in and out); a random sound's are taken as they
+    // are.
+    auto buttonFadesFor = [this](const juce::String& name, bool isLoop)
     {
-        auto onBoard = loopingNames.contains(name);
-        auto* toggle = loopToggles.add(new juce::ToggleButton(onBoard ? name : name + "  (not on the board as a loop)"));
-        toggle->setComponentID(name);
-        toggle->setToggleState(scene.loops.contains(name), juce::dontSendNotification);
-        loopsPanel.addAndMakeVisible(toggle);
+        auto it = board.buttonFades.find(name);
+        auto in = it == board.buttonFades.end() ? 0.0 : it->second.first;
+        auto out = it == board.buttonFades.end() ? 0.0 : it->second.second;
+        if (isLoop)
+            return SceneFades { in > 0.0 ? in : SceneFades::kSceneTransition,
+                                out > 0.0 ? out : SceneFades::kSceneTransition };
+        return SceneFades { in, out };
+    };
+
+    auto addRow = [this, buttonFadesFor](juce::OwnedArray<SoundRow>& rows, const juce::String& name,
+                                         bool isLoop, bool missing, bool included, int frequency)
+    {
+        auto fades = scene.soundFades.count(name) > 0 ? scene.fadesFor(name) : buttonFadesFor(name, isLoop);
+        auto* row = rows.add(new SoundRow(name, isLoop, missing, included, frequency, fades));
+        row->wasIncludedAtStart = included;
+        row->onIncludedChanged = [buttonFadesFor](SoundRow& r)
+        {
+            // Newly switched on: start from the button's own fades.
+            if (r.isIncluded() && ! r.wasIncludedAtStart)
+                r.setFadesIfNew(buttonFadesFor(r.name, r.loop));
+        };
+        soundsPanel.addAndMakeVisible(row);
+    };
+
+    // Every looping button, plus anything the scene lists that the board
+    // no longer has as a loop - kept and marked, so Edit never drops it.
+    juce::StringArray loopNames(board.loopingNames);
+    for (const auto& name : scene.loops)
+        loopNames.addIfNotAlreadyThere(name);
+
+    for (const auto& name : loopNames)
+        addRow(loopRows, name, true, ! board.loopingNames.contains(name), scene.loops.contains(name), 0);
+
+    // Every one-shot, likewise.
+    juce::StringArray oneShots(board.oneShotNames);
+    for (const auto& random : scene.randoms)
+        oneShots.addIfNotAlreadyThere(random.name);
+
+    for (const auto& name : oneShots)
+    {
+        auto random = std::find_if(scene.randoms.begin(), scene.randoms.end(),
+                                   [&](const SceneRandom& r) { return r.name == name; });
+        auto included = random != scene.randoms.end();
+        addRow(randomRows, name, false, ! board.oneShotNames.contains(name), included,
+               included ? random->frequency : 2);
     }
 
-    noLoopsHint.setText("No soundboard buttons loop yet. Right-click one on the Soundboard and choose "
-                         "\"Loop this sound\".", juce::dontSendNotification);
-    noLoopsHint.setFont(juce::Font(juce::FontOptions(12.0f)));
-    addChildComponent(noLoopsHint);
-    noLoopsHint.setVisible(loopToggles.isEmpty());
+    loopsHeading.setText("Ambience - the looping buttons that should be running", juce::dontSendNotification);
+    randomHeading.setText("Random - sound effects that play by themselves every so often", juce::dontSendNotification);
+    for (auto* heading : { &loopsHeading, &randomHeading })
+    {
+        heading->setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::bold)));
+        soundsPanel.addAndMakeVisible(*heading);
+    }
+    loopsHeading.setVisible(! loopRows.isEmpty());
+    randomHeading.setVisible(! randomRows.isEmpty());
 
-    loopsViewport.setViewedComponent(&loopsPanel, false);
-    loopsViewport.setScrollBarsShown(true, false);
-    addAndMakeVisible(loopsViewport);
+    noSoundsHint.setText("There's nothing on the soundboard yet. Add sounds there, and right-click one to "
+                          "loop it or have it play randomly.", juce::dontSendNotification);
+    noSoundsHint.setFont(juce::Font(juce::FontOptions(12.0f)));
+    addChildComponent(noSoundsHint);
+    noSoundsHint.setVisible(loopRows.isEmpty() && randomRows.isEmpty());
+
+    soundsViewport.setViewedComponent(&soundsPanel, false);
+    soundsViewport.setScrollBarsShown(true, false);
+    addAndMakeVisible(soundsViewport);
 
     volumeToggle.setToggleState(scene.setsVolume, juce::dontSendNotification);
     volumeToggle.onClick = [this] { updateEnablement(); };
@@ -112,15 +316,17 @@ SceneEditor::SceneEditor(const Scene& sceneToEdit,
     addAndMakeVisible(saveButton);
     addAndMakeVisible(cancelButton);
 
-    for (auto* label : { &nameCaption, &musicCaption, &loopsCaption, &colourCaption })
+    for (auto* label : { &nameCaption, &musicCaption, &soundsCaption, &colourCaption, &loopsHeading, &randomHeading })
         label->setColour(juce::Label::textColourId, inkwyrd::theme::text);
 
-    for (auto* label : { &nameHint, &noLoopsHint })
+    for (auto* label : { &nameHint, &noSoundsHint })
         label->setColour(juce::Label::textColourId, inkwyrd::theme::textDim);
 
     updateEnablement();
-    setSize(480, 560);
+    setSize(680, 640);
 }
+
+SceneEditor::~SceneEditor() = default;
 
 void SceneEditor::launch(juce::Component* anchor, const juce::String& title, std::unique_ptr<SceneEditor> editor)
 {
@@ -183,10 +389,27 @@ void SceneEditor::save()
         default:          result.music = Scene::Music::leave;   break;
     }
 
+    // Only sounds the scene uses keep fades; one switched off here drops
+    // them, so a later re-tick starts again from its button.
     result.loops.clear();
-    for (auto* toggle : loopToggles)
-        if (toggle->getToggleState())
-            result.loops.add(toggle->getComponentID());
+    result.randoms.clear();
+    result.soundFades.clear();
+
+    for (auto* row : loopRows)
+    {
+        if (! row->isIncluded())
+            continue;
+        result.loops.add(row->name);
+        result.soundFades[row->name] = row->fades();
+    }
+
+    for (auto* row : randomRows)
+    {
+        if (! row->isIncluded())
+            continue;
+        result.randoms.push_back({ row->name, row->frequency() });
+        result.soundFades[row->name] = row->fades();
+    }
 
     result.setsVolume = volumeToggle.getToggleState();
     result.volume = (float) (volumeSlider.getValue() / 100.0);
@@ -245,17 +468,34 @@ void SceneEditor::resized()
     volumeSlider.setBounds(volumeRow);
     area.removeFromBottom(14);
 
-    loopsCaption.setBounds(area.removeFromTop(22));
+    soundsCaption.setBounds(area.removeFromTop(22));
     area.removeFromTop(4);
 
-    noLoopsHint.setBounds(area.removeFromTop(36));
-    if (! loopToggles.isEmpty())
-        area.setTop(noLoopsHint.getY()); // the hint only takes space when it's showing
+    noSoundsHint.setBounds(area.removeFromTop(36));
+    if (! loopRows.isEmpty() || ! randomRows.isEmpty())
+        area.setTop(noSoundsHint.getY()); // the hint only takes space when it's showing
 
-    loopsViewport.setBounds(area);
+    soundsViewport.setBounds(area);
 
-    auto panelWidth = area.getWidth() - loopsViewport.getScrollBarThickness();
-    loopsPanel.setSize(panelWidth, loopToggles.size() * kToggleHeight);
-    for (int i = 0; i < loopToggles.size(); ++i)
-        loopToggles[i]->setBounds(0, i * kToggleHeight, panelWidth, kToggleHeight);
+    auto panelWidth = area.getWidth() - soundsViewport.getScrollBarThickness() - 4;
+    auto y = 0;
+
+    auto layOut = [&](juce::Label& heading, juce::OwnedArray<SoundRow>& rows)
+    {
+        if (rows.isEmpty())
+            return;
+
+        heading.setBounds(0, y, panelWidth, kHeadingHeight);
+        y += kHeadingHeight;
+        for (auto* row : rows)
+        {
+            row->setBounds(0, y, panelWidth, kRowHeight);
+            y += kRowHeight;
+        }
+        y += 10;
+    };
+
+    layOut(loopsHeading, loopRows);
+    layOut(randomHeading, randomRows);
+    soundsPanel.setSize(panelWidth, y);
 }

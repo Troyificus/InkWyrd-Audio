@@ -129,6 +129,10 @@ private:
     // happens when something actually changed.
     juce::StringArray playingLoops;
 
+    // Sounds in random mode last time the timer looked, so the indicator
+    // follows changes made elsewhere (a scene, the Killswitch).
+    juce::StringArray randomSounds;
+
 
     std::unique_ptr<juce::FileChooser> activeChooser;
 
