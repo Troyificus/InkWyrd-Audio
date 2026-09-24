@@ -143,6 +143,13 @@ public:
     bool isSpriteExampleSkinWritten() const;
     void setSpriteExampleSkinWritten(bool written);
 
+    // Which version of each shipped example skin was last installed, as a
+    // JSON object of { "Skin name": version }. Replaces the two flags above
+    // (still read once, to migrate). Needed to tell a skin the user deleted
+    // - which must stay deleted - from one that was never installed.
+    juce::String getExampleSkinVersionsJson() const;
+    void setExampleSkinVersionsJson(const juce::String& json);
+
     // Which view the Library window's track pane was last showing:
     // false = the sortable table, true = the folder tree. A view is a
     // preference, so it survives a restart.

@@ -164,8 +164,7 @@ private:
 
     // Writes the example skins once, so the skins folder has something
     // in it to copy.
-    void writeExampleSkinsIfNeeded();
-    void writeSpriteExampleSkinIfNeeded();
+    void installExampleSkins();
 
     // --- Scenes ---------------------------------------------------------
     // Carries out what planScene says pressing a scene should change. The

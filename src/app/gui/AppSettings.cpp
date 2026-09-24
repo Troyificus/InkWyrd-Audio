@@ -30,6 +30,7 @@ namespace
     constexpr const char* kMicMutedKey = "micMuted";
     constexpr const char* kExampleSkinsWrittenKey = "exampleSkinsWritten";
     constexpr const char* kSpriteExampleSkinWrittenKey = "spriteExampleSkinWritten";
+    constexpr const char* kExampleSkinVersionsKey = "exampleSkinVersions";
     constexpr const char* kNoiseSuppressionKey = "noiseSuppressionEnabled";
     constexpr const char* kDiscordAutoMuteKey = "discordAutoMuteEnabled";
     constexpr const char* kDiscordClientSecretKey = "discordClientSecret";
@@ -324,6 +325,16 @@ bool AppSettings::isSpriteExampleSkinWritten() const
 void AppSettings::setSpriteExampleSkinWritten(bool written)
 {
     settings()->setValue(kSpriteExampleSkinWrittenKey, written);
+}
+
+juce::String AppSettings::getExampleSkinVersionsJson() const
+{
+    return settings()->getValue(kExampleSkinVersionsKey, "{}");
+}
+
+void AppSettings::setExampleSkinVersionsJson(const juce::String& json)
+{
+    settings()->setValue(kExampleSkinVersionsKey, json);
 }
 
 bool AppSettings::isLibraryFolderView() const

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "name": "Amber",
+  "version": 2,
+  "colours": {
+    "background": "#ff0b0803",
+    "panelDeep": "#ff120d05",
+    "panel": "#ff1b1206",
+    "panelRaised": "#ff241908",
+    "titleBar": "#ffe0a94f",
+    "titleBarText": "#ff1a1204",
+    "titleBarSubtle": "#ff5c421a",
+    "text": "#ffefc98a",
+    "textDim": "#ffa8854a",
+    "accent": "#ffffb340",
+    "accentSoft": "#ff8a5f1e",
+    "outline": "#ff5c4520",
+    "outlineFaint": "#ff2e2310",
+    "warning": "#ff7fb6ff",
+    "danger": "#ffff6b5a"
+  },
+  "fonts": {
+    "title": "Segoe UI Semibold",
+    "label": "Segoe UI",
+    "digits": "Consolas"
+  },
+  "metrics": {
+    "cornerRadius": 6.0,
+    "titleBarHeight": 46
+  }
+}

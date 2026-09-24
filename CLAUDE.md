@@ -2555,6 +2555,47 @@ Not done: snapping pixel-font sizes to multiples of 8 (Silkscreen is
 sharpest there; at the app's 12-15px it's slightly soft but readable), and
 the same text-measured layout for windows other than the Player.
 
+### Example skins are versioned and kept current (after beta.31)
+
+beta.31 exposed it: a user who already had Pixel Phosphor never got the
+Silkscreen update, because example skins were written ONCE behind a
+settings flag and never touched again. Now:
+
+- **Every shipped skin is a folder in `src/app/skins`** - the flat ones
+  too (Amber/Midnight/High Contrast used to be palettes in C++). CMake
+  zips the lot at configure time (`execute_process` + `cmake -E tar`,
+  with the files in `CMAKE_CONFIGURE_DEPENDS`) and embeds the one zip, so
+  adding a skin is adding a folder.
+- **skin.json has a `"version"`**, read into `SkinLoadResult::version`
+  and written by Export. For shipped skins it drives updates.
+- **`ExampleSkins::install()`** (pure over files, fully self-tested):
+  installs a new skin; replaces a user's copy ONLY if it's an older
+  version AND every file of ours still matches the fingerprints in the
+  folder's `.inkwyrd-example.json` manifest; never touches an edited
+  copy; never recreates a deleted one (the last-installed version per
+  skin is kept in `AppSettings::exampleSkinVersions` for exactly that).
+  Files the user ADDED to a skin folder are ignored and survive updates.
+- **Copies from before manifests** (beta.30 flat skins, beta.31 Pixel
+  Phosphor) count as ours when skin.json matches apart from `version`
+  (compared as values: key order and 6 vs 6.0 don't matter) and every
+  other file matches byte for byte. Checked against the user's real
+  skins folder before shipping: all four matched.
+- The old flags (`exampleSkinsWritten`, `spriteExampleSkinWritten`) are
+  read once to seed those versions at 1.
+- `INKWYRD_INSTALLSKINS=<folder> INKWYRD_SKINSZIP=<zip>
+  [INKWYRD_SKINRECORD=<json>]` runs the installer on any folder - use it
+  on a COPY of a user's skins folder to see what an upgrade will do.
+
+**When changing a shipped skin: bump its number** (`VERSIONS` in
+build_skin.py for pixel skins, the `"version"` in skin.json for flat
+ones). An unbumped change reaches new installs only.
+
+Seven shipped skins: the built-in flat green (code, not a folder), flat
+Amber/Midnight/High Contrast, and Pixel Phosphor/Amber/Midnight/High
+Contrast from `build_skin.py --all` (`THEMES` holds each scheme; Phosphor's
+values are its original ones exactly - regenerating it was checked to be
+byte-identical apart from the version).
+
 ### The white band when resizing a window (fixed on `sprite-skin`)
 
 Reported with the sprite skin, but present since the custom title bars

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "name": "Midnight",
+  "version": 2,
+  "colours": {
+    "background": "#ff05070f",
+    "panelDeep": "#ff080c18",
+    "panel": "#ff0d1424",
+    "panelRaised": "#ff131d33",
+    "titleBar": "#ff7fa8e8",
+    "titleBarText": "#ff06101f",
+    "titleBarSubtle": "#ff2a3d5c",
+    "text": "#ffb8cdf0",
+    "textDim": "#ff7189b0",
+    "accent": "#ff5a9cff",
+    "accentSoft": "#ff2c4f80",
+    "outline": "#ff2a3f66",
+    "outlineFaint": "#ff16233a",
+    "warning": "#ffe0b24f",
+    "danger": "#ffe06a5a"
+  },
+  "fonts": {
+    "title": "Segoe UI Semibold",
+    "label": "Segoe UI",
+    "digits": "Consolas"
+  },
+  "metrics": {
+    "cornerRadius": 6.0,
+    "titleBarHeight": 46
+  }
+}

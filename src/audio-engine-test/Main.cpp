@@ -34,6 +34,7 @@
 #include "UpdateCheck.h"
 #include "SkinLoader.h"
 #include "SkinSpriteNames.h"
+#include "ExampleSkins.h"
 #include "TagEditor.h"
 #include "PlaylistTrackListComponent.h"
 #include "TrackLibrary.h"
@@ -893,6 +894,108 @@ namespace
                 auto noSprites = SkinLoader::loadFromFolder(scratch.getChildFile("skins").getChildFile("Exported"));
                 check(noSprites.ok && noSprites.sprites.isEmpty() && noSprites.warnings.isEmpty(),
                        "a skin with no sprites section is exactly what it was before sprites existed");
+            }
+
+            // Example skins: installed, kept current, and never allowed to
+            // overwrite anything the user changed or bring back anything
+            // they deleted.
+            {
+                using inkwyrd::ExampleSkin;
+                using inkwyrd::ExampleSkins;
+                using Outcome = ExampleSkins::Outcome;
+
+                auto skinsDir = scratch.getChildFile("example-skins");
+                skinsDir.deleteRecursively();
+                skinsDir.createDirectory();
+
+                auto block = [](const juce::String& text) { return juce::MemoryBlock(text.toRawUTF8(), text.getNumBytesAsUTF8()); };
+                auto makeSkin = [&](const juce::String& name, int version, const juce::String& art, bool withExtra)
+                {
+                    ExampleSkin skin { name, version, {} };
+                    skin.files.emplace_back("skin.json", block("{ \"name\": \"" + name + "\", \"version\": "
+                                                                  + juce::String(version) + ", \"colours\": { \"accent\": \"#ff0000\" } }"));
+                    skin.files.emplace_back("sprites.png", block(art));
+                    if (withExtra)
+                        skin.files.emplace_back("extra.png", block("only in v1"));
+                    return skin;
+                };
+
+                auto folder = skinsDir.getChildFile("Demo");
+
+                check(ExampleSkins::install(makeSkin("Demo", 1, "art v1", true), skinsDir, 0) == Outcome::installed
+                       && folder.getChildFile("sprites.png").loadFileAsString() == "art v1"
+                       && folder.getChildFile(ExampleSkins::kManifestName).existsAsFile(),
+                       "a shipped skin is installed, with a manifest of what was written");
+                check(ExampleSkins::install(makeSkin("Demo", 1, "art v1", true), skinsDir, 1) == Outcome::alreadyCurrent,
+                       "installing the same version again does nothing");
+
+                check(ExampleSkins::install(makeSkin("Demo", 2, "art v2", false), skinsDir, 1) == Outcome::updated
+                       && folder.getChildFile("sprites.png").loadFileAsString() == "art v2",
+                       "an untouched older copy is updated to the new version");
+                check(! folder.getChildFile("extra.png").existsAsFile(),
+                       "and a file the new version no longer ships is removed");
+                check(ExampleSkins::versionOf(folder) == 2, "the installed skin.json carries its version");
+
+                folder.getChildFile("sprites.png").replaceWithText("the user's own art");
+                check(ExampleSkins::install(makeSkin("Demo", 3, "art v3", false), skinsDir, 2) == Outcome::keptEdited
+                       && folder.getChildFile("sprites.png").loadFileAsString() == "the user's own art",
+                       "an edited copy is never overwritten by a newer version");
+
+                folder.getChildFile("notes.txt").replaceWithText("added by the user");
+                folder.getChildFile("sprites.png").replaceWithText("art v2");
+                check(ExampleSkins::install(makeSkin("Demo", 3, "art v3", false), skinsDir, 2) == Outcome::updated
+                       && folder.getChildFile("notes.txt").existsAsFile(),
+                       "a file the user ADDED doesn't block an update, and survives it");
+
+                folder.deleteRecursively();
+                check(ExampleSkins::install(makeSkin("Demo", 4, "art v4", false), skinsDir, 3) == Outcome::keptDeleted
+                       && ! folder.exists(),
+                       "a skin the user deleted stays deleted, even when a newer version ships");
+                check(ExampleSkins::install(makeSkin("Demo", 4, "art v4", false), skinsDir, 0) == Outcome::installed,
+                       "but one that was never installed is");
+
+                // Copies from before manifests existed: recognised by content.
+                auto legacyPalette = inkwyrd::theme::builtIn();
+                legacyPalette.accent = juce::Colour(0xffffb340);
+                juce::String legacyError;
+                SkinLoader::writeToFolder(legacyPalette, "Legacy", skinsDir.getChildFile("Legacy"), legacyError);
+
+                auto shippedJson = SkinLoader::toVar(legacyPalette, "Legacy");
+                shippedJson.getDynamicObject()->setProperty("version", 2);
+                ExampleSkin legacyV2 { "Legacy", 2, {} };
+                legacyV2.files.emplace_back("skin.json", block(juce::JSON::toString(shippedJson)));
+
+                check(ExampleSkins::install(legacyV2, skinsDir, 1) == Outcome::updated
+                       && skinsDir.getChildFile("Legacy").getChildFile(ExampleSkins::kManifestName).existsAsFile(),
+                       "an untouched copy from before versions existed is recognised and brought up to date");
+
+                auto someoneElses = inkwyrd::theme::builtIn();
+                someoneElses.accent = juce::Colour(0xff00ff00);
+                SkinLoader::writeToFolder(someoneElses, "Legacy2", skinsDir.getChildFile("Legacy2"), legacyError);
+                auto legacy2Json = SkinLoader::toVar(legacyPalette, "Legacy2");
+                legacy2Json.getDynamicObject()->setProperty("version", 2);
+                ExampleSkin legacy2 { "Legacy2", 2, {} };
+                legacy2.files.emplace_back("skin.json", block(juce::JSON::toString(legacy2Json)));
+                check(ExampleSkins::install(legacy2, skinsDir, 0) == Outcome::keptEdited,
+                       "a folder with the same name but different content - someone's own skin - is left alone");
+
+                // The zip the app embeds.
+                juce::MemoryOutputStream zipData;
+                {
+                    juce::ZipFile::Builder builder;
+                    auto add = [&](const char* path, const juce::String& text)
+                    {
+                        builder.addEntry(new juce::MemoryInputStream(block(text), true), 9, path, juce::Time::getCurrentTime());
+                    };
+                    add("Alpha/skin.json", "{ \"version\": 3 }");
+                    add("Alpha/sprites.png", "png");
+                    add("Beta/skin.json", "{ }");
+                    builder.writeToStream(zipData, nullptr);
+                }
+                auto fromZip = ExampleSkins::fromZip(zipData.getData(), zipData.getDataSize());
+                check(fromZip.size() == 2 && fromZip[0].name == "Alpha" && fromZip[0].version == 3
+                       && fromZip[0].files.size() == 2 && fromZip[1].version == 0,
+                       "the embedded zip unpacks into one skin per folder, with each skin.json's version");
             }
 
             // Every name the app asks for must be accepted, or a skin
@@ -3703,6 +3806,29 @@ int main(int argc, char* argv[])
 
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RESIZETEST", "").isNotEmpty())
         return runResizeFlashTest();
+
+    // INKWYRD_INSTALLSKINS=<skins folder> INKWYRD_SKINSZIP=<example-skins.zip>
+    // [INKWYRD_SKINRECORD=<json of {name: version}>]: runs the app's example-
+    // skin installer against any folder - a COPY of a user's, to see what an
+    // upgrade will do to it before it happens.
+    auto installInto = juce::SystemStats::getEnvironmentVariable("INKWYRD_INSTALLSKINS", "");
+    if (installInto.isNotEmpty())
+    {
+        juce::MemoryBlock zip;
+        juce::File(juce::SystemStats::getEnvironmentVariable("INKWYRD_SKINSZIP", "")).loadFileAsData(zip);
+
+        juce::var record;
+        juce::JSON::parse(juce::SystemStats::getEnvironmentVariable("INKWYRD_SKINRECORD", "{}"), record);
+
+        for (auto& skin : inkwyrd::ExampleSkins::fromZip(zip.getData(), zip.getSize()))
+        {
+            auto previous = (int) record.getProperty(juce::Identifier(skin.name), 0);
+            auto outcome = inkwyrd::ExampleSkins::install(skin, juce::File(installInto), previous);
+            std::cout << "  " << skin.name << " v" << skin.version << " (was " << previous << "): "
+                      << inkwyrd::ExampleSkins::describe(outcome) << std::endl;
+        }
+        return 0;
+    }
 
     auto skinRenderFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_SKINRENDER", "");
     if (skinRenderFolder.isNotEmpty())

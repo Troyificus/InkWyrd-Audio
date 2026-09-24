@@ -17,13 +17,25 @@ python build_skin.py --check
 that same header, so a control added there shows up in the next
 generated sheet with no change here.
 
-The built-in **Pixel Phosphor** example (`src/app/skins/Pixel Phosphor`,
-embedded in the app) is this script's output with no options. Regenerate
-it after changing the art here:
+The four pixel skins the app ships - **Pixel Phosphor**, **Pixel Amber**,
+**Pixel Midnight** and **Pixel High Contrast** - are this script's output,
+one per colour scheme in `THEMES` (each one matching a flat example skin's
+colours). Regenerate them all after changing the art here:
 
 ```
-python build_skin.py --out "../../src/app/skins/Pixel Phosphor"
+python build_skin.py --all --out ../../src/app/skins
+python build_skin.py --theme amber --out "some/folder"   # just one
 ```
+
+**Bump the skin's number in `VERSIONS`** whenever its art or skin.json
+changes, or users who already have it won't get the new one - the app
+only replaces a user's untouched copy with a HIGHER version (see
+`src/app/gui/ExampleSkins.h`). Phosphor's colours are its original values
+exactly, so regenerating it changes nothing unless the art itself does.
+
+Every folder under `src/app/skins` is packed into the app at build time
+(CMake zips them at configure time), so a new skin folder is shipped just
+by adding it.
 
 ## Textures from ComfyUI (optional)
 

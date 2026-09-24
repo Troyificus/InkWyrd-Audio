@@ -8,6 +8,7 @@
 #include "Dialogs.h"
 #include "SkinLoader.h"
 #include "InkwyrdSkinData.h"
+#include "ExampleSkins.h"
 
 #include <ixwebsocket/IXNetSystem.h>
 #include <sodium.h>
@@ -63,8 +64,7 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     // The saved skin, before any window exists - a window reads its
     // background colour and title bar height at construction, so applying
     // a skin afterwards would leave the first frame on the old palette.
-    writeExampleSkinsIfNeeded();
-    writeSpriteExampleSkinIfNeeded();
+    installExampleSkins();
     auto skinMessage = applySkin(settings.getSkinName());
     if (skinMessage.isNotEmpty())
         logLine("[Skin] " + skinMessage);
@@ -700,142 +700,54 @@ juce::String InkwyrdAudioApplication::applySkin(const juce::String& skinName)
     return message;
 }
 
-void InkwyrdAudioApplication::writeExampleSkinsIfNeeded()
+void InkwyrdAudioApplication::installExampleSkins()
 {
-    // Something to look at and copy, rather than a folder that is empty
-    // until someone reads the README. Guarded by an explicit flag, like
-    // the other one-time steps here, so deleting them is permanent.
-    if (settings.areExampleSkinsWritten())
-        return;
+    // Every skin the app ships (src/app/skins, packed into the exe as one
+    // zip): installed if new, updated if the user's copy is an untouched
+    // older version, and otherwise left exactly as it is. See ExampleSkins.h
+    // for the rule; this only keeps the record of what was installed.
+    juce::var recorded;
+    if (! juce::JSON::parse(settings.getExampleSkinVersionsJson(), recorded).wasOk()
+         || recorded.getDynamicObject() == nullptr)
+        recorded = juce::var(new juce::DynamicObject());
 
-    using Palette = inkwyrd::theme::Palette;
+    auto* record = recorded.getDynamicObject();
 
-    Palette amber;
-    amber.background = juce::Colour(0xff0b0803);
-    amber.panelDeep = juce::Colour(0xff120d05);
-    amber.panel = juce::Colour(0xff1b1206);
-    amber.panelRaised = juce::Colour(0xff241908);
-    amber.titleBar = juce::Colour(0xffe0a94f);
-    amber.titleBarText = juce::Colour(0xff1a1204);
-    amber.titleBarSubtle = juce::Colour(0xff5c421a);
-    amber.text = juce::Colour(0xffefc98a);
-    amber.textDim = juce::Colour(0xffa8854a);
-    amber.accent = juce::Colour(0xffffb340);
-    amber.accentSoft = juce::Colour(0xff8a5f1e);
-    amber.outline = juce::Colour(0xff5c4520);
-    amber.outlineFaint = juce::Colour(0xff2e2310);
-    amber.warning = juce::Colour(0xff7fb6ff);
-    amber.danger = juce::Colour(0xffff6b5a);
-
-    Palette midnight;
-    midnight.background = juce::Colour(0xff05070f);
-    midnight.panelDeep = juce::Colour(0xff080c18);
-    midnight.panel = juce::Colour(0xff0d1424);
-    midnight.panelRaised = juce::Colour(0xff131d33);
-    midnight.titleBar = juce::Colour(0xff7fa8e8);
-    midnight.titleBarText = juce::Colour(0xff06101f);
-    midnight.titleBarSubtle = juce::Colour(0xff2a3d5c);
-    midnight.text = juce::Colour(0xffb8cdf0);
-    midnight.textDim = juce::Colour(0xff7189b0);
-    midnight.accent = juce::Colour(0xff5a9cff);
-    midnight.accentSoft = juce::Colour(0xff2c4f80);
-    midnight.outline = juce::Colour(0xff2a3f66);
-    midnight.outlineFaint = juce::Colour(0xff16233a);
-
-    // Maximum contrast, square corners, no mid-tones - for anyone who
-    // finds the default's greens hard to read.
-    Palette contrast;
-    contrast.background = juce::Colour(0xff000000);
-    contrast.panelDeep = juce::Colour(0xff000000);
-    contrast.panel = juce::Colour(0xff0a0a0a);
-    contrast.panelRaised = juce::Colour(0xff1a1a1a);
-    contrast.titleBar = juce::Colour(0xffffffff);
-    contrast.titleBarText = juce::Colour(0xff000000);
-    contrast.titleBarSubtle = juce::Colour(0xff555555);
-    contrast.text = juce::Colour(0xffffffff);
-    contrast.textDim = juce::Colour(0xffcccccc);
-    contrast.accent = juce::Colour(0xffffe600);
-    contrast.accentSoft = juce::Colour(0xff6b6100);
-    contrast.outline = juce::Colour(0xffffffff);
-    contrast.outlineFaint = juce::Colour(0xff666666);
-    contrast.warning = juce::Colour(0xffffa500);
-    contrast.danger = juce::Colour(0xffff4040);
-    contrast.cornerRadius = 0.0f;
-
-    const std::pair<const char*, Palette> examples[] =
+    // From before versions were recorded: one flag for the three flat
+    // examples, one for Pixel Phosphor. Either set means "installed at
+    // version 1" - so a skin deleted back then stays deleted.
+    auto migrate = [&](const char* name, bool wasWritten)
     {
-        { "Amber", amber },
-        { "Midnight", midnight },
-        { "High Contrast", contrast }
+        if (wasWritten && ! record->hasProperty(name))
+            record->setProperty(name, 1);
     };
+    migrate("Amber", settings.areExampleSkinsWritten());
+    migrate("Midnight", settings.areExampleSkinsWritten());
+    migrate("High Contrast", settings.areExampleSkinsWritten());
+    migrate("Pixel Phosphor", settings.isSpriteExampleSkinWritten());
 
     auto folder = inkwyrd::SkinLoader::getDefaultFolder();
+    folder.createDirectory();
 
-    for (const auto& example : examples)
+    for (const auto& skin : inkwyrd::ExampleSkins::fromZip(InkwyrdSkinData::exampleskins_zip,
+                                                            (size_t) InkwyrdSkinData::exampleskins_zipSize))
     {
-        juce::String error;
-        if (! inkwyrd::SkinLoader::writeToFolder(example.second, example.first,
-                                                  folder.getChildFile(example.first), error))
-            logLine("[Skin] Couldn't write the " + juce::String(example.first)
-                     + " example skin: " + error);
+        auto previous = (int) record->getProperty(skin.name);
+        auto outcome = inkwyrd::ExampleSkins::install(skin, folder, previous);
+
+        // Quiet when nothing happened; everything else is worth a log line.
+        if (outcome != inkwyrd::ExampleSkins::Outcome::alreadyCurrent)
+            logLine("[Skin] " + skin.name + " v" + juce::String(skin.version) + ": "
+                     + inkwyrd::ExampleSkins::describe(outcome));
+
+        // Recorded even when an edited copy was kept, so deleting it later
+        // is final too. A failed write isn't recorded, so it retries.
+        if (outcome != inkwyrd::ExampleSkins::Outcome::failed
+             && outcome != inkwyrd::ExampleSkins::Outcome::keptDeleted)
+            record->setProperty(skin.name, juce::jmax(previous, skin.version));
     }
 
-    logLine("[Skin] Wrote example skins to " + folder.getFullPathName());
-
-    settings.setExampleSkinsWritten(true);
-    settings.save(); // AppSettings has no autosave
-}
-
-void InkwyrdAudioApplication::writeSpriteExampleSkinIfNeeded()
-{
-    // A skin that uses per-widget images, so there is a working sprite
-    // sheet to open and redraw rather than only the README's description
-    // of the format. Built by tools/skin-builder and embedded in the exe.
-    if (settings.isSpriteExampleSkinWritten())
-        return;
-
-    auto folder = inkwyrd::SkinLoader::getDefaultFolder().getChildFile("Pixel Phosphor");
-
-    // Someone may already have a skin by that name - never overwrite it.
-    if (! folder.getChildFile(inkwyrd::SkinLoader::kSkinFileName).existsAsFile())
-    {
-        const std::pair<const char*, std::pair<const char*, int>> files[] =
-        {
-            { "skin.json",   { InkwyrdSkinData::skin_json,   InkwyrdSkinData::skin_jsonSize } },
-            { "sprites.png", { InkwyrdSkinData::sprites_png, InkwyrdSkinData::sprites_pngSize } },
-            { "logo.png",    { InkwyrdSkinData::logo_png,    InkwyrdSkinData::logo_pngSize } },
-            // Silkscreen, by The Silkscreen Project Authors, under the SIL Open
-            // Font License - which has to travel with the font, hence the .txt.
-            { "Silkscreen-Regular.ttf", { InkwyrdSkinData::SilkscreenRegular_ttf, InkwyrdSkinData::SilkscreenRegular_ttfSize } },
-            { "Silkscreen-Bold.ttf",    { InkwyrdSkinData::SilkscreenBold_ttf,    InkwyrdSkinData::SilkscreenBold_ttfSize } },
-            { "Silkscreen-OFL.txt",     { InkwyrdSkinData::SilkscreenOFL_txt,     InkwyrdSkinData::SilkscreenOFL_txtSize } },
-        };
-
-        auto created = folder.createDirectory();
-        auto ok = created.wasOk();
-
-        for (const auto& file : files)
-        {
-            if (! ok)
-                break;
-
-            // Atomic, like every other file this app writes.
-            juce::TemporaryFile temp(folder.getChildFile(file.first));
-            ok = temp.getFile().replaceWithData(file.second.first, (size_t) file.second.second)
-                  && temp.overwriteTargetFileWithTemporary();
-        }
-
-        if (! ok)
-        {
-            // Not marked as written, so the next launch tries again.
-            logLine("[Skin] Couldn't write the Pixel Phosphor example skin to " + folder.getFullPathName());
-            return;
-        }
-
-        logLine("[Skin] Wrote the Pixel Phosphor sprite skin to " + folder.getFullPathName());
-    }
-
-    settings.setSpriteExampleSkinWritten(true);
+    settings.setExampleSkinVersionsJson(juce::JSON::toString(recorded, true));
     settings.save(); // AppSettings has no autosave
 }
 

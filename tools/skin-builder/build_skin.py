@@ -60,7 +60,73 @@ LCD1 = (7, 22, 13)
 AMBER = (224, 178, 79)
 RED = (224, 106, 90)
 
-PALETTE = [BLACK, D0, D1, D2, D3, D4, D5, G0, G1, G2, G3, G4, LCD0, LCD1, AMBER, RED]
+TEXT = (156, 232, 184)
+TEXTDIM = (96, 156, 120)
+
+# The colour schemes the pixel skins come in - one per flat example skin, so
+# every flat look has a pixel twin in the same colours. The names above are
+# the ones every drawing function reads; apply_theme() swaps them.
+#
+#   D0..D5  the "metal": deepest shadow up to brightest highlight
+#   G0..G4  the accent ramp: unlit, through the accent itself, to glow
+#   AMBER   the warning colour (a muted mic lights up in it)
+#
+# Phosphor is the original Pixel Phosphor, value for value - regenerating
+# it must not change its art.
+THEMES = {
+    "phosphor": dict(
+        name="Pixel Phosphor",
+        BLACK=(4, 8, 6), D0=(10, 17, 13), D1=(19, 30, 24), D2=(32, 47, 39), D3=(50, 70, 59),
+        D4=(78, 104, 89), D5=(120, 150, 132),
+        G0=(10, 38, 22), G1=(24, 86, 50), G2=(44, 156, 90), G3=(79, 224, 138), G4=(178, 255, 206),
+        LCD0=(4, 13, 8), LCD1=(7, 22, 13), AMBER=(224, 178, 79), RED=(224, 106, 90),
+        TEXT=(156, 232, 184), TEXTDIM=(96, 156, 120),
+        MUTE={(10, 38, 22): (46, 34, 10), (24, 86, 50): (96, 72, 24),
+              (44, 156, 90): (170, 128, 46), (79, 224, 138): (224, 178, 79)}),
+    # From the flat Amber skin: warm browns, an orange accent, and - as in
+    # that skin - a BLUE warning colour, since amber can't warn on amber.
+    "amber": dict(
+        name="Pixel Amber",
+        BLACK=(8, 5, 2), D0=(18, 13, 5), D1=(27, 18, 6), D2=(36, 25, 8), D3=(62, 44, 18),
+        D4=(92, 69, 32), D5=(140, 108, 58),
+        G0=(44, 30, 8), G1=(138, 95, 30), G2=(200, 140, 50), G3=(255, 179, 64), G4=(255, 225, 160),
+        LCD0=(11, 8, 3), LCD1=(22, 15, 5), AMBER=(127, 182, 255), RED=(255, 107, 90),
+        TEXT=(239, 201, 138), TEXTDIM=(168, 133, 74)),
+    "midnight": dict(
+        name="Pixel Midnight",
+        BLACK=(3, 4, 9), D0=(8, 12, 24), D1=(13, 20, 36), D2=(19, 29, 51), D3=(34, 50, 82),
+        D4=(58, 80, 120), D5=(100, 125, 170),
+        G0=(14, 26, 48), G1=(44, 79, 128), G2=(70, 130, 210), G3=(90, 156, 255), G4=(190, 215, 255),
+        LCD0=(4, 6, 14), LCD1=(8, 12, 26), AMBER=(224, 178, 79), RED=(224, 106, 90),
+        TEXT=(184, 205, 240), TEXTDIM=(113, 137, 176)),
+    # Maximum contrast, like its flat twin: black body, white bevels, a
+    # yellow accent. The bevels are the brightest of any theme on purpose.
+    "contrast": dict(
+        name="Pixel High Contrast",
+        BLACK=(0, 0, 0), D0=(10, 10, 10), D1=(18, 18, 18), D2=(34, 34, 34), D3=(96, 96, 96),
+        D4=(200, 200, 200), D5=(255, 255, 255),
+        G0=(40, 36, 0), G1=(107, 97, 0), G2=(200, 180, 0), G3=(255, 230, 0), G4=(255, 250, 180),
+        LCD0=(0, 0, 0), LCD1=(16, 16, 16), AMBER=(255, 165, 0), RED=(255, 64, 64),
+        TEXT=(255, 255, 255), TEXTDIM=(204, 204, 204)),
+}
+
+# Each shipped skin's version. Bump one when its art or skin.json changes,
+# so the app replaces users' untouched copies of the old one (and never an
+# edited copy - see ExampleSkins.cpp). Pixel Phosphor was 1 in beta.31.
+VERSIONS = {"phosphor": 2, "amber": 1, "midnight": 1, "contrast": 1}
+
+
+def apply_theme(key):
+    theme = THEMES[key]
+    for name, value in theme.items():
+        if name not in ("name", "MUTE"):
+            globals()[name] = value
+    # The muted-mic sprites recolour the accent ramp into the warning colour.
+    # Phosphor keeps the exact shades it shipped with in beta.31.
+    w = theme["AMBER"]
+    shade = lambda f: tuple(int(c * f) for c in w)
+    globals()["AMBER_SHADES"] = theme.get("MUTE") or {
+        theme["G0"]: shade(0.2), theme["G1"]: shade(0.43), theme["G2"]: shade(0.76), theme["G3"]: w}
 
 
 def hexa(rgb):
@@ -173,7 +239,10 @@ class Canvas:
                     self.px(x + i, y + j, c)
 
 
-def framed(w, h, face, light, dark, outline=BLACK):
+def framed(w, h, face, light, dark, outline=None):
+    # outline=None, not =BLACK: a default is evaluated once, when the
+    # function is defined, and would pin every theme to Phosphor's black.
+    outline = BLACK if outline is None else outline
     c = Canvas(w, h, face)
     c.outline(outline)
     c.bevel(light, dark)
@@ -225,7 +294,7 @@ def led(on):
 # ---------------------------------------------------------------------------
 # The sprites. Each returns (Canvas, slice or None, tile).
 
-AMBER_SHADES = {G0: (46, 34, 10), G1: (96, 72, 24), G2: (170, 128, 46), G3: AMBER}
+AMBER_SHADES = {}  # set by apply_theme()
 
 
 def mute_button(state):
@@ -534,7 +603,7 @@ def pack(sprites, width=160, gap=1):
     return sheet, items
 
 
-def build(out, textures_dir, name, font_dir=None):
+def build(out, textures_dir, name, font_dir=None, version=1):
     bases, ids = read_names()
 
     textures = {}
@@ -604,11 +673,12 @@ def build(out, textures_dir, name, font_dir=None):
     skin = {
         "schemaVersion": 1,
         "name": name,
+        "version": version,
         "logo": "logo.png",
         "colours": {
             "background": hexa(BLACK), "panelDeep": hexa(LCD0), "panel": hexa(D1),
             "panelRaised": hexa(D2), "titleBar": hexa(D1), "titleBarText": hexa(G3),
-            "titleBarSubtle": hexa(G2), "text": hexa((156, 232, 184)), "textDim": hexa((96, 156, 120)),
+            "titleBarSubtle": hexa(G2), "text": hexa(TEXT), "textDim": hexa(TEXTDIM),
             "accent": hexa(G3), "accentSoft": hexa(G1), "outline": hexa(D3),
             "outlineFaint": hexa(D2), "warning": hexa(AMBER), "danger": hexa(RED),
         },
@@ -642,8 +712,10 @@ def build(out, textures_dir, name, font_dir=None):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", help="skin folder to write")
-    ap.add_argument("--name", default="Pixel Phosphor")
+    ap.add_argument("--out", help="skin folder to write (with --all: the folder to write them INTO)")
+    ap.add_argument("--theme", choices=sorted(THEMES), default="phosphor")
+    ap.add_argument("--all", action="store_true", help="every theme, each in its own folder under --out")
+    ap.add_argument("--name", help="skin name (default: the theme's own)")
     ap.add_argument("--textures", help="folder of textures from comfy_textures.py")
     ap.add_argument("--font-dir", default=str(Path(__file__).parent / "fonts" / "Silkscreen"),
                     help="folder of .ttf/.otf files (+ licence .txt) to bundle; default Silkscreen")
@@ -656,7 +728,12 @@ def main():
     if not args.out:
         ap.error("--out is required unless --check")
     font_dir = None if args.no_font or not Path(args.font_dir).is_dir() else args.font_dir
-    build(args.out, args.textures, args.name, font_dir)
+    keys = sorted(THEMES) if args.all else [args.theme]
+    for key in keys:
+        apply_theme(key)
+        name = THEMES[key]["name"] if args.all or not args.name else args.name
+        out = Path(args.out) / name if args.all else Path(args.out)
+        build(out, args.textures, name, font_dir, VERSIONS[key])
 
 
 if __name__ == "__main__":

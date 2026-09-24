@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "name": "High Contrast",
+  "version": 2,
+  "colours": {
+    "background": "#ff000000",
+    "panelDeep": "#ff000000",
+    "panel": "#ff0a0a0a",
+    "panelRaised": "#ff1a1a1a",
+    "titleBar": "#ffffffff",
+    "titleBarText": "#ff000000",
+    "titleBarSubtle": "#ff555555",
+    "text": "#ffffffff",
+    "textDim": "#ffcccccc",
+    "accent": "#ffffe600",
+    "accentSoft": "#ff6b6100",
+    "outline": "#ffffffff",
+    "outlineFaint": "#ff666666",
+    "warning": "#ffffa500",
+    "danger": "#ffff4040"
+  },
+  "fonts": {
+    "title": "Segoe UI Semibold",
+    "label": "Segoe UI",
+    "digits": "Consolas"
+  },
+  "metrics": {
+    "cornerRadius": 0.0,
+    "titleBarHeight": 46
+  }
+}

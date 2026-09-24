@@ -29,6 +29,12 @@ namespace inkwyrd
 
         juce::String name;
 
+        // The skin's own revision ("version" in skin.json; 0 if it has none).
+        // Bump it whenever a skin you share changes. For the skins the app
+        // ships it's what decides whether a user's copy gets updated - see
+        // ExampleSkins.h.
+        int version = 0;
+
         // Empty when the skin has no logo, or names one that isn't there
         // (which is a warning, not a failure - the drawn mark is used).
         juce::File logoFile;
@@ -79,7 +85,7 @@ namespace inkwyrd
         // What the export button writes: the palette as it stands, in the
         // same shape parse() reads, so export -> edit -> load round-trips.
         static juce::var toVar(const theme::Palette& palette, const juce::String& name,
-                                const juce::String& logoFileName = {});
+                                const juce::String& logoFileName = {}, int version = 1);
 
         static bool writeToFolder(const theme::Palette& palette, const juce::String& name,
                                    const juce::File& skinFolder, juce::String& errorMessage);

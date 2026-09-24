@@ -175,6 +175,8 @@ namespace inkwyrd
         if (name.isNotEmpty())
             result.name = name;
 
+        result.version = juce::jmax(0, (int) json.getProperty("version", 0));
+
         // Colours. Anything absent keeps the built-in value, and anything
         // unreadable says so rather than being silently ignored.
         if (auto* colours = json.getProperty(kColoursKey, {}).getDynamicObject())
@@ -290,7 +292,7 @@ namespace inkwyrd
     }
 
     juce::var SkinLoader::toVar(const theme::Palette& palette, const juce::String& name,
-                                 const juce::String& logoFileName)
+                                 const juce::String& logoFileName, int version)
     {
         auto* colours = new juce::DynamicObject();
         for (const auto& field : kColourFields)
@@ -307,6 +309,7 @@ namespace inkwyrd
         auto* root = new juce::DynamicObject();
         root->setProperty(kSchemaKey, kCurrentSchemaVersion);
         root->setProperty(kNameKey, name);
+        root->setProperty("version", version);
         root->setProperty(kColoursKey, juce::var(colours));
         root->setProperty(kFontsKey, juce::var(fonts));
         root->setProperty(kMetricsKey, juce::var(metrics));

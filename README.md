@@ -705,9 +705,26 @@ frames from pictures of your own (see
 [below](#pictures-for-buttons-sliders-and-frames-sprite-skins)).
 
 **To change skin**, open **Settings** and pick one under **Skin**. It
-applies straight away. Four examples are included - **Amber**,
-**Midnight**, **High Contrast** and the pixel-art **Pixel Phosphor** -
-and **Inkwyrd (built-in)** always takes you back.
+applies straight away. **Inkwyrd (built-in)** always takes you back.
+
+Seven skins are included, in two styles and four colour schemes:
+
+| Colours | Flat | Pixel art |
+|---|---|---|
+| Green | Inkwyrd (built-in) | Pixel Phosphor |
+| Amber | Amber | Pixel Amber |
+| Blue | Midnight | Pixel Midnight |
+| Black, white and yellow | High Contrast | Pixel High Contrast |
+
+The pixel-art skins draw the buttons, sliders and window frames from
+pictures and use the Silkscreen pixel font.
+
+**Included skins get updated.** When a new version of Inkwyrd improves
+one of these skins, your copy is replaced with the new one - but only if
+you haven't changed it. If you've edited any of its files, Inkwyrd leaves
+it exactly as it is. If you've deleted one, it stays deleted. (Each
+included skin's folder holds a small `.inkwyrd-example.json` file that
+records what Inkwyrd installed, which is how it can tell.)
 
 **To make your own:**
 1. Pick the skin closest to what you want, then click **Export
@@ -731,12 +748,16 @@ Inkwyrd's own value, so a short file is fine.
 {
   "schemaVersion": 1,
   "name": "Amber",
+  "version": 2,
   "colours": { "accent": "#ffb340", "text": "#efc98a" },
   "fonts": { "title": "Segoe UI Semibold", "label": "Segoe UI", "digits": "Consolas" },
   "metrics": { "cornerRadius": 6, "titleBarHeight": 46 },
   "logo": "logo.png"
 }
 ```
+
+**`version`** is your skin's own revision number. Raise it whenever you
+change a skin you share, so people can tell which one they have.
 
 Colours are `#rrggbb`, or `#aarrggbb` for transparency.
 
