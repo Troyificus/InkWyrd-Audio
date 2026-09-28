@@ -100,42 +100,83 @@ Inspired by Kenku FM and Winamp.
 
 Get the newest release from the
 [Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases).
-Take the one at the **top of the list**: GitHub's "Latest" label skips
-pre-releases, so it doesn't point at the newest version while this is a
-beta. What changed in each version, all the way back to the first beta,
-is in [CHANGELOG.md](CHANGELOG.md).
+What changed in each version, all the way back to the first beta, is in
+[CHANGELOG.md](CHANGELOG.md).
 
-Each release comes in two forms, the same program in both:
+**There's nothing to install.** Download
+`InkwyrdAudio-Portable-<version>.zip`, unzip it anywhere you like - your
+Desktop, Documents, a USB stick - and run **`Inkwyrd Audio.exe`** from
+inside. To remove Inkwyrd, delete the folder.
 
-- **The portable ZIP** (`InkwyrdAudio-Portable-...zip`) is the simplest
-  and the one to start with. Unzip it anywhere and run
-  `Inkwyrd Audio.exe`. Nothing is installed, and you remove it by
-  deleting the folder.
-- **The installer** (`InkwyrdAudio-Setup-...exe`) adds a Start menu
-  entry, a desktop shortcut and an uninstaller. It installs for your own
-  Windows account only, with no admin rights needed, and upgrades
-  replace the old version in place.
+Everything it needs is in that folder, including the Microsoft C++
+runtime, so it runs on a fresh Windows install with nothing set up
+first.
 
-Your settings, playlists, soundboard and scenes live in
-`%APPDATA%\Inkwyrd Audio` whichever you choose, so you can switch
-between the two without losing anything.
+**To upgrade**, unzip the new version over the old folder, or into a new
+one and delete the old. Your settings, playlists, soundboard, scenes,
+track library and skins live in `%APPDATA%\Inkwyrd Audio`, separately
+from the program, so they survive either way.
 
-> **Windows warnings.** Windows will probably show **"Windows protected
-> your PC"** the first time you run either one, and your browser may say
-> the file **"isn't commonly downloaded."** Both happen because this is a
-> small project without a paid code-signing certificate yet. Click
-> **More info -> Run anyway** to continue.
+> **There used to be an installer, and there isn't one now.** It did the
+> same job with a Start menu entry and an uninstaller, but it was the
+> part antivirus engines disliked most - an unsigned program that unpacks
+> other programs looks exactly like a dropper to a machine-learning model,
+> whatever it actually does. One download is also one less thing to
+> explain.
 >
-> **If Microsoft Defender blocks a download as a threat, please don't
-> override it.** [Open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
-> instead. Microsoft's automatic machine-learning check (detection names
-> ending in `!ml`) has flagged Inkwyrd's unsigned downloads before, while
-> other antivirus products flag few or none of them, and its verdict has
-> changed between builds of identical code. It has been reported to
-> Microsoft as a false positive. Code signing is the long-term fix.
->
-> Every release's notes list the SHA-256 checksum of both downloads.
-> Check yours matches with `Get-FileHash <file>` in PowerShell.
+> **If you installed Inkwyrd that way before**, uninstall it first -
+> Windows **Settings -> Apps -> Installed apps -> Inkwyrd Audio ->
+> Uninstall** - then use the ZIP. Your settings and playlists are in
+> `%APPDATA%` and aren't touched by uninstalling. Running both at once
+> would leave you with two copies sharing one set of settings, which is
+> confusing rather than harmful.
+
+### Windows will warn you about this download
+
+It will probably say **"Windows protected your PC"** the first time you
+run it, and your browser may say the file **"isn't commonly
+downloaded."** Both happen because Inkwyrd isn't code-signed. Click
+**More info -> Run anyway**.
+
+**Microsoft Defender may go further and block it as a threat.** Here is
+the honest position, because you're being asked to run an unsigned
+program off the internet and you deserve the whole picture:
+
+- Microsoft's **automatic machine-learning** scanner has flagged
+  Inkwyrd's downloads before, with names ending in `!ml` - `Wacatac.B!ml`,
+  `Sabsik.EN.D!ml`. Those suffixes mean a model guessed, not that anything
+  was found.
+- On VirusTotal the program scores **0 or 1 out of about 70 engines**.
+  The one hit, when there is one, is Microsoft's own model. Every major
+  signature-based engine reads it as clean, and no engine names an actual
+  malware family.
+- **Microsoft's verdict has flipped between builds of identical source
+  code** - the same program, compiled twice, scored 0/70 and then 1/64.
+- **A false-positive report was submitted to Microsoft and rejected.**
+  Their analyst's reply was that it "meets our criteria for malware,
+  detection remains". So this is **unresolved, not cleared** - it would be
+  dishonest to tell you Microsoft has confirmed it's harmless, because
+  they have declined to.
+
+**So: if Defender blocks it, don't override the block.**
+[Open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
+instead and I'll look into it. Overriding your antivirus on the say-so of
+the person who wrote the program is a bad habit, and I'm not going to ask
+you to get into it.
+
+If you'd rather satisfy yourself independently: the full source is in
+this repository and you can build it yourself, every release lists a
+SHA-256 checksum below, and you can upload the download to
+[VirusTotal](https://www.virustotal.com) and read the results first-hand.
+
+The real fix is code signing, which Inkwyrd doesn't have yet.
+
+**Checksums.** Every release's notes list the SHA-256 of the download.
+Check yours matches before running it:
+
+```powershell
+Get-FileHash InkwyrdAudio-Portable-0.1.1-beta.zip
+```
 
 ## Quick start
 
@@ -752,7 +793,7 @@ Inkwyrd is running.
 | **Soundboard Killswitch** | Silences every sound effect; the music keeps playing |
 | **Scene** | Switches to a scene |
 
-**Installing it.** The plugin isn't in the ZIP or installer yet - it's
+**Installing it.** The plugin isn't in the download yet - it's
 built from this repository's source. You need the Stream Deck app
 (version 6.5 or later) and [Node.js](https://nodejs.org/).
 
@@ -1102,8 +1143,13 @@ See the note under [Download and install](#download-and-install).
 
 ## Known limitations
 
-- The downloads aren't code-signed yet, so Windows warns about them on
-  first run.
+- The download isn't code-signed, so Windows warns about it and Defender
+  may block it. See
+  [Download and install](#download-and-install) - and please don't
+  override a block.
+- There's no installer, so no Start menu entry or desktop shortcut.
+  Make your own shortcut to `Inkwyrd Audio.exe` if you want one: right-
+  click it, **Show more options -> Send to -> Desktop**.
 - The Stream Deck plugin has to be built from source.
 - Changing your Discord bot token, server or channel after Inkwyrd has
   connected takes effect the next time it starts. It won't drop a live

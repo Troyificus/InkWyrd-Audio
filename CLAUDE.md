@@ -3353,22 +3353,42 @@ release:
   the build's. Both are a couple of `Get-Item` calls. Do that, record
   the installer's SHA-256, and say plainly in the handover that the full
   install/uninstall cycle was skipped and why.
-- **Every release ships two assets** (from beta.18): the installer AND
+- **Every release ships ONE asset as of 0.1.1-beta**:
   `InkwyrdAudio-Portable-<version>.zip`, built by
-  `installer/make-portable-zip.ps1` after `iscc` (it reads the version
-  from the `.iss`, so there's still one place to bump). Both SHA-256s go
-  in the release notes - the README tells users they're there. Build
-  both AFTER any README edit: the README is packaged into each as
-  `README.txt`. **Present the ZIP FIRST** in the README and in every
-  release's notes, with the installer second for people who want
-  shortcuts and an uninstaller: the ZIP is the one with the least that
-  can go wrong for a new user, and it dodges the antivirus heuristics
-  that target installers (below). The ZIP CAN be launch-tested safely from here (unzip to
+  `installer/make-portable-zip.ps1` (it reads the version from the
+  `.iss`, so that is still the one place to bump). Its SHA-256 goes in
+  the release notes - the README tells users it is there. Build it AFTER
+  any README edit: the README is packaged inside as `README.txt`.
+
+  **The installer is no longer published.** Troy's call at 0.1.1-beta,
+  with no code signing planned while the app is free. `iscc` still works
+  and `installer/InkwyrdAudio.iss` is deliberately KEPT in the repo - the
+  capability is paused, not deleted, and bringing it back is one `iscc`
+  run plus an upload. Reasons it went: an unsigned program that unpacks
+  other programs is the shape ML malware models dislike most, and it
+  consistently scored worse than the program inside it (4/71 then 3/71,
+  against 0-1/70 for the exe); and one download is one less thing to
+  explain to a new user.
+
+  If it ever comes back, note that anyone who installed via the old
+  installer still has an entry in Windows' "Installed apps" - the README
+  tells them to uninstall before switching to the ZIP, because otherwise
+  two copies share one `%APPDATA%` folder. The ZIP CAN be launch-tested safely from here (unzip to
   scratch, run with `INKWYRD_NO_DISCORD=1` +
   `INKWYRD_ALLOW_MULTIPLE_INSTANCES=1`, back up and restore the settings
   file), unlike the install cycle above.
 
 ### Why the ZIP exists: antivirus flagged the installer, not the program
+
+**Read the "Update after release" note at the end of this section before
+repeating any of this to a user.** The short version, and what the README
+now says out loud as of 0.1.1-beta: Microsoft REJECTED the false-positive
+submission ("meets our criteria for malware, detection remains"), so the
+detection is unresolved rather than cleared. Do not describe it anywhere
+as a confirmed false positive - it is not, and telling a user that could
+talk them into overriding a block on the author's say-so. The README
+states the rejection explicitly, gives the VirusTotal numbers, and tells
+people NOT to override Defender.
 
 beta.17's installer was blocked on a user's machine by Defender
 (`Trojan:Win32/Sabsik.EN.D!ml`), and Microsoft's analyst response to a
