@@ -1217,6 +1217,19 @@ namespace
             check(! isNewerRelease("0.1.0", "0.1.0-beta.24"), "and a beta of it does not beat the release");
             check(isNewerRelease("0.1.0-beta.24", "0.2.0-beta.1"), "a later base version wins outright");
             check(isNewerRelease("v0.1.0-beta.23", "v0.1.0-beta.24"), "a leading v on either side is ignored");
+
+            // The numbering changed at 0.1.1-beta: third digit for
+            // hotfixes, second for beta iterations, first for the real
+            // 1.0. Everyone already running an old "0.1.0-beta.NN" build
+            // has to be told the new scheme is newer, or the update
+            // banner silently never appears again for them.
+            check(isNewerRelease("0.1.0-beta.33", "0.1.1-beta"),
+                   "the new numbering is newer than the old beta.NN it replaced");
+            check(! isNewerRelease("0.1.1-beta", "0.1.0-beta.33"),
+                   "and the old scheme doesn't look newer from the new one");
+            check(isNewerRelease("0.1.1-beta", "0.1.2-beta"), "a hotfix bumps the third digit");
+            check(isNewerRelease("0.1.2-beta", "0.2.0-beta"), "a beta iteration bumps the second");
+            check(isNewerRelease("0.2.0-beta", "1.0.0"), "and 1.0.0 beats every beta before it");
             check(! isNewerRelease("0.1.0-beta.24", "nonsense"),
                    "an unparseable tag is never treated as an update");
 

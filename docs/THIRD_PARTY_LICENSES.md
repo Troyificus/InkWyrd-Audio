@@ -7,8 +7,8 @@ or which JUCE version is pinned:
 
 - **TagLib** is weak copyleft (LGPL), and stays legitimate only because
   it is dynamically linked. Its own section is below.
-- **The VST3 SDK bundled in the pinned JUCE** is NOT the MIT one. See
-  its section below - this is an open obligation, not a resolved one.
+- **The VST3 SDK** is MIT only in JUCE 8.0.15 and newer. It is fine as
+  pinned; its section below says what downgrading JUCE would cost.
 
 Everything else is permissive: no copyleft, no royalty, and no
 redistribution restriction that conflicts with closed-source or
@@ -18,7 +18,7 @@ expanded with what's actually been integrated since.
 | Component | License | Used for |
 |---|---|---|
 | [JUCE](https://juce.com) | Free "Starter" tier (see note below) | Application framework, audio engine |
-| [VST3 SDK](https://github.com/steinbergmedia/vst3sdk) (bundled inside JUCE) | **Steinberg proprietary OR GPLv3** in the pinned JUCE 8.0.6 - MIT only from SDK 3.8.0, which JUCE 8.0.6 predates. See below | VST3 plugin hosting |
+| [VST3 SDK](https://github.com/steinbergmedia/vst3sdk) (bundled inside JUCE) | MIT, since SDK 3.8.0 - which means JUCE 8.0.15 or newer. See below before downgrading JUCE | VST3 plugin hosting |
 | [libopus](https://opus-codec.org/) | BSD-3-Clause | Opus encoding for Discord voice |
 | [libsodium](https://libsodium.org/) | ISC | AEAD transport encryption for Discord voice (`aead_xchacha20_poly1305_rtpsize`) |
 | [dr_mp3](https://github.com/mackron/dr_libs) | Public domain / MIT-0 (your choice) | MP3 decoding |
@@ -61,40 +61,36 @@ for writing them, and hand-rolling an ID3v2 writer to avoid a licence
 note would be a worse trade - a bug in that code corrupts someone's
 music.
 
-## The VST3 SDK - an open obligation, not a resolved one
+## The VST3 SDK - resolved by the JUCE 8.0.15 bump
 
-Steinberg relicensed the VST3 SDK to **MIT** with SDK **3.8.0** (October
-2025). That is true, and it is what an earlier version of this file
-recorded. It is also not what this project actually compiles.
+**Current position: MIT, and nothing is owed to anyone.** Verified by
+reading the licence header in the fetched JUCE source, not the release
+notes: `MIT License, Copyright (c) 2025, Steinberg Media Technologies
+GmbH`.
 
-**JUCE 8.0.6, which `CMakeLists.txt` pins, bundles the older SDK** -
-copyright 2024, licensed "Steinberg VST3 License **or** GPLv3", with no
-MIT text anywhere in the bundled tree. Verified by reading
-`modules/juce_audio_processors/format_types/VST3_SDK/LICENSE.txt` in the
-fetched JUCE source, not by trusting the release notes. The app compiles
-it: `JUCE_PLUGINHOST_VST3=1` in `src/app/CMakeLists.txt`.
+Worth keeping the history, because it is the reason JUCE is pinned where
+it is and a future downgrade would quietly reintroduce the problem:
 
-Why that matters now Inkwyrd is proprietary: of the two options the
-bundled SDK offers, **GPLv3 is unavailable to a closed-source app**, so
-the Steinberg proprietary option is the one in force - and its text says:
+Steinberg relicensed the VST3 SDK to MIT with SDK **3.8.0** (October
+2025). **JUCE 8.0.6, pinned until 0.1.1-beta, predated that** and bundled
+the 2024 SDK - "Steinberg VST3 License **or** GPLv3". For a closed-source
+app the GPLv3 half is unavailable, so the proprietary half applied, and
+its text says:
 
 > Before publishing a software under the proprietary license, you need to
 > obtain a copy of the License Agreement signed by Steinberg Media
 > Technologies GmbH.
 
-So a public proprietary release on this JUCE pin needs that agreement.
+That made it a genuine blocker for a public proprietary release, found
+while choosing the app's own licence.
 
-**The fix is a one-line change, and it is the recommended one: bump JUCE
-to 8.0.15 or newer.** JUCE 8.0.15's own `LICENSE.md` lists VST3 as
-**MIT** (the SDK also moved to
-`modules/juce_audio_processors_headless/format_types/VST3_SDK/`), which
-removes the obligation entirely rather than satisfying it with paperwork.
-Confirmed by reading that file at tag 8.0.15. JUCE is on 9.0.2 at the
-time of writing, so 8.0.6 is well behind regardless.
+**Bumping JUCE to 8.0.15 removed it** rather than satisfying it with
+paperwork. The SDK also moved inside JUCE, to
+`modules/juce_audio_processors_headless/format_types/VST3_SDK/`.
 
-Until that bump lands, this is the one genuine legal loose end in the
-project. Do not treat the MIT relicensing as covering us - it covers a
-version we do not ship.
+**Do not downgrade JUCE below 8.0.15** without re-reading this. The
+bundled SDK's licence is a property of the JUCE version, and going
+backwards puts the Steinberg agreement back on the to-do list.
 
 ## Explicitly avoided
 

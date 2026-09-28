@@ -23,7 +23,11 @@ public:
 
     juce::AudioFormatReader* createReaderFor(juce::InputStream* sourceStream, bool deleteStreamIfOpeningFails) override;
 
-    juce::AudioFormatWriter* createWriterFor(juce::OutputStream*, double, unsigned int, int,
-                                              const juce::StringPairArray&, int) override;
-    using juce::AudioFormat::createWriterFor;
+    // Decode-only. JUCE 8.0.15 made the AudioFormatWriterOptions overload
+    // the pure virtual and demoted the old six-argument one to a
+    // non-virtual deprecated helper, so overriding the old signature no
+    // longer makes these classes concrete - it left them abstract, which
+    // is what the upgrade broke.
+    std::unique_ptr<juce::AudioFormatWriter> createWriterFor(std::unique_ptr<juce::OutputStream>& streamToWriteTo,
+                                                              const juce::AudioFormatWriterOptions& options) override;
 };

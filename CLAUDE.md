@@ -3184,13 +3184,11 @@ Two live obligations, neither of them optional:
 1. **The JUCE Starter cap: $20,000/yr, donations included.** See the
    JUCE section of `docs/THIRD_PARTY_LICENSES.md` for the EULA's own
    wording. This is the only recurring condition in the project.
-2. **The VST3 SDK bundled in the pinned JUCE 8.0.6 is NOT MIT** - it is
-   Steinberg-proprietary-or-GPLv3, and GPLv3 is unavailable to a
-   closed-source app, so the proprietary option applies and it requires a
-   signed Steinberg agreement before publishing. **Bumping JUCE to
-   8.0.15+ removes this entirely** (its VST3 is MIT). That bump is the
-   single highest-value follow-up and should happen before any public
-   release.
+2. ~~The VST3 SDK bundled in JUCE 8.0.6 needs a signed Steinberg
+   agreement~~ - **resolved in 0.1.1-beta** by bumping JUCE to 8.0.15,
+   whose bundled VST3 SDK is MIT. See the VST3 section of
+   `docs/THIRD_PARTY_LICENSES.md`, and do not downgrade JUCE below
+   8.0.15 without reading it.
 
 A third thing is worth writing down because it is counter-intuitive:
 **a licence cannot stop forking on a public GitHub repo.** GitHub's Terms
@@ -3217,19 +3215,81 @@ can still be opened up, dual-licensed or sold later.
 installer and the portable ZIP, and - since the app is proprietary now -
 an Inno `LicenseFile` page that asks the user to agree during setup.
 
+## The JUCE 8.0.6 -> 8.0.15 bump (0.1.1-beta)
+
+Done to get the MIT-licensed VST3 SDK (see
+`docs/THIRD_PARTY_LICENSES.md`), which removed the only legal loose end
+left before a public beta. Two things broke, both small:
+
+- **`project()` needs `LANGUAGES C CXX`.** 8.0.15 refuses to configure
+  otherwise: "A C compiler is required to build targets that depend on
+  JUCE". Nothing here is written in C; rnnoise is, and it worked before
+  because it enables its own.
+- **`AudioFormat::createWriterFor` changed shape.** The
+  `AudioFormatWriterOptions` overload is now the pure virtual, and the
+  old six-argument one is a non-virtual deprecated helper. `Mp3AudioFormat`
+  and `MediaFoundationAudioFormat` overrode only the old signature, so
+  after the bump they overrode nothing and stayed abstract. Both are
+  decode-only and return nullptr either way; they now override the new
+  one.
+
+Nothing else moved. All 501 checks passed unchanged, the app launched
+clean, and the off-screen UI render (`INKWYRD_SKINRENDER`) was compared
+by eye - title bar, look-and-feel, sliders, lists and panels all drawing
+as before. That render is the useful check here: a UI framework bump can
+break drawing without failing a single headless test.
+
+**A trap for next time:** deleting `build/.../InkwyrdAudioApp_rc_lib.dir`
+to force the version resource to regenerate also took out
+`juce_binarydata_*`, which broke `InkwyrdSkinData` with a BinaryData
+custom-build failure. Re-running the CMake configure regenerates it. The
+version resource does need a nudge when only `project(VERSION)` changes,
+but delete the rc_lib directory ALONE.
+
+### Version numbering came along with it
+
+`MyAppBaseVersion` in the `.iss` used to be a second hardcoded literal
+and had sat at `0.1.0` for thirty-odd releases while the real version
+moved on. It is now derived from `MyAppVersion`, so there is still one
+number to bump.
+
+`project(VERSION)` in CMakeLists.txt is what JUCE stamps into the exe's
+version resource, and it has to be a literal because `project()` runs
+before the `.iss` can be read. A configure-time check now fails the build
+if it drifts from the `.iss` - verified by setting it to 0.9.9 and
+confirming the configure refuses. Before this, Windows' "Installed apps"
+list and the exe's Properties tab both reported 0.1.0 regardless of what
+had shipped.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future
 release:
 
-- **Version numbering**: hotfixes (bug fixes, diagnostics, no new
-  user-facing capability) bump the last dot only - `beta.2` ->
-  `beta.2.1` -> `beta.2.2`. Only bump to a new whole number
-  (`beta.2.x` -> `beta.3`) when an actual feature lands. This is a
+- **Version numbering, as of `0.1.1-beta`** - plain MAJOR.MINOR.PATCH,
+  set by Troy, replacing the old `0.1.0-beta.NN` counter that left the
+  real version stuck at `0.1.0` for thirty-odd releases:
+
+  | Digit | Bumps when | Example |
+  |---|---|---|
+  | MAJOR | the full, finished release lands | `0.2.1-beta` -> `1.0.0` |
+  | MINOR | a beta iteration - features, anything worth a new beta | `0.1.1-beta` -> `0.2.0-beta` |
+  | PATCH | a hotfix on the beta that is out | `0.2.0-beta` -> `0.2.1-beta` |
+
+  The `-beta` qualifier stays until `1.0.0`. `UpdateCheck.h`'s comparison
+  copes with the changeover - `0.1.1-beta` really does read as newer than
+  `0.1.0-beta.33` - and there are checks for exactly that, because
+  getting it wrong means nobody on an old build is told about an update
+  ever again.
+
+  THE OLD SCHEME, for reading git history before `0.1.1-beta`: hotfixes
+  bumped the last dot only - `beta.2` ->
+  `beta.2.1` -> `beta.2.2`. Only a new whole number
+  (`beta.2.x` -> `beta.3`) when an actual feature landed. This was a
   user preference, not a technical constraint - don't infer feature-vs-
   hotfix from the diff size, ask if it's ambiguous.
 - **`installer/InkwyrdAudio.iss`'s `#define MyAppVersion`** carries the
-  full beta-qualified string (e.g. `"0.1.0-beta.2.1"`) and must be
+  full version string (e.g. `"0.1.1-beta"`) and must be
   bumped to match every release tag - it feeds `AppVersion`, so Windows'
   "Installed apps" list shows which beta is actually installed rather
   than a static "0.1.0" for every one (a real gap: this used to be

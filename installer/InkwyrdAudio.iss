@@ -17,20 +17,38 @@
 ; section for this to reference.
 
 #define MyAppName "Inkwyrd Audio"
-; The full beta-qualified version string - bump this at the top of
-; EVERY release, hotfix or feature (e.g. "0.1.0-beta.2.2"), not just
-; the GitHub release tag/filename. Feeds AppVersion below (so Windows'
-; "Installed apps" list actually shows which beta is installed - it
-; used to just say "0.1.0" for every beta, indistinguishable) AND
-; OutputBaseFilename further down, so there's one place to update per
-; release rather than two.
-#define MyAppVersion "0.1.0-beta.33"
+; The full version string - bump this at the top of EVERY release, not
+; just the GitHub release tag/filename. Feeds AppVersion below (so
+; Windows' "Installed apps" list actually shows which build is
+; installed - it used to just say "0.1.0" for every beta,
+; indistinguishable) AND OutputBaseFilename further down, so there's one
+; place to update per release rather than two.
+;
+; NUMBERING, as of 0.1.1-beta. Plain MAJOR.MINOR.PATCH, replacing the
+; old "0.1.0-beta.NN" counter that never moved off 0.1.0:
+;
+;   MAJOR - stays 0 until the full, finished release. Then 1.0.0.
+;   MINOR - a beta iteration: new features, anything worth calling a
+;           new version of the beta.  0.1.x -> 0.2.0-beta
+;   PATCH - a hotfix on the beta that's out.  0.2.0 -> 0.2.1-beta
+;
+; The "-beta" qualifier stays on until 1.0.0. UpdateCheck.h's comparison
+; handles the changeover - 0.1.1-beta really does read as newer than
+; 0.1.0-beta.33, and there are checks for exactly that, because getting
+; it wrong means nobody on an old build is ever told about an update
+; again.
+#define MyAppVersion "0.1.1-beta"
 #define MyAppPublisher "Troy"
 #define MyAppURL "https://github.com/Troyificus/InkWyrd-Audio"
-; Windows' numeric version fields hold at most four numbers, which can't
-; carry "beta.14.1" - so the file version stays at the base version and
-; the full beta string goes in the text fields alongside it.
-#define MyAppBaseVersion "0.1.0"
+; Windows' numeric version fields hold at most four numbers and can't
+; carry a "-beta" qualifier, so they get the numeric part on its own
+; while the full string goes in the text fields alongside it.
+;
+; DERIVED from MyAppVersion rather than typed again: it used to be a
+; second literal, and it sat at "0.1.0" through thirty-odd releases
+; while the real version moved on. Now there is still exactly one number
+; to bump per release.
+#define MyAppBaseVersion (Pos("-", MyAppVersion) > 0 ? Copy(MyAppVersion, 1, Pos("-", MyAppVersion) - 1) : MyAppVersion)
 ; The CMake target is named InkwyrdAudioApp, but juce_add_gui_app names
 ; the actual output binary after PRODUCT_NAME ("Inkwyrd Audio") - unlike
 ; juce_add_console_app, which used the target name. Confirmed by building

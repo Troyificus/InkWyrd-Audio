@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(InkwyrdAudio VERSION 0.1.0 LANGUAGES CXX)
+# C as well as CXX: JUCE 8.0.15 refuses to configure without a C compiler
+# enabled ("A C compiler is required to build targets that depend on
+# JUCE"), where 8.0.6 did not. Nothing here is written in C - rnnoise is,
+# and it already worked, because it enables its own.
+# VERSION is the numeric part of the release, and JUCE stamps it into the
+# exe's version resource. It has to be a literal (project() runs before
+# the .iss can be read), so a check further down fails the configure if
+# it ever drifts from the real version.
+project(InkwyrdAudio VERSION 0.1.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,7 +24,7 @@ include(FetchContent)
 FetchContent_Declare(
     JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG        8.0.6
+    GIT_TAG        8.0.15
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(JUCE)
@@ -142,6 +150,18 @@ endif()
 # Otherwise editing the .iss alone leaves a stale version compiled in.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/installer/InkwyrdAudio.iss")
+
+# The exe's version resource comes from project() above; the release
+# version comes from the .iss. They are two literals that must agree, so
+# drifting them is a configure error rather than a release that reports
+# the wrong version in Windows' "Installed apps" list.
+string(REGEX REPLACE "-.*$" "" INKWYRD_BASE_VERSION "${INKWYRD_VERSION_STRING}")
+if(NOT INKWYRD_BASE_VERSION STREQUAL PROJECT_VERSION)
+    message(FATAL_ERROR
+        "Version mismatch: installer/InkwyrdAudio.iss says ${INKWYRD_VERSION_STRING} "
+        "(numeric part ${INKWYRD_BASE_VERSION}) but project() in CMakeLists.txt says "
+        "${PROJECT_VERSION}. Bump project(InkwyrdAudio VERSION ...) to match.")
+endif()
 
 add_subdirectory(third_party/rnnoise)
 

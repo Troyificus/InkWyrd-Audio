@@ -332,8 +332,8 @@ juce::AudioFormatReader* MediaFoundationAudioFormat::createReaderFor(juce::Input
     return nullptr;
 }
 
-juce::AudioFormatWriter* MediaFoundationAudioFormat::createWriterFor(juce::OutputStream*, double, unsigned int, int,
-                                                                      const juce::StringPairArray&, int)
+std::unique_ptr<juce::AudioFormatWriter> MediaFoundationAudioFormat::createWriterFor(std::unique_ptr<juce::OutputStream>&,
+                                                             const juce::AudioFormatWriterOptions&)
 {
     return nullptr; // decode-only, matching the design brief's scope
 }

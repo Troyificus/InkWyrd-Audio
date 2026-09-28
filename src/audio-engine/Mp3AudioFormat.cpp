@@ -127,8 +127,8 @@ juce::AudioFormatReader* Mp3AudioFormat::createReaderFor(juce::InputStream* sour
     return nullptr;
 }
 
-juce::AudioFormatWriter* Mp3AudioFormat::createWriterFor(juce::OutputStream*, double, unsigned int, int,
-                                                          const juce::StringPairArray&, int)
+std::unique_ptr<juce::AudioFormatWriter> Mp3AudioFormat::createWriterFor(std::unique_ptr<juce::OutputStream>&,
+                                                             const juce::AudioFormatWriterOptions&)
 {
     return nullptr; // decode-only, matching the design brief's scope
 }
