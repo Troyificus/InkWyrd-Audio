@@ -150,7 +150,7 @@ program off the internet and you deserve the whole picture:
   signature-based engine reads it as clean, and no engine names an actual
   malware family.
 - **Microsoft's verdict has flipped between builds of identical source
-  code** The same program, compiled twice, scored 0/70 and then 1/64.
+  code.** The same program, compiled twice, scored 0/70 and then 1/64.
 - **A false-positive report was submitted to Microsoft and rejected.**
   Their analyst's reply was that it "meets our criteria for malware,
   detection remains". So this is **unresolved, not cleared,** it would be
