@@ -3305,11 +3305,22 @@ release:
   and "0.1.0" is identical for every beta, so it answers nothing when
   someone reports a bug.
 - **Each release is its own GitHub Release** (a new tag per version,
-  e.g. `v0.1.0-beta.2.1`), not one release with its asset silently
-  swapped out - keeps a stable download link per version and a real
-  changelog per hotfix. Mark the previous release's notes with a
-  one-line "Superseded by vX" pointer so anyone landing on an old
-  release page finds the current one.
+  e.g. `v0.2.1-beta`), not one release with its asset silently swapped
+  out - keeps a stable download link per version and a real changelog
+  per hotfix.
+- **Old releases are pruned, and `CHANGELOG.md` is where the history
+  lives.** At `0.1.1-beta` the list had reached 46 releases and Troy
+  asked for them to be cleared. Their notes were archived into
+  `CHANGELOG.md` FIRST, because deleting a release destroys its notes
+  along with its downloads; download links and checksums were stripped
+  on the way in, since those assets no longer exist. **Add the new
+  release's notes to `CHANGELOG.md` as part of every release from now
+  on**, so pruning again is free.
+  The git TAGS were deliberately kept - they map a version to the commit
+  it was built from, cost nothing on the releases page (tags live on
+  their own tab), and are the only remaining record of that mapping.
+  This also retires the old "Superseded by vX" pointer convention: with
+  one release on the page there is nothing to supersede.
 - **Always verify the installer for real before publishing**: silent
   install to a scratch directory (`/VERYSILENT /SUPPRESSMSGBOXES
   /DIR=...`), confirm the file layout and the exe's file size actually
