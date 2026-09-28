@@ -1,7 +1,6 @@
 # Inkwyrd Audio
 
-**Beta.** A Windows app for running the sound of a tabletop game - D&D or
-anything else - over Discord.
+**Beta.** A Windows app for running the sound of a tabletop game (D&D, Daggerheart, Call of Cthulhu, Pathfinder, anything you like!) over Discord.
 
 You get music playlists that crossfade on their own, a soundboard of
 effects and looping ambience, **scenes** that change the whole mood in
@@ -88,7 +87,7 @@ Inspired by Kenku FM and Winamp.
 - Keyboard shortcuts on the Player window.
 - Six windows that snap together and remember where you left them.
 - **Skins**: change the colours, fonts and logo, or go further and draw
-  the buttons, sliders and window frames from your own pixel art - the
+  the buttons, sliders and window frames from your own pixel art, the
   **Pixel Phosphor** skin shows how.
 
 **Under the hood**
@@ -104,8 +103,8 @@ What changed in each version, all the way back to the first beta, is in
 [CHANGELOG.md](CHANGELOG.md).
 
 **There's nothing to install.** Download
-`InkwyrdAudio-Portable-<version>.zip`, unzip it anywhere you like - your
-Desktop, Documents, a USB stick - and run **`Inkwyrd Audio.exe`** from
+`InkwyrdAudio-Portable-<version>.zip`, unzip it anywhere you like, your
+Desktop, Documents, a USB stick, and run **`Inkwyrd Audio.exe`** from
 inside. To remove Inkwyrd, delete the folder.
 
 Everything it needs is in that folder, including the Microsoft C++
@@ -117,16 +116,16 @@ one and delete the old. Your settings, playlists, soundboard, scenes,
 track library and skins live in `%APPDATA%\Inkwyrd Audio`, separately
 from the program, so they survive either way.
 
-> **There used to be an installer, and there isn't one now.** It did the
+> **There used to be an installer here, but it's gone now.** It did the
 > same job with a Start menu entry and an uninstaller, but it was the
-> part antivirus engines disliked most - an unsigned program that unpacks
+> part antivirus engines disliked most: an unsigned program that unpacks
 > other programs looks exactly like a dropper to a machine-learning model,
 > whatever it actually does. One download is also one less thing to
 > explain.
 >
-> **If you installed Inkwyrd that way before**, uninstall it first -
-> Windows **Settings -> Apps -> Installed apps -> Inkwyrd Audio ->
-> Uninstall** - then use the ZIP. Your settings and playlists are in
+> **If you installed Inkwyrd that way before**, uninstall it first 
+> (Windows **Settings -> Apps -> Installed apps -> Inkwyrd Audio ->
+> Uninstall**) then use the ZIP. Your settings and playlists are in
 > `%APPDATA%` and aren't touched by uninstalling. Running both at once
 > would leave you with two copies sharing one set of settings, which is
 > confusing rather than harmful.
@@ -143,7 +142,7 @@ the honest position, because you're being asked to run an unsigned
 program off the internet and you deserve the whole picture:
 
 - Microsoft's **automatic machine-learning** scanner has flagged
-  Inkwyrd's downloads before, with names ending in `!ml` - `Wacatac.B!ml`,
+  Inkwyrd's downloads before, with names ending in `!ml`, `Wacatac.B!ml`,
   `Sabsik.EN.D!ml`. Those suffixes mean a model guessed, not that anything
   was found.
 - On VirusTotal the program scores **0 or 1 out of about 70 engines**.
@@ -151,10 +150,10 @@ program off the internet and you deserve the whole picture:
   signature-based engine reads it as clean, and no engine names an actual
   malware family.
 - **Microsoft's verdict has flipped between builds of identical source
-  code** - the same program, compiled twice, scored 0/70 and then 1/64.
+  code** The same program, compiled twice, scored 0/70 and then 1/64.
 - **A false-positive report was submitted to Microsoft and rejected.**
   Their analyst's reply was that it "meets our criteria for malware,
-  detection remains". So this is **unresolved, not cleared** - it would be
+  detection remains". So this is **unresolved, not cleared,** it would be
   dishonest to tell you Microsoft has confirmed it's harmless, because
   they have declined to.
 
@@ -372,8 +371,8 @@ through one list while another plays.
 **Rename** and **Delete** manage the list. **Refresh** re-reads a
 playlist's linked folder (see below).
 
-**The Playlist window** shows the selected playlist's tracks - title,
-artist and length - in the order they play when Shuffle is off, with the
+**The Playlist window** shows the selected playlist's tracks; title,
+artist and length, in the order they play when Shuffle is off, with the
 playing one marked.
 - **Double-click a track** to jump to it.
 - **Select several tracks** the usual ways:
@@ -539,8 +538,8 @@ another.
 
 ## Sounds that play by themselves
 
-A sound effect can play on its own every so often - a seagull over the
-waves, distant thunder, a creak in an old house - while the rest of the
+A sound effect can play on its own every so often, such as a seagull over the
+waves, distant thunder, a creak in an old house, while the rest of the
 scene carries on.
 
 1. **Right-click** the button and choose **Play randomly**.
@@ -551,7 +550,7 @@ scene carries on.
 
    Each gap is picked at random within its range, so it never falls
    into a pattern. The first one comes sooner, so you can tell it's on.
-3. A small **die** appears in the button's top corner while it's playing
+3. A small **dice** appears in the button's top corner while it's playing
    randomly.
 
 **Clicking the button still plays it straight away**, whenever you
@@ -580,7 +579,7 @@ Open the **Scenes** window from the **Scenes** button on the Player.
 3. A dialog opens, already filled in from what's playing. Give it a
    name, untick anything you don't want in it, and pick a colour. Each
    sound also has **In** and **Out** fades for this scene, taken from
-   its button - change them here without changing the button. **Scene
+   its button. Change them here without changing the button. **Scene
    transition** means the scene's normal change time; **Off** cuts
    straight in or out.
 4. Choose what it does to the music:
@@ -643,7 +642,7 @@ talk.
 The **Voice FX** window shapes how you sound.
 
 **Noise suppression** (at the top, off by default) removes steady
-background noise - a fan, hiss, room tone - from the gaps between your
+background noise, a fan, hiss, room tone, from the gaps between your
 words. Turn it on for a noisy mic and leave it off for a quiet one: on a
 clean mic it takes more from your voice than from the noise. It adds
 about 40ms of delay. The line under the switch says which state you're
@@ -742,7 +741,7 @@ own. It's free and takes about five minutes.
 >
 > The same applies to the client secret if you set up automatic muting.
 > Your bot can only join voice channels and speak, on servers you invited
-> it to - so the worst case is somebody playing audio at your group, not
+> it to, so the worst case is somebody playing audio at your group, not
 > access to your Discord account.
 
 **Once you're connected, turn Monitor off.** You're in the call too, so
@@ -761,7 +760,7 @@ it. It uses the **same** Discord application as your bot:
 1. **Add a redirect.** In the Developer Portal, open your app, go to
    **OAuth2 -> Redirects**, click **Add Redirect**, enter
    `https://inkwyrd.com/rpc` exactly, and **Save Changes**. Nothing is
-   ever sent there - Discord just requires one. It must be that exact
+   ever sent there, Discord just requires one. It must be that exact
    address, and first in the list if you have several.
 2. **Fully quit Discord** - right-click it in the system tray and choose
    **Quit Discord** - then start it again. Discord only reads your
@@ -793,7 +792,7 @@ Inkwyrd is running.
 | **Soundboard Killswitch** | Silences every sound effect; the music keeps playing |
 | **Scene** | Switches to a scene |
 
-**Installing it.** The plugin isn't in the download yet - it's
+**Installing it.** The plugin isn't in the download yet, it's
 built from this repository's source. You need the Stream Deck app
 (version 6.5 or later) and [Node.js](https://nodejs.org/).
 
@@ -825,7 +824,7 @@ There's more detail in [streamdeck-plugin/README.md](streamdeck-plugin/README.md
 ## Skins
 
 A skin changes Inkwyrd's colours, fonts, corner rounding, title bar
-height and logo - and, optionally, draws the buttons, sliders and window
+height and logo and, optionally, draws the buttons, sliders and window
 frames from pictures of your own (see
 [below](#pictures-for-buttons-sliders-and-frames-sprite-skins)).
 
@@ -845,7 +844,7 @@ The pixel-art skins draw the buttons, sliders and window frames from
 pictures and use the Silkscreen pixel font.
 
 **Included skins get updated.** When a new version of Inkwyrd improves
-one of these skins, your copy is replaced with the new one - but only if
+one of these skins, your copy is replaced with the new one, but only if
 you haven't changed it. If you've edited any of its files, Inkwyrd leaves
 it exactly as it is. If you've deleted one, it stays deleted. (Each
 included skin's folder holds a small `.inkwyrd-example.json` file that
@@ -937,7 +936,7 @@ and uses the rest of your file.
 ### Pictures for buttons, sliders and frames (sprite skins)
 
 A skin can also replace how the controls themselves are drawn, with
-pictures from one image - a *sprite sheet* - in the skin's folder. The
+pictures from one image, a *sprite sheet* in the skin's folder. The
 **Pixel Phosphor** example skin does this: open its folder and its
 `sprites.png` to see one.
 
@@ -963,7 +962,7 @@ way in your skin's colours, so you can start with just the buttons.
 - **`slice`** keeps the edges from stretching: `[left, top, right, bottom]`.
   The corners stay their real size and only the middle stretches, so one
   small picture fits a button of any width and a window of any size.
-- **`tile`** repeats the edges and middle instead of stretching them - good
+- **`tile`** repeats the edges and middle instead of stretching them, good
   for textures and patterned frames.
 - **`scale`** is how many screen pixels each sheet pixel becomes (1-8).
   Pixel art drawn small looks right at `2` or `3`.
@@ -1003,7 +1002,7 @@ bar's own glyphs are `icon.close`, `icon.minimise` and `icon.maximise`.
 Toggles are lit (`@on`) while their option is on.
 
 A misspelt name, a picture that reaches outside the sheet, or a slice
-wider than its picture is listed under the Skin picker and skipped - the
+wider than its picture is listed under the Skin picker and skipped, the
 rest of the skin still loads.
 
 **Export current...** saves colours, fonts and sizes only. To start from
@@ -1021,7 +1020,7 @@ floats over the other windows while it's open.
 |---|---|
 | **Music folder** | Required on first run. Becomes your first playlist, linked to the folder |
 | **Sound effects folder** | Optional. Its sounds are added to free soundboard buttons |
-| **Discord bot** | Token, server and channel - see [Connecting to Discord](#connecting-to-discord) |
+| **Discord bot** | Token, server and channel, see [Connecting to Discord](#connecting-to-discord) |
 | **Mute me in Discord** | See [Muting yourself in Discord automatically](#muting-yourself-in-discord-automatically) |
 | **Duck the music** | See [Ducking the music while you talk](#ducking-the-music-while-you-talk) |
 | **Tell me when a newer release exists** | Checks GitHub once at startup |
@@ -1038,7 +1037,7 @@ is shown at the bottom right.
 startup whether a newer release exists. If one does, an **Update
 available** link appears at the top of the Player window: click it to
 open the release page in your browser, or hover over it to see the
-address first. **It never downloads or installs anything** - you get the
+address first. **It never downloads or installs anything,** you get the
 new version from that page yourself.
 
 **Your files** all live in `%APPDATA%\Inkwyrd Audio` (paste that into
@@ -1053,7 +1052,7 @@ bot token as plain text (see
 folder** in Settings takes you straight there. `log.txt` covers the run
 you're in; `log-previous.txt` is the run before it, kept so that a crash
 you reported after restarting still has its evidence. They record what
-Inkwyrd did - which files it loaded, how the Discord connection went,
+Inkwyrd did; which files it loaded, how the Discord connection went,
 how long startup took, and a report if it stopped unexpectedly. They
 never contain your bot token. **Attaching both to a bug report is the
 single most useful thing you can do.**
@@ -1097,7 +1096,7 @@ you're in another program, use a [Stream Deck](#using-a-stream-deck).
 ## Troubleshooting
 
 **I can't hear anything.**
-If you're not connected to Discord, turn **Monitor** on - without
+If you're not connected to Discord, turn **Monitor** on. Without
 Discord it's the only way to hear the mix. Also check the **Master**
 slider, and the Player's warning banner (it says if the audio device
 failed to open, or a playlist has no playable files).
@@ -1145,7 +1144,7 @@ See the note under [Download and install](#download-and-install).
 
 - The download isn't code-signed, so Windows warns about it and Defender
   may block it. See
-  [Download and install](#download-and-install) - and please don't
+  [Download and install](#download-and-install) and please don't
   override a block.
 - There's no installer, so no Start menu entry or desktop shortcut.
   Make your own shortcut to `Inkwyrd Audio.exe` if you want one: right-
@@ -1166,15 +1165,15 @@ This is a beta, and reports are what make it better.
 
 - **Something's broken:** open a
   [bug report](https://github.com/Troyificus/InkWyrd-Audio/issues/new?template=bug_report.yml).
-  It asks a few questions - which version, which download, what you were
-  doing - and all of them help.
+  It asks a few questions; which version, which download, what you were
+  doing, and all of them help.
 - **Something's missing:** open a
   [feature request](https://github.com/Troyificus/InkWyrd-Audio/issues/new?template=feature_request.yml).
   Say what you're trying to do at the table, not just what button you
   want; that usually leads to a better answer than the one first
   imagined.
 
-**Please attach your log files** to a bug report - Settings -> **Open log
+**Please attach your log files** to a bug report. Settings -> **Open log
 folder**, then attach `log.txt` and `log-previous.txt`. They say what the
 app was doing and record a crash if there was one, and they don't contain
 your bot token. A screenshot of the Player's status line or warning
@@ -1182,15 +1181,15 @@ banner helps too.
 
 ## Licence
 
-**Inkwyrd Audio is free to use, and its source is public to read - but it
-isn't open source.** Copyright (c) 2026 Troy, all rights reserved. The
+**Inkwyrd Audio is free to use, and its source is public to read, but it
+isn't open source.** Copyright (c) 2026 InkWyrd, all rights reserved. The
 full terms are in [LICENSE](LICENSE), and the short version is:
 
 - **You may** download it, install it and use it free of charge, for
   anything you like, personal or commercial, on as many of your own
   computers as you want. You may read the source and build it yourself.
 - **You may not** redistribute it, publish your own builds of it, put out
-  a modified version, or charge anyone for it - not without asking first.
+  a modified version, or charge anyone for it.
 
 The source is published so you can see exactly what the program does
 before you run it. That matters here, because the downloads aren't
