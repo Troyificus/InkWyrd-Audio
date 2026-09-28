@@ -2,6 +2,9 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <set>
+#include <string>
 #include <juce_core/juce_core.h>
 
 #include "PlaylistEngine.h"
@@ -43,6 +46,18 @@ public:
 
 private:
     void handleCommand(const juce::var& parsed);
+
+    // Connections refused for carrying an Origin header (see
+    // ControlOrigin.h), by IXWebSocket connection id. Held rather than
+    // just closed, so anything already in flight behind the handshake is
+    // dropped too. Touched from the websocket server's own threads, so
+    // it takes a lock.
+    void rejectConnection(const std::string& connectionId);
+    void forgetConnection(const std::string& connectionId);
+    bool isRejected(const std::string& connectionId) const;
+
+    mutable std::mutex rejectedMutex;
+    std::set<std::string> rejectedConnections;
 
     PlaylistEngine& playlist;
     SoundboardEngine& soundboard;

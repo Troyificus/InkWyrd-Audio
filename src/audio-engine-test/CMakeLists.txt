@@ -43,7 +43,10 @@ target_sources(AudioEngineTest PRIVATE
     ../app/UpdateCheck.cpp
 )
 
-target_include_directories(AudioEngineTest PRIVATE ../app/gui ../app)
+# ../discord-voice for LogRedaction.h: the log's credential filter is
+# pure over strings, so it is covered here rather than by reading a log
+# file and hoping. ControlOrigin.h comes from ../app, already listed.
+target_include_directories(AudioEngineTest PRIVATE ../app/gui ../app ../discord-voice)
 
 target_compile_definitions(AudioEngineTest PRIVATE
     JUCE_STANDALONE_APPLICATION=1

@@ -2958,6 +2958,198 @@ it was the bug, wearing a plausible excuse. Using real speech (Windows'
 own SAPI can write a 48kHz mono WAV, which is how the fixture here was
 made) removed that excuse and made the number impossible to rationalise.
 
+## Getting ready for a public beta (pre-release hardening)
+
+Prompted by "what should I consider before releasing this publicly?" -
+an audit of the repo rather than of the code's behaviour. Four things
+were found and fixed; the licence question is deliberately still open.
+
+### The Visual C++ runtime was missing from both downloads
+
+**The most serious of the four, because it makes the app not start at
+all.** The vcpkg triplet links the CRT dynamically
+(`VCPKG_CRT_LINKAGE dynamic`), so `Inkwyrd Audio.exe` and vcpkg's
+`tag.dll` import `MSVCP140.dll`, `VCRUNTIME140.dll` and
+`VCRUNTIME140_1.dll`. Those are not part of Windows - they arrive with
+the "Microsoft Visual C++ 2015-2022 Redistributable". A development
+machine always has it. A clean install may not, and neither the ZIP nor
+the installer shipped it or chained the redistributable.
+
+What a tester would have seen: a bare "The code execution cannot proceed
+because MSVCP140.dll was not found", from the loader, with no mention of
+Inkwyrd anywhere in it. Reports of that are indistinguishable from any
+other "it doesn't work".
+
+Found by walking the real import tables with `dumpbin /dependents`
+recursively over every shipped binary and classifying each dependency as
+shipped / System32 / absent - not by reading CMake and assuming. The
+`api-ms-win-crt-*.dll` entries in that output are a red herring: they
+are API-set stubs resolved by the OS's own `ucrtbase.dll`, present on
+every Windows 10 and 11, and must NOT be shipped.
+
+Fixed in CMake via `InstallRequiredSystemLibraries` plus a POST_BUILD
+copy (`inkwyrd_copy_msvc_runtime`), rather than a hardcoded path or an
+edit to each packager:
+
+- It resolves the redistributable matching whichever toolset is
+  building, so a Visual Studio update can't leave a stale runtime being
+  shipped.
+- Both packagers already glob `*.dll` next to the exe, so the ZIP and
+  the installer picked this up with no change to either.
+- `CMAKE_INSTALL_UCRT_LIBRARIES FALSE` - see the API-set note above.
+- Configure FAILS if the list comes back empty. Shipping downloads that
+  don't start, silently, is the exact failure being fixed.
+- `make-portable-zip.ps1` throws if the three required DLLs aren't in
+  the staged folder, because a ZIP missing them works perfectly on this
+  machine and fails on everyone else's.
+
+It ships the full eight-file redistributable set, not the three actually
+imported. Deliberate: they are Microsoft-signed, add about 1.4 MB, and
+`msvcp140_atomic_wait.dll` in particular is what C++20's
+`std::atomic::wait` pulls in - this codebase is full of `std::atomic`,
+so the import list is one ordinary code change away from growing.
+
+**Verifying it without a clean VM.** This is Windows 11 Home: no Windows
+Sandbox, no Hyper-V, no VM tooling installed. Two things were done
+instead, and the first attempt at each was wrong in an instructive way:
+
+1. **A symbol-level check** that the redist copies actually export every
+   CRT symbol the binaries import (331 of them). This matters more here
+   than it looks - see the `__std_find_first_not_of_trivial_pos_1` note
+   under "Toolchain gotchas": this project has already been bitten once
+   by a CRT that didn't export what the toolset emitted. The shipped
+   runtime is 14.44.35211 while this machine's System32 has 14.50.35719,
+   so shipping genuinely downgrades what the app loads.
+   *The first attempt reported "all symbols present" having checked ZERO
+   symbols* - `Get-ChildItem -Include` with no wildcard in the path
+   returns nothing, so the loop never ran. A pass with a zero count is
+   not a pass; the script now prints the count and says INCONCLUSIVE
+   when it is zero.
+2. **A real A/B on the real binaries**, with the loader restricted to the
+   package folder (`LoadLibraryExW` with
+   `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR`, which excludes System32 - exactly
+   the clean-machine condition). Without the shipped runtime: error 126,
+   ERROR_MOD_NOT_FOUND. With it: loads, resolving from the package
+   folder.
+   *The first attempt did this from PowerShell and was meaningless*: the
+   loader resolves an import by module NAME against what is already
+   loaded in the process before it ever consults the search path, and
+   the host process may well already have the CRT in it. The probe is
+   now a tiny `/MT` (static CRT) native exe that aborts if
+   `msvcp140.dll` is already present in its own process.
+
+Finally, the real app was launched from a copied package and its loaded
+modules enumerated: all three CRT DLLs resolved from the package folder,
+not System32. That is the mechanism confirmed end to end.
+
+**Still worth doing on a genuinely clean machine** when one is
+available. The above proves the dependency and proves the fix; it cannot
+prove the absence of some *other* clean-install-only dependency.
+
+### A crash left nothing behind
+
+There was no crash handler anywhere - no `setApplicationCrashHandler`,
+no dump, nothing. A tester's "it just vanished" was unanswerable.
+
+Note for future sessions: there WAS already a log. `logLine()` in
+`src/discord-voice/Log.h` has been writing a log file all along;
+grepping for `FileLogger` or `juce::Logger` misses it entirely and
+produces the wrong conclusion.
+
+Three changes:
+
+- **A crash handler** that writes a dated block plus
+  `SystemStats::getStackBacktrace()`. Verified by actually crashing:
+  `INKWYRD_CRASHTEST=1` on the test harness installs the same handler
+  and dereferences null. A crash handler that silently fails to fire is
+  worse than none - it buys false confidence - so this is proven rather
+  than assumed. The backtrace resolves system frames only (no app
+  symbols in a Release build without PDBs), so it establishes *that* a
+  crash happened and when, with the preceding log lines for context; it
+  does not point at a line. A minidump would, and is the obvious next
+  step if crash reports start arriving that the log can't explain.
+- **`logCrashLine()` deliberately does not take `logLine`'s mutex.** It
+  runs from an unhandled-exception filter, and the thread that crashed
+  may have been holding that lock when it died - blocking there turns a
+  crash that writes a usable log into a hang that writes nothing. A torn
+  line is the better outcome.
+- **Logs rotate instead of truncating.** They moved into a `logs`
+  subfolder, and the previous run is kept as `log-previous.txt`. The old
+  behaviour deleted the log at startup, which meant the first thing
+  anyone does after a crash - open the program again - destroyed the
+  only evidence before they could report it. A pre-existing `log.txt` is
+  migrated to `log-before-upgrade.txt` on first run. Settings gained an
+  **Open log folder** button (and the window's fixed height had to grow
+  by that row's 36px, or Save falls off the bottom - it has no scroll
+  view).
+
+### The log is now something people are asked to send
+
+Which changes what may go in it. Checked first, and the existing code is
+careful on purpose: neither gateway logs its own payload, `sendJson` is
+silent, and `VOICE_SERVER_UPDATE` logs the voice token's LENGTH rather
+than the token. **No credential currently reaches the log.**
+
+`LogRedaction.h` is the net under that care, so one careless
+`logLine(payload)` in a future session can't quietly undo it. Two
+layers:
+
+- **Exact values**, registered from AppSettings at startup and whenever
+  one changes. Precise, and it covers the client secret and refresh
+  token - plain alphanumeric runs that no pattern could safely tell from
+  a checksum or an ID.
+- **A shape check** for Discord bot tokens, for a secret that reaches
+  the log before registration.
+
+The trap worth remembering: **secrets shorter than 8 characters are
+ignored**. An unset setting is an empty string, and a naive replace of
+the empty string matches at every position - which would fill the log
+with redaction markers and destroy exactly the diagnostics it exists to
+protect. There is a check for that case specifically.
+
+### A web page could drive the control server
+
+`ControlServer` is loopback-only with no auth, on the reasoning that
+nothing outside the machine can reach it. True of the network, false of
+the browser: a WebSocket handshake is not subject to same-origin rules,
+so any page the user had open could connect to `ws://127.0.0.1:39231`
+and fire the Soundboard Killswitch mid-session.
+
+Fixed by refusing any handshake carrying an `Origin` header. It works
+because of an asymmetry: a browser always sends one and page script
+cannot suppress it (a sandboxed iframe sends the literal `null`), while
+the Stream Deck plugin's Node `ws` client sends none unless asked. See
+`ControlOrigin.h`. Localhost origins are refused too - a page on a dev
+server is still a page.
+
+This does not stop a hostile local program, which can simply omit the
+header. Nothing short of real authentication would, and a process
+running as the user has far worse options available than skipping a
+track.
+
+Refused connections are remembered by id and their messages dropped, not
+just closed: `close()` asks the peer to go away but doesn't guarantee
+nothing was already in flight behind the handshake.
+
+### Issue templates, and what is still open
+
+`.github/ISSUE_TEMPLATE/` gained a bug form (version, which download,
+steps, reproducibility, logs) and a feature form that asks **what the
+person is trying to do at the table** before what button they want. The
+bug form says in its header not to paste tokens or the settings file.
+
+**Still open, deliberately:**
+
+- **No LICENSE file**, on an already-public repo - so it is
+  all-rights-reserved by default while the source sits there readable.
+  The user's call, being taken separately; note that the JUCE Starter
+  tier caps total annual revenue INCLUDING donations at $20,000.
+- **No CI.** Every release is still built by hand from a working copy.
+- **No code signing.** The Defender false-positive story is unchanged.
+- **The version was NOT bumped** by this work. These changes need a
+  release to reach anyone, and that release is waiting on the licence
+  decision.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

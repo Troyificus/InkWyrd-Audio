@@ -60,6 +60,67 @@ function(inkwyrd_copy_dave_dll target)
     )
 endfunction()
 
+# --- The Visual C++ runtime, shipped beside the exe ---
+#
+# The app imports MSVCP140.dll, VCRUNTIME140.dll and VCRUNTIME140_1.dll
+# (so does vcpkg's tag.dll), because the vcpkg triplet links the CRT
+# dynamically - see vcpkg-overlay-triplets/x64-windows.cmake. Those are
+# NOT part of Windows: they arrive with the "Microsoft Visual C++
+# 2015-2022 Redistributable", which a development machine always has and
+# a clean install may not. Without them the app doesn't start, and what
+# the user sees is a bare "MSVCP140.dll was not found" from the loader
+# with no mention of Inkwyrd at all.
+#
+# Copying them next to the exe (Microsoft's own "local deployment"
+# option for these files) means the downloads work as they are, with no
+# prerequisite to install. It also covers the portable ZIP, which has no
+# installer that could have chained the redistributable.
+#
+# InstallRequiredSystemLibraries rather than a hardcoded path: it
+# resolves the redistributable matching whichever toolset is building,
+# so this doesn't quietly ship a stale runtime after a Visual Studio
+# update.
+#
+# UCRT is excluded deliberately - api-ms-win-crt-*.dll are API sets
+# resolved by the OS's own ucrtbase.dll, present on every Windows 10 and
+# 11, and shipping a private copy of those is the documented way to get
+# subtle mismatches.
+if(MSVC)
+    set(CMAKE_INSTALL_UCRT_LIBRARIES FALSE)
+    set(CMAKE_INSTALL_OPENMP_LIBRARIES FALSE)
+    # We copy them ourselves, post-build; no install() rule is wanted.
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+    include(InstallRequiredSystemLibraries)
+
+    if(NOT CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+        message(FATAL_ERROR
+            "Couldn't find the MSVC redistributable DLLs to ship. Building "
+            "without them produces downloads that fail to start on any machine "
+            "that hasn't installed the VC++ redistributable - refusing to "
+            "configure rather than ship that silently.")
+    endif()
+
+    message(STATUS "Shipping MSVC runtime: ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}")
+endif()
+
+# Copies the runtime above next to a target's exe. Must be called for
+# anything that actually ships (the app); spikes and tests run from a
+# machine that has the redistributable anyway.
+function(inkwyrd_copy_msvc_runtime target)
+    if(NOT MSVC)
+        return()
+    endif()
+
+    foreach(runtime_dll ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${runtime_dll}"
+                "$<TARGET_FILE_DIR:${target}>"
+            VERBATIM
+        )
+    endforeach()
+endfunction()
+
 # The beta-qualified version string, read from the installer script so
 # there is still ONE place to bump per release (see CLAUDE.md's release
 # process). JUCE's own version can't carry it - Windows' version fields

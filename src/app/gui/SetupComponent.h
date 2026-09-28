@@ -130,6 +130,12 @@ private:
     juce::Label playlistFilesCaption { {}, "Playlist files" };
     juce::TextButton openPlaylistFolderButton { "Open playlists folder" };
 
+    // The log, and the one place the app points at it. A bug report is
+    // worth far more with this attached, and before this button the only
+    // way to find it was to be told a %APPDATA% path in a README.
+    juce::Label logFilesCaption { {}, "Log files" };
+    juce::TextButton openLogFolderButton { "Open log folder" };
+
     // Skins. A skin is a folder of its own under %APPDATA%\Inkwyrd Audio    // skins; "Export current..." writes what is on screen out as one,
     // which is the starting point for editing rather than typing a file
     // from scratch.

@@ -25,6 +25,41 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
 #endif
 
+    // Before anything that could log: the settings file holds the bot
+    // token, the OAuth client secret and the refresh token, and the log
+    // is a file testers are asked to attach to a bug report. Registering
+    // them here means any line that ever contains one has it replaced on
+    // the way to disk. See LogRedaction.h.
+    registerSecretsForRedaction();
+
+    // A crash currently leaves nothing behind at all - no log line, no
+    // dump, nothing for a bug report to be built from. JUCE's handler
+    // runs on an unhandled exception; getStackBacktrace() gives the
+    // frames, which is the one thing that makes a "it just closed"
+    // report actionable.
+    juce::SystemStats::setApplicationCrashHandler([](void*)
+    {
+        logCrashLine("");
+        logCrashLine("=== CRASH ===");
+        logCrashLine("Inkwyrd Audio " INKWYRD_VERSION_STRING " stopped unexpectedly at "
+                      + juce::Time::getCurrentTime().toString(true, true));
+        logCrashLine(juce::SystemStats::getStackBacktrace());
+        logCrashLine("=== end of crash report ===");
+    });
+
+    // The header of every run. Without this a log says what the app did
+    // but not what it was running on, and "works here, not there" reports
+    // have nowhere to start. Costs one block of text per launch.
+    logLine("");
+    logLine("=== Inkwyrd Audio " INKWYRD_VERSION_STRING " starting: "
+             + juce::Time::getCurrentTime().toString(true, true) + " ===");
+    logLine("[App] " + juce::SystemStats::getOperatingSystemName()
+             + (juce::SystemStats::isOperatingSystem64Bit() ? " (64-bit)" : " (32-bit)")
+             + ", " + juce::String(juce::SystemStats::getNumCpus()) + " cores, "
+             + juce::String(juce::SystemStats::getMemorySizeInMegabytes()) + " MB RAM");
+    logLine("[App] running from " + juce::File::getSpecialLocation(juce::File::currentExecutableFile)
+                                         .getParentDirectory().getFullPathName());
+
     if (sodium_init() < 0)
     {
         logLine("[App] sodium_init failed");
@@ -800,6 +835,7 @@ void InkwyrdAudioApplication::showSetup()
                                        {
                                            settings.setDiscordRpcRefreshToken(refreshToken);
                                            settings.save();
+                                           registerSecretsForRedaction();
                                        }
 
                                        if (callback)
@@ -1086,6 +1122,19 @@ void InkwyrdAudioApplication::applyDiscordRpcSettings()
         discordRpc.setSelfMuted(! masterEngine.isMicMuted());
 }
 
+void InkwyrdAudioApplication::registerSecretsForRedaction()
+{
+    // Exact values, so nothing else in the log is touched. Anything
+    // short is dropped by redactLine() anyway (an unset setting is an
+    // empty string, which would otherwise match everywhere) - passing
+    // them all and letting it filter keeps the rule in one place.
+    inkwyrd::setSecretsToRedact({
+        settings.getBotToken().toStdString(),
+        settings.getDiscordClientSecret().toStdString(),
+        settings.getDiscordRpcRefreshToken().toStdString(),
+    });
+}
+
 void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result result)
 {
     settings.setPlaylistFolder(result.playlistFolder);
@@ -1100,6 +1149,10 @@ void InkwyrdAudioApplication::completeSetupAndLaunch(SetupComponent::Result resu
     settings.setDuckThresholdDb(result.duckThresholdDb);
     settings.setCheckForUpdates(result.checkForUpdates);
     settings.save();
+
+    // Settings has just handed us a token and maybe a client secret that
+    // the redaction list doesn't know about yet.
+    registerSecretsForRedaction();
 
     // Ducking applies to the session already running - it is a mix
     // setting, not a connection one, so there is nothing to restart for.

@@ -4,6 +4,9 @@
 #include <ixwebsocket/IXWebSocketServer.h>
 #include <ixwebsocket/IXConnectionState.h>
 
+#include "ControlOrigin.h"
+#include "Log.h"
+
 ControlServer::ControlServer(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse,
                               MasterEngine& masterEngineToUse)
     : playlist(playlistToUse), soundboard(soundboardToUse), masterEngine(masterEngineToUse)
@@ -23,9 +26,41 @@ bool ControlServer::start(int port)
     server = std::make_unique<ix::WebSocketServer>(port, "127.0.0.1");
 
     server->setOnClientMessageCallback(
-        [this](std::shared_ptr<ix::ConnectionState>, ix::WebSocket&, const ix::WebSocketMessagePtr& msg)
+        [this](std::shared_ptr<ix::ConnectionState> state, ix::WebSocket& socket,
+                const ix::WebSocketMessagePtr& msg)
         {
+            if (msg->type == ix::WebSocketMessageType::Open)
+            {
+                // See ControlOrigin.h: a handshake carrying an Origin
+                // header came from a web page, and web pages don't get
+                // to drive the app.
+                if (! inkwyrd::controlHandshakeAllowed(msg->openInfo.headers))
+                {
+                    const auto origin = msg->openInfo.headers.find("Origin");
+                    logLine("[ControlServer] refused a connection from a web page, origin: "
+                             + juce::String(origin != msg->openInfo.headers.end() ? origin->second
+                                                                                  : std::string("(empty)")));
+                    rejectConnection(state->getId());
+                    socket.close(ix::WebSocketCloseConstants::kNormalClosureCode,
+                                  "Inkwyrd Audio does not accept control connections from web pages");
+                }
+                return;
+            }
+
+            if (msg->type == ix::WebSocketMessageType::Close)
+            {
+                forgetConnection(state->getId());
+                return;
+            }
+
             if (msg->type != ix::WebSocketMessageType::Message)
+                return;
+
+            // close() above asks the peer to go away; it does not
+            // guarantee nothing else was already in flight behind the
+            // handshake. Commands from a refused connection are dropped
+            // for as long as it exists, so the refusal can't be raced.
+            if (isRejected(state->getId()))
                 return;
 
             auto parsed = juce::JSON::parse(juce::String(msg->str));
@@ -96,4 +131,22 @@ void ControlServer::handleCommand(const juce::var& parsed)
         masterEngine.setMicMuted(!masterEngine.isMicMuted());
         std::cout << "[ControlServer] mic muted = " << (masterEngine.isMicMuted() ? "true" : "false") << std::endl;
     }
+}
+
+void ControlServer::rejectConnection(const std::string& connectionId)
+{
+    const std::lock_guard<std::mutex> lock(rejectedMutex);
+    rejectedConnections.insert(connectionId);
+}
+
+void ControlServer::forgetConnection(const std::string& connectionId)
+{
+    const std::lock_guard<std::mutex> lock(rejectedMutex);
+    rejectedConnections.erase(connectionId);
+}
+
+bool ControlServer::isRejected(const std::string& connectionId) const
+{
+    const std::lock_guard<std::mutex> lock(rejectedMutex);
+    return rejectedConnections.count(connectionId) > 0;
 }

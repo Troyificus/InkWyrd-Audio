@@ -160,6 +160,11 @@ private:
     // Applies a skin by folder name ({} = the built-in look) and returns
     // what to tell the user: empty when it loaded cleanly, otherwise the
     // warnings, or why it couldn't be used.
+    // Puts the current bot token / client secret / refresh token on the
+    // log's redaction list. Called at startup and again whenever one of
+    // them changes. See LogRedaction.h.
+    void registerSecretsForRedaction();
+
     juce::String applySkin(const juce::String& skinName);
 
     // Writes the example skins once, so the skins folder has something

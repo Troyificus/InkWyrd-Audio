@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How do I use...?
+    url: https://github.com/Troyificus/InkWyrd-Audio#contents
+    about: The README has a guide for every part of the app - try it first, and if the answer isn't there, that's a documentation bug worth reporting.
+  - name: Windows or Defender blocked the download
+    url: https://github.com/Troyificus/InkWyrd-Audio#download-and-install
+    about: Known, and explained in the README. Please don't override a Defender block - open a bug report instead.

@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <map>
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -27,6 +28,9 @@
 #include "PlaylistPanel.h"
 #include "LibraryFolderTree.h"
 #include "TrackSearch.h"
+#include "Log.h"
+#include "LogRedaction.h"
+#include "ControlOrigin.h"
 #include "DuckEnvelope.h"
 #include "SceneLibrary.h"
 #include "ScenesComponent.h"
@@ -2832,6 +2836,112 @@ namespace
             }
         }
 
+        {
+            // Log redaction (pre-public-beta). The log is now something
+            // the bug-report template tells people to attach, so a
+            // credential reaching it is a credential handed to whoever
+            // reads a public issue. Nothing logs one today; these checks
+            // are what keep that true.
+            const std::string botToken = "MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.mNoPqRsTuVwXyZ1234567890ab";
+            const std::string clientSecret = "aB3dE6gH9jK2mN5pQ8sT1vW4xY7zC0eF";
+            const std::string refreshToken = "r3fr3shT0k3nV4lu3G0esH3re99";
+            const std::vector<std::string> secrets { botToken, clientSecret, refreshToken };
+
+            check(inkwyrd::redactLine("[Gateway] token=" + botToken, secrets).find(botToken) == std::string::npos,
+                   "a registered bot token never reaches the log");
+            check(inkwyrd::redactLine("[Gateway] token=" + botToken, secrets) == "[Gateway] token=<redacted>",
+                   "and what's left says a secret was removed");
+            check(inkwyrd::redactLine("a " + clientSecret + " b " + clientSecret, secrets)
+                       == "a <redacted> b <redacted>",
+                   "a secret is removed everywhere it appears on a line, not just the first time");
+            check(inkwyrd::redactLine("refresh=" + refreshToken, secrets) == "refresh=<redacted>",
+                   "the OAuth refresh token goes too");
+            check(inkwyrd::redactLine("{\"token\":\"" + botToken + "\"}", secrets)
+                       == "{\"token\":\"<redacted>\"}",
+                   "including inside a JSON payload, which is how one would actually escape");
+
+            // The backstop, for a secret that reached the log before it
+            // was registered (settings not yet loaded, say).
+            const std::string strayToken = "OTg3NjU0MzIxMDk4NzY1NDMy.AbCdEf.ZyXwVu9876543210TsRqPo";
+            check(inkwyrd::redactLine("[Gateway] sending " + strayToken, {}).find(strayToken) == std::string::npos,
+                   "a bot-token-shaped string is removed even when nothing was registered");
+
+            // The dangerous failure: an unset setting is an empty string,
+            // and a naive search-and-replace for "" matches at every
+            // position - which would turn every log line into markers and
+            // destroy the diagnostics this whole thing exists to protect.
+            const std::vector<std::string> withBlanks { "", " ", "x", botToken };
+            check(inkwyrd::redactLine("[App] opened the audio device", withBlanks)
+                       == "[App] opened the audio device",
+                   "empty and one-character secrets are ignored, not matched everywhere");
+            check(inkwyrd::redactLine("token " + botToken, withBlanks) == "token <redacted>",
+                   "and a real secret alongside them still goes");
+
+            // Precision: the log is worthless if redaction eats the
+            // diagnostics. Each of these is a real line this app logs.
+            const char* mustSurvive[] = {
+                "[App] running from C:\Users\someone\Inkwyrd Audio",
+                "=== Inkwyrd Audio 0.1.0-beta.33 starting ===",
+                "[Gateway] VOICE_SERVER_UPDATE endpoint=oregon1234.discord.media:443 guild_id=987654321098765432",
+                "[App] 12 voice FX plugin(s) in your list.",
+                "https://github.com/Troyificus/InkWyrd-Audio/releases",
+                "sha256 91A739935FBB02042B695FCE221387FFB00234BC2610EEA11014C4FDE2057A9F",
+                "AppId CA652386-31DE-4EC3-8625-D21D268A5831",
+                "[Playlist] playing orc.battle.theme.mp3",
+            };
+            bool everythingSurvived = true;
+            for (const auto* line : mustSurvive)
+                if (inkwyrd::redactLine(line, secrets) != line)
+                {
+                    everythingSurvived = false;
+                    std::cout << "    redaction damaged: " << line << std::endl;
+                    std::cout << "                  ->  " << inkwyrd::redactLine(line, secrets) << std::endl;
+                }
+            check(everythingSurvived, "ordinary log lines - paths, versions, IDs, checksums, URLs - are untouched");
+
+            check(! inkwyrd::looksLikeBotToken("0.1.0-beta.33"), "a version string isn't mistaken for a token");
+            check(! inkwyrd::looksLikeBotToken("github.com"), "nor a hostname");
+            check(inkwyrd::looksLikeBotToken(botToken), "and a real token's shape is recognised");
+        }
+
+        {
+            // Who may drive the control server (pre-public-beta). A web
+            // page can open a WebSocket to 127.0.0.1 - same-origin rules
+            // don't stop it - so without this any site the user has open
+            // could fire the killswitch mid-session. See ControlOrigin.h.
+            using Headers = std::map<std::string, std::string>;
+
+            check(inkwyrd::controlHandshakeAllowed(Headers {}),
+                   "a handshake with no headers at all is allowed");
+
+            // What the Stream Deck plugin's Node "ws" client actually sends.
+            check(inkwyrd::controlHandshakeAllowed(Headers {
+                       { "Host", "127.0.0.1:39231" },
+                       { "Upgrade", "websocket" },
+                       { "Connection", "Upgrade" },
+                       { "Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==" },
+                       { "Sec-WebSocket-Version", "13" } }),
+                   "the Stream Deck plugin's own handshake is allowed");
+
+            check(! inkwyrd::controlHandshakeAllowed(Headers { { "Origin", "https://example.test" } }),
+                   "a web page is refused");
+            check(! inkwyrd::controlHandshakeAllowed(Headers { { "origin", "https://example.test" } }),
+                   "header names are case-insensitive - lowercase is refused too");
+            check(! inkwyrd::controlHandshakeAllowed(Headers { { "ORIGIN", "https://example.test" } }),
+                   "and uppercase");
+            check(! inkwyrd::controlHandshakeAllowed(Headers { { "Origin", "null" } }),
+                   "a sandboxed iframe, which sends the literal \"null\", is refused");
+            check(! inkwyrd::controlHandshakeAllowed(Headers { { "Origin", "http://localhost:5173" } }),
+                   "a page on localhost is still a web page, and is refused");
+            check(! inkwyrd::controlHandshakeAllowed(Headers { { "Origin", "" } }),
+                   "present but empty counts as present");
+
+            // Precision the other way: don't refuse something merely
+            // because a header name has "origin" inside it.
+            check(inkwyrd::controlHandshakeAllowed(Headers { { "X-Original-Host", "somewhere" } }),
+                   "a header that merely contains \"origin\" doesn't refuse the connection");
+        }
+
         scratch.deleteRecursively();
 
         std::cout << (failures == 0 ? "SELF-TEST PASSED" : "SELF-TEST FAILED")
@@ -4079,6 +4189,40 @@ int main(int argc, char* argv[])
     auto iconFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_ICONRENDER", "");
     if (iconFolder.isNotEmpty())
         return runIconRender(juce::File(iconFolder));
+
+    // INKWYRD_CRASHTEST=1: installs the same crash handler the app
+    // installs, then deliberately crashes.
+    //
+    // A crash handler that silently fails to fire is worse than none -
+    // it buys false confidence that a tester's "it just vanished" report
+    // will come with a stack trace. The only way to know is to crash
+    // something on purpose and read the log afterwards, which is what
+    // this does, in a process nobody minds losing.
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_CRASHTEST", "").isNotEmpty())
+    {
+        juce::ScopedJuceInitialiser_GUI juceInitialiser;
+
+        juce::SystemStats::setApplicationCrashHandler([](void*)
+        {
+            logCrashLine("");
+            logCrashLine("=== CRASH ===");
+            logCrashLine("Inkwyrd Audio " INKWYRD_VERSION_STRING " stopped unexpectedly at "
+                          + juce::Time::getCurrentTime().toString(true, true));
+            logCrashLine(juce::SystemStats::getStackBacktrace());
+            logCrashLine("=== end of crash report ===");
+        });
+
+        std::cout << "Crash handler installed; crashing on purpose now." << std::endl;
+        std::cout << "Log folder: " << inkwyrdLogFolder().getFullPathName() << std::endl;
+
+        // A null dereference, through a volatile pointer so the compiler
+        // can't decide this is undefined behaviour it may delete.
+        volatile int* nowhere = nullptr;
+        *nowhere = 1;
+
+        std::cout << "Still here - the crash did not happen." << std::endl;
+        return 1;
+    }
 
     auto playlistFolder = juce::SystemStats::getEnvironmentVariable("PLAYLIST_FOLDER", "");
     auto soundboardFolder = juce::SystemStats::getEnvironmentVariable("SOUNDBOARD_FOLDER", "");

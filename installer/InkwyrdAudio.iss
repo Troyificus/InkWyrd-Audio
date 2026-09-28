@@ -97,6 +97,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "{#ReleaseDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; Every DLL beside the exe: the vcpkg ones (opus, sodium, taglib, zlib),
+; libdave, AND the Visual C++ runtime (msvcp140/vcruntime140/
+; vcruntime140_1), which the build copies there - see
+; inkwyrd_copy_msvc_runtime in the root CMakeLists.txt. Shipping the
+; runtime is what lets this install and run on a machine that has never
+; had the VC++ redistributable on it.
 Source: "{#ReleaseDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\docs\THIRD_PARTY_LICENSES.md"; DestDir: "{app}"; DestName: "THIRD_PARTY_LICENSES.txt"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; DestName: "README.txt"; Flags: ignoreversion

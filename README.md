@@ -43,6 +43,7 @@ Inspired by Kenku FM and Winamp.
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 - [Known limitations](#known-limitations)
+- [Reporting a problem, or asking for something](#reporting-a-problem-or-asking-for-something)
 
 ## What it can do
 
@@ -680,6 +681,27 @@ own. It's free and takes about five minutes.
     once it has connected, takes effect the next time Inkwyrd starts; it
     offers to restart for you.
 
+> **Where your token is kept, and how to cancel it.** Inkwyrd saves the
+> bot token in its settings file at
+> `%APPDATA%\Inkwyrd Audio\Inkwyrd Audio.settings`, as ordinary text
+> that isn't encrypted. Anyone who can read that file can use your bot.
+>
+> That's fine on a computer only you use, and worth knowing about
+> otherwise. Two things follow from it:
+>
+> - **Don't send anyone that file** - including when you report a bug.
+>   Send the log files instead (Settings -> **Open log folder**); the log
+>   deliberately never records your token.
+> - **If you think it has got out**, go to the
+>   [Developer Portal](https://discord.com/developers/applications) ->
+>   your app -> **Bot** -> **Reset Token**. The old token stops working
+>   immediately. Paste the new one into Settings.
+>
+> The same applies to the client secret if you set up automatic muting.
+> Your bot can only join voice channels and speak, on servers you invited
+> it to - so the worst case is somebody playing audio at your group, not
+> access to your Discord account.
+
 **Once you're connected, turn Monitor off.** You're in the call too, so
 you already hear everything through the bot.
 
@@ -980,6 +1002,18 @@ new version from that page yourself.
 Explorer's address bar to open it): settings, playlists, the
 soundboard, scenes, your track library, per-track volumes, cached tags,
 your plugin list and skins. Copy that folder to back everything up.
+Keep the backup somewhere private: the settings file holds your Discord
+bot token as plain text (see
+[Connecting to Discord](#connecting-to-discord)).
+
+**Log files** are in `%APPDATA%\Inkwyrd Audio\logs`, and **Open log
+folder** in Settings takes you straight there. `log.txt` covers the run
+you're in; `log-previous.txt` is the run before it, kept so that a crash
+you reported after restarting still has its evidence. They record what
+Inkwyrd did - which files it loaded, how the Discord connection went,
+how long startup took, and a report if it stopped unexpectedly. They
+never contain your bot token. **Attaching both to a bug report is the
+single most useful thing you can do.**
 
 **Inkwyrd never overwrites a file it can't safely read.** If one was
 written by a newer version of Inkwyrd, or has been damaged, it's left
@@ -1078,6 +1112,22 @@ See the note under [Download and install](#download-and-install).
   (the flyout over the maximise button) and Win+arrow snapping don't
   work on its windows. Inkwyrd's own snapping does.
 
-**Found a bug?** Please [open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues)
-saying what you were doing, with a screenshot of the Player's status
-line or warning banner if you can.
+## Reporting a problem, or asking for something
+
+This is a beta, and reports are what make it better.
+
+- **Something's broken:** open a
+  [bug report](https://github.com/Troyificus/InkWyrd-Audio/issues/new?template=bug_report.yml).
+  It asks a few questions - which version, which download, what you were
+  doing - and all of them help.
+- **Something's missing:** open a
+  [feature request](https://github.com/Troyificus/InkWyrd-Audio/issues/new?template=feature_request.yml).
+  Say what you're trying to do at the table, not just what button you
+  want; that usually leads to a better answer than the one first
+  imagined.
+
+**Please attach your log files** to a bug report - Settings -> **Open log
+folder**, then attach `log.txt` and `log-previous.txt`. They say what the
+app was doing and record a crash if there was one, and they don't contain
+your bot token. A screenshot of the Player's status line or warning
+banner helps too.

@@ -1,5 +1,7 @@
 #include "SetupComponent.h"
 
+#include "Log.h"
+
 #include "PlaylistLibrary.h"
 #include "SkinLoader.h"
 
@@ -147,6 +149,13 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     };
     addAndMakeVisible(openPlaylistFolderButton);
 
+    addAndMakeVisible(logFilesCaption);
+    openLogFolderButton.onClick = [] { inkwyrdLogFolder().startAsProcess(); };
+    openLogFolderButton.setTooltip("Opens the folder holding log.txt (this run) and log-previous.txt"
+                                   " (the run before). Attach these to a bug report - they say"
+                                   " what the app was doing, and record a crash if there was one.");
+    addAndMakeVisible(openLogFolderButton);
+
     addAndMakeVisible(skinSectionCaption);
 
     skinBox.setTextWhenNothingSelected("Inkwyrd (built-in)");
@@ -216,7 +225,7 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     // component's own size, so an explicit size here IS the window size.
     // Taller than it was: the auto-mute section adds three rows, and
     // leaving the height alone would have pushed Save off the bottom.
-    setSize(640, 890); // ducking and the update toggle added ~130px
+    setSize(640, 926); // + the log folder row (28px + its 8px gap)
 }
 
 void SetupComponent::browseForFolder(juce::Label& targetLabel, juce::File& targetValue, const juce::String& chooserTitle)
@@ -448,6 +457,11 @@ void SetupComponent::resized()
     auto playlistFilesRow = area.removeFromTop(28);
     playlistFilesCaption.setBounds(playlistFilesRow.removeFromLeft(140));
     openPlaylistFolderButton.setBounds(playlistFilesRow.removeFromLeft(190));
+    area.removeFromTop(8);
+
+    auto logFilesRow = area.removeFromTop(28);
+    logFilesCaption.setBounds(logFilesRow.removeFromLeft(140));
+    openLogFolderButton.setBounds(logFilesRow.removeFromLeft(190));
     area.removeFromTop(16);
 
     skinSectionCaption.setBounds(area.removeFromTop(24));

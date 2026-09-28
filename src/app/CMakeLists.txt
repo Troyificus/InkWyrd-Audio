@@ -158,3 +158,8 @@ target_link_libraries(InkwyrdAudioApp PRIVATE
 )
 
 inkwyrd_copy_dave_dll(InkwyrdAudioApp)
+
+# The VC++ runtime, so the ZIP and the installer both work on a machine
+# that has never had Visual Studio or the redistributable on it. See the
+# long note in the root CMakeLists.txt.
+inkwyrd_copy_msvc_runtime(InkwyrdAudioApp)

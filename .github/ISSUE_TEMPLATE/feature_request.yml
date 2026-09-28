@@ -1,0 +1,65 @@
+name: Feature request
+description: Something Inkwyrd Audio should be able to do and can't yet.
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas from people actually running games are the best source of
+        these, so thank you.
+
+        The most useful thing you can tell me is **what you're trying to
+        do at the table** - not only which button you'd like. Knowing the
+        problem often leads somewhere better than the first solution
+        either of us would think of.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        The situation in your game or your prep where Inkwyrd gets in the
+        way or can't help yet.
+      placeholder: |
+        When combat starts I want the battle music and the crowd ambience
+        to swap over together, but I have to hit two things quickly and I
+        usually fumble it while also describing the scene.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like it to do?
+      description: As rough or as specific as you like.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How do you handle it now?
+      description: >
+        What you currently do instead - another program, a workaround
+        inside Inkwyrd, or just putting up with it. This says a lot about
+        how much a feature would actually help.
+
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How much would this change your sessions?
+      options:
+        - I'd use it every session
+        - I'd use it now and then
+        - It'd be nice, but I'd live without it
+    validations:
+      required: true
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else?
+      description: >
+        Screenshots, how another program does it, a link - whatever
+        helps.

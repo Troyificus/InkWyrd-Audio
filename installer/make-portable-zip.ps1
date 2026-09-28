@@ -3,6 +3,9 @@
 #
 # Exactly the files the installer puts in place (see [Files] in
 # InkwyrdAudio.iss), in an "Inkwyrd Audio" folder - unzip and run.
+# That includes the VC++ runtime DLLs, which the build drops next to the
+# exe and the *.dll copy below therefore picks up; there is a hard check
+# for them further down.
 #
 # Why this exists: antivirus heuristics flagged the unsigned INSTALLER
 # (VirusTotal 4/71, every hit a generic machine-learning or "behaves like
@@ -36,6 +39,23 @@ Copy-Item (Join-Path $release '*.dll') $appDir
 Copy-Item (Join-Path $root 'README.md') (Join-Path $appDir 'README.txt')
 Copy-Item (Join-Path $root 'docs\THIRD_PARTY_LICENSES.md') (Join-Path $appDir 'THIRD_PARTY_LICENSES.txt')
 Copy-Item (Join-Path $PSScriptRoot 'ThirdPartyNotices.txt') $appDir
+
+# The Visual C++ runtime must be in the package. It is copied next to the
+# exe by a post-build step (see inkwyrd_copy_msvc_runtime in the root
+# CMakeLists.txt), so it is here only if the app was actually rebuilt
+# after that was added - and a ZIP missing these starts on this machine,
+# which has the redistributable installed, while failing on a clean one
+# with a bare "MSVCP140.dll was not found". That is precisely the kind of
+# breakage a packaging run must not be able to ship quietly.
+$requiredRuntime = 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'
+$missingRuntime = $requiredRuntime | Where-Object { -not (Test-Path (Join-Path $appDir $_)) }
+if ($missingRuntime) {
+    # Parentheses around the concatenation: -f binds tighter than +, so
+    # without them the format is applied to the SECOND literal only and
+    # the message ships with a literal "{0}" where the filenames belong.
+    throw (("The VC++ runtime is missing from the package: {0}. Rebuild the " +
+            "Release target so the post-build copy runs, then package again.") -f ($missingRuntime -join ', '))
+}
 
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Add-Type -AssemblyName System.IO.Compression.FileSystem

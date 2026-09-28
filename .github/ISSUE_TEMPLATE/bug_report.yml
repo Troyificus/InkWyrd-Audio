@@ -1,0 +1,111 @@
+name: Bug report
+description: Something in Inkwyrd Audio doesn't work, or doesn't work the way it should.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Inkwyrd is in beta and real reports
+        are what make it better.
+
+        **Please don't paste your Discord bot token, client secret, or
+        your settings file anywhere in here** - anyone reading this issue
+        would be able to use your bot. The log files asked for below
+        never contain them, so they're safe to attach.
+
+  - type: input
+    id: version
+    attributes:
+      label: Which version?
+      description: Settings shows it at the bottom right, e.g. 0.1.0-beta.33.
+      placeholder: 0.1.0-beta.33
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - The portable ZIP
+        - The installer
+        - Built it from source
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what you got instead.
+      placeholder: |
+        I clicked Play on a playlist and the music started, but after the
+        first track it went silent instead of moving to the next one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: What were you doing when it happened?
+      description: >
+        Step by step if you can. "I don't know, it just happened" is a
+        perfectly good answer too - say so and attach the logs below.
+      placeholder: |
+        1. Opened Inkwyrd
+        2. Chose the "Tavern" playlist in the Library window
+        3. Pressed Play
+        4. Waited for the first track to end
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reproducible
+    attributes:
+      label: Does it happen every time?
+      options:
+        - Every time
+        - Most times
+        - Only happened once
+        - Not sure yet
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log files
+      description: >
+        Settings -> **Open log folder**, then drag `log.txt` and
+        `log-previous.txt` into this box. These say what the app was
+        doing and record a crash if there was one. They do not contain
+        your bot token. This is the single most useful thing you can
+        include.
+      placeholder: Drag the log files here, or paste the last 50 lines.
+
+  - type: textarea
+    id: banner
+    attributes:
+      label: Anything shown in the app?
+      description: >
+        The status line at the top of the Player window, or an orange
+        warning banner. A screenshot is fine - paste it straight in.
+
+  - type: input
+    id: windows
+    attributes:
+      label: Which Windows?
+      description: >
+        Windows key -> type "winver" -> Enter. The first line of the box
+        that opens.
+      placeholder: Windows 11 22H2
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your audio setup, if it seems relevant
+      description: >
+        Headset or interface, whether you were connected to Discord, any
+        voice FX plugins loaded, roughly how big your library is.
