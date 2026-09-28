@@ -102,7 +102,8 @@ Get the newest release from the
 [Releases page](https://github.com/Troyificus/InkWyrd-Audio/releases).
 Take the one at the **top of the list**: GitHub's "Latest" label skips
 pre-releases, so it doesn't point at the newest version while this is a
-beta.
+beta. What changed in each version, all the way back to the first beta,
+is in [CHANGELOG.md](CHANGELOG.md).
 
 Each release comes in two forms, the same program in both:
 
