@@ -44,6 +44,7 @@ Inspired by Kenku FM and Winamp.
 - [Troubleshooting](#troubleshooting)
 - [Known limitations](#known-limitations)
 - [Reporting a problem, or asking for something](#reporting-a-problem-or-asking-for-something)
+- [Licence](#licence)
 
 ## What it can do
 
@@ -1131,3 +1132,31 @@ folder**, then attach `log.txt` and `log-previous.txt`. They say what the
 app was doing and record a crash if there was one, and they don't contain
 your bot token. A screenshot of the Player's status line or warning
 banner helps too.
+
+## Licence
+
+**Inkwyrd Audio is free to use, and its source is public to read - but it
+isn't open source.** Copyright (c) 2026 Troy, all rights reserved. The
+full terms are in [LICENSE](LICENSE), and the short version is:
+
+- **You may** download it, install it and use it free of charge, for
+  anything you like, personal or commercial, on as many of your own
+  computers as you want. You may read the source and build it yourself.
+- **You may not** redistribute it, publish your own builds of it, put out
+  a modified version, or charge anyone for it - not without asking first.
+
+The source is published so you can see exactly what the program does
+before you run it. That matters here, because the downloads aren't
+code-signed yet and Windows will warn you about them; "read the code
+yourself" is the honest answer to "should I trust this?".
+
+If you want to do something the licence doesn't allow,
+[open an issue](https://github.com/Troyificus/InkWyrd-Audio/issues) and
+ask. It's a small project and the answer may well be yes.
+
+Inkwyrd Audio is built on other people's work, all of it properly
+licensed and credited in
+[THIRD_PARTY_LICENSES.md](docs/THIRD_PARTY_LICENSES.md), which is also
+installed next to the program. Those licences are theirs, not affected by
+the one above, and a few of them grant you rights this licence can't take
+away.

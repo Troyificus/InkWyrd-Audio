@@ -1,16 +1,24 @@
 # Third-party licenses
 
-Every dependency below is permissive (no copyleft, no royalty, no
+Inkwyrd Audio itself is **source-available and proprietary** - see
+`LICENSE` at the repository root. That decision is what makes the two
+entries below matter, so read both before changing how either is linked
+or which JUCE version is pinned:
+
+- **TagLib** is weak copyleft (LGPL), and stays legitimate only because
+  it is dynamically linked. Its own section is below.
+- **The VST3 SDK bundled in the pinned JUCE** is NOT the MIT one. See
+  its section below - this is an open obligation, not a resolved one.
+
+Everything else is permissive: no copyleft, no royalty, and no
 redistribution restriction that conflicts with closed-source or
-donation-supported distribution) **except TagLib**, which is weak
-copyleft and has its own section below - read it before changing how
-that one is linked. This list matches `docs/design-brief.md` section 10,
+donation-supported distribution. This list matches `docs/design-brief.md` section 10,
 expanded with what's actually been integrated since.
 
 | Component | License | Used for |
 |---|---|---|
 | [JUCE](https://juce.com) | Free "Starter" tier (see note below) | Application framework, audio engine |
-| [VST3 SDK](https://github.com/steinbergmedia/vst3sdk) (bundled inside JUCE) | MIT (since Nov 2025) | VST3 plugin hosting |
+| [VST3 SDK](https://github.com/steinbergmedia/vst3sdk) (bundled inside JUCE) | **Steinberg proprietary OR GPLv3** in the pinned JUCE 8.0.6 - MIT only from SDK 3.8.0, which JUCE 8.0.6 predates. See below | VST3 plugin hosting |
 | [libopus](https://opus-codec.org/) | BSD-3-Clause | Opus encoding for Discord voice |
 | [libsodium](https://libsodium.org/) | ISC | AEAD transport encryption for Discord voice (`aead_xchacha20_poly1305_rtpsize`) |
 | [dr_mp3](https://github.com/mackron/dr_libs) | Public domain / MIT-0 (your choice) | MP3 decoding |
@@ -53,11 +61,47 @@ for writing them, and hand-rolling an ID3v2 writer to avoid a licence
 note would be a worse trade - a bug in that code corrupts someone's
 music.
 
+## The VST3 SDK - an open obligation, not a resolved one
+
+Steinberg relicensed the VST3 SDK to **MIT** with SDK **3.8.0** (October
+2025). That is true, and it is what an earlier version of this file
+recorded. It is also not what this project actually compiles.
+
+**JUCE 8.0.6, which `CMakeLists.txt` pins, bundles the older SDK** -
+copyright 2024, licensed "Steinberg VST3 License **or** GPLv3", with no
+MIT text anywhere in the bundled tree. Verified by reading
+`modules/juce_audio_processors/format_types/VST3_SDK/LICENSE.txt` in the
+fetched JUCE source, not by trusting the release notes. The app compiles
+it: `JUCE_PLUGINHOST_VST3=1` in `src/app/CMakeLists.txt`.
+
+Why that matters now Inkwyrd is proprietary: of the two options the
+bundled SDK offers, **GPLv3 is unavailable to a closed-source app**, so
+the Steinberg proprietary option is the one in force - and its text says:
+
+> Before publishing a software under the proprietary license, you need to
+> obtain a copy of the License Agreement signed by Steinberg Media
+> Technologies GmbH.
+
+So a public proprietary release on this JUCE pin needs that agreement.
+
+**The fix is a one-line change, and it is the recommended one: bump JUCE
+to 8.0.15 or newer.** JUCE 8.0.15's own `LICENSE.md` lists VST3 as
+**MIT** (the SDK also moved to
+`modules/juce_audio_processors_headless/format_types/VST3_SDK/`), which
+removes the obligation entirely rather than satisfying it with paperwork.
+Confirmed by reading that file at tag 8.0.15. JUCE is on 9.0.2 at the
+time of writing, so 8.0.6 is well behind regardless.
+
+Until that bump lands, this is the one genuine legal loose end in the
+project. Do not treat the MIT relicensing as covering us - it covers a
+version we do not ship.
+
 ## Explicitly avoided
 
 - **ASIO SDK** - Steinberg relicensed it to **GPLv3** in the same move
-  that made VST3 MIT. Embedding it would risk license-contaminating the
-  rest of a closed-source app. WASAPI is used instead for all audio I/O.
+  that made VST3 MIT (October 2025). GPLv3 would license-contaminate a
+  closed-source app, so this stays avoided no matter which JUCE is
+  pinned. WASAPI is used instead for all audio I/O.
 - **JUCE's own bundled `MP3AudioFormat`** - requires an explicit
   `JUCE_USE_MP3AUDIOFORMAT` flag and ships with a disclaimer from Raw
   Material Software themselves that it's "NOT guaranteed to be free from
@@ -71,17 +115,51 @@ music.
   decoders.
 - **VST2** - not supported at all (v1 scope decision, see
   `docs/design-brief.md`) - its SDK isn't redistributable the way VST3's
-  now is.
+  is once JUCE is bumped to a version carrying the MIT SDK.
 
 ## JUCE licensing - the one to actually track
 
-The free **Starter** tier permits a closed-source app, but caps **total
-annual revenue or funding - donations explicitly included - at
-$20,000**. Beyond that, the **Indie** tier is $40/month (or an $800
-one-time perpetual license) for up to $300,000/year. Not a concern at
-launch; worth revisiting if the app takes off. See
-[juce.com/get-juce](https://juce.com/get-juce) for current terms before
-a public release, since pricing/tiers can change.
+JUCE 8 is **dual-licensed: AGPLv3, or the commercial JUCE licence**
+(`LICENSE.md` in the JUCE source says so directly). Inkwyrd Audio is
+proprietary, so it is distributed under **the commercial licence**, on
+the free **Starter** tier. The AGPL option was considered and rejected
+because it would let anyone fork and redistribute the app, which is the
+opposite of the intent behind `LICENSE`.
+
+That choice has one ongoing condition, and it is the only one in this
+whole project:
+
+> **Starter caps total annual revenue or funding at $20,000, and the EULA
+> counts donations.** Its wording: "the applicable annual revenue or
+> funding limit is the total revenue or funding generated by that
+> individual or entity's use of the Framework from all sources,
+> **including donations**, sponsorship, advertising, and any other
+> indirect revenue."
+
+So if Inkwyrd ever takes donations, that total is what matters - not
+profit, and not sales, of which there are none.
+
+| Tier | Cap | Price | Closed source |
+|---|---|---|---|
+| Starter | $20,000/yr | Free | Yes |
+| Indie | $300,000/yr | $40/month, or $800 once, perpetual | Yes |
+| Pro | Unlimited | $175/month, or $3,500 once | Yes |
+
+Verified against [the JUCE 8 EULA](https://juce.com/legal/juce-8-licence/)
+in September 2026. **There is no splash-screen requirement on any tier**,
+and JUCE 8.0.6 removed the splash screen mechanism outright - its own
+`juce_gui_basics.cpp` warns that `JUCE_DISPLAY_SPLASH_SCREEN` is now
+ignored. Nothing to display, nothing to suppress.
+
+Crossing $20,000 is not a disaster: it means buying Indie, which at $800
+once is roughly a rounding error against that number. The thing to avoid
+is crossing it without noticing. Re-check the terms before any release
+that changes how the app is funded, since tiers and pricing can change.
+
+Worth remembering for later: **Troy holds the copyright in all of
+Inkwyrd's own code**, so nothing here is one-way. The app can be
+relicensed - opened up, dual-licensed, or sold commercially - at any
+point, provided the JUCE tier matches what it is doing at the time.
 
 ## Elgato Stream Deck SDK - confirm before shipping
 

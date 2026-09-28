@@ -3140,15 +3140,82 @@ bug form says in its header not to paste tokens or the settings file.
 
 **Still open, deliberately:**
 
-- **No LICENSE file**, on an already-public repo - so it is
-  all-rights-reserved by default while the source sits there readable.
-  The user's call, being taken separately; note that the JUCE Starter
-  tier caps total annual revenue INCLUDING donations at $20,000.
+- ~~No LICENSE file~~ - **resolved**, see "The licence decision" below:
+  source-available and proprietary. That section also records the two
+  obligations it brings with it.
 - **No CI.** Every release is still built by hand from a working copy.
 - **No code signing.** The Defender false-positive story is unchanged.
 - **The version was NOT bumped** by this work. These changes need a
   release to reach anyone, and that release is waiting on the licence
   decision.
+
+## The licence decision (source-available, proprietary)
+
+Taken deliberately after laying out the options, with one instruction
+from Troy: **"I'd rather not allow forking at this point."** That single
+constraint decided it.
+
+`LICENSE` at the repo root: free to use for anything, personal or
+commercial, on any number of your own machines; source public to read and
+build for yourself; no redistribution, no derivative works, no charging
+for it, without written permission.
+
+### Why not the obvious alternatives
+
+- **AGPLv3** was the cheapest option and was rejected on that
+  instruction. It is worth remembering *why* it was cheap, because it
+  stays true: JUCE 8 is dual-licensed AGPLv3 / commercial, so the AGPL
+  route carries no revenue cap, no tier tracking and no Steinberg
+  question. Everything below is the price of not taking it.
+- **PolyForm Strict 1.0.0** matches "no forking" exactly and is
+  lawyer-drafted, which a hand-written licence is not - but its permitted
+  purposes are **noncommercial only**. That would bar a paid GM or a
+  monetised stream from *using* Inkwyrd, which was never asked for. Worth
+  revisiting if a standard form licence is ever preferred over the
+  hand-written one; the gap is the commercial-use grant.
+- **MIT** gives away the most while *still* leaving the project under the
+  JUCE commercial tier, and would mislead forkers, who would each need
+  their own JUCE licence that an MIT grant cannot give them.
+
+### What being proprietary costs, concretely
+
+Two live obligations, neither of them optional:
+
+1. **The JUCE Starter cap: $20,000/yr, donations included.** See the
+   JUCE section of `docs/THIRD_PARTY_LICENSES.md` for the EULA's own
+   wording. This is the only recurring condition in the project.
+2. **The VST3 SDK bundled in the pinned JUCE 8.0.6 is NOT MIT** - it is
+   Steinberg-proprietary-or-GPLv3, and GPLv3 is unavailable to a
+   closed-source app, so the proprietary option applies and it requires a
+   signed Steinberg agreement before publishing. **Bumping JUCE to
+   8.0.15+ removes this entirely** (its VST3 is MIT). That bump is the
+   single highest-value follow-up and should happen before any public
+   release.
+
+A third thing is worth writing down because it is counter-intuitive:
+**a licence cannot stop forking on a public GitHub repo.** GitHub's Terms
+of Service D.5 - "By setting your repositories to be viewed publicly, you
+agree to allow others to view and 'fork' your repositories" - grant that
+independently of `LICENSE`. The licence stops redistribution *outside*
+GitHub, modified builds, and anyone shipping their own version; it does
+not stop the fork button. Only a private repository does, and that would
+cost the public issue tracker the beta depends on. Left public as a
+deliberate trade, not an oversight.
+
+### Contributions
+
+`LICENSE` carries an inbound grant: a contributor keeps their copyright
+and gives a perpetual licence to ship the contribution as part of
+Inkwyrd under any licence. Without that, an all-rights-reserved project
+that accepts a single PR can never relicense again without tracking down
+whoever wrote it. Troy holds copyright in everything else, so the project
+can still be opened up, dual-licensed or sold later.
+
+### Where it is stated
+
+`LICENSE`, a Licence section in `README.md`, `LICENSE.txt` in both the
+installer and the portable ZIP, and - since the app is proprietary now -
+an Inno `LicenseFile` page that asks the user to agree during setup.
 
 ## Beta release process
 

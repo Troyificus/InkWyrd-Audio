@@ -69,6 +69,10 @@ SetupIconFile=InkwyrdAudio.ico
 ; user (a DM setting this up for a game night, not an IT admin) and
 ; matches how e.g. VS Code and Discord itself install by default.
 PrivilegesRequired=lowest
+; Inkwyrd is source-available but proprietary (see LICENSE at the repo
+; root), so setup shows the terms and asks for agreement rather than
+; just dropping a text file in the install folder.
+LicenseFile=..\LICENSE
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
@@ -104,6 +108,7 @@ Source: "{#ReleaseDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; runtime is what lets this install and run on a machine that has never
 ; had the VC++ redistributable on it.
 Source: "{#ReleaseDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\docs\THIRD_PARTY_LICENSES.md"; DestDir: "{app}"; DestName: "THIRD_PARTY_LICENSES.txt"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; DestName: "README.txt"; Flags: ignoreversion
 

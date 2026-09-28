@@ -36,6 +36,7 @@ New-Item -ItemType Directory -Force $appDir | Out-Null
 # from older target names, which must not ship.
 Copy-Item (Join-Path $release 'Inkwyrd Audio.exe') $appDir
 Copy-Item (Join-Path $release '*.dll') $appDir
+Copy-Item (Join-Path $root 'LICENSE') (Join-Path $appDir 'LICENSE.txt')
 Copy-Item (Join-Path $root 'README.md') (Join-Path $appDir 'README.txt')
 Copy-Item (Join-Path $root 'docs\THIRD_PARTY_LICENSES.md') (Join-Path $appDir 'THIRD_PARTY_LICENSES.txt')
 Copy-Item (Join-Path $PSScriptRoot 'ThirdPartyNotices.txt') $appDir

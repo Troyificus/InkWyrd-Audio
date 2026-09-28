@@ -1,0 +1,89 @@
+Inkwyrd Audio
+Copyright (c) 2026 Troy. All rights reserved.
+
+
+SOURCE-AVAILABLE, NOT OPEN SOURCE
+
+The source code of Inkwyrd Audio is published so that anyone can read it,
+see exactly what the program does, and satisfy themselves that it is safe
+to run - which matters more than usual here, because the downloads are not
+code-signed and Windows will warn about them.
+
+Publishing the source does not place it in the public domain, and does not
+grant permission to reuse it. The terms below are what you are given.
+
+
+WHAT YOU MAY DO
+
+You may download, install and use Inkwyrd Audio free of charge, for any
+purpose - personal or commercial - on any number of computers you own or
+control.
+
+You may read the source code, and build it yourself for your own use.
+
+You may share a link to the official releases page.
+
+
+WHAT YOU MAY NOT DO
+
+Without prior written permission from the copyright holder, you may not:
+
+  - redistribute the program or its source code, in whole or in part,
+    modified or unmodified. This includes publishing your own builds,
+    mirroring the downloads, and bundling it with anything else;
+
+  - create or distribute a derivative work, port, or modified version;
+
+  - sell, rent, sub-license, or charge anyone for the program;
+
+  - remove or alter the copyright notices, or present the program, or any
+    part of it, as your own work.
+
+If you want to do any of these, ask. The answer may well be yes.
+
+
+THIRD-PARTY COMPONENTS
+
+Inkwyrd Audio is built with third-party components that carry their own
+licences. Those licences are not affected or overridden by this one, and
+they continue to grant you whatever rights they grant. They are listed in
+THIRD_PARTY_LICENSES.txt, which is installed alongside the program.
+
+In particular, TagLib is licensed under the GNU Lesser General Public
+License version 2.1. Nothing above limits your rights under that licence,
+including your right to obtain TagLib's source, to modify it, and to
+replace the copy of tag.dll distributed with this program with your own
+build of it.
+
+
+CONTRIBUTIONS
+
+If you send a contribution - a pull request, a patch, a skin, or anything
+else intended for inclusion in Inkwyrd Audio - you keep your own copyright
+in it, and you grant the copyright holder a perpetual, worldwide,
+irrevocable, royalty-free licence to use, modify, distribute and
+sub-license it as part of Inkwyrd Audio, under this licence or any other.
+
+This is only so that the project can keep being distributed as one whole
+thing, and so its licence can be changed later without having to track
+down everyone who ever contributed. You are not signing your work away:
+it remains yours to use however you like.
+
+
+NO WARRANTY, NO LIABILITY
+
+Inkwyrd Audio is provided "as is", without warranty of any kind, express
+or implied, including but not limited to the warranties of merchantability
+and fitness for a particular purpose.
+
+To the fullest extent permitted by law, the copyright holder is not liable
+for any claim, damages, data loss, or other liability arising from the
+software or its use - including, without limitation, damage to or loss of
+audio files, playlists, or their tags.
+
+
+ASKING FOR ANYTHING ELSE
+
+Permission for anything this licence does not grant, including any use of
+the name "Inkwyrd Audio", can be requested by opening an issue at
+https://github.com/Troyificus/InkWyrd-Audio/issues.
