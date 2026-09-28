@@ -2268,9 +2268,12 @@ touched; a board is arranged by where things physically are.
 - **It reports and never downloads.** An app that fetched and ran an
   executable would be doing exactly what this project's Defender history
   says not to do (see above).
-- Reads `/releases`, NOT `/releases/latest`: GitHub's "latest"
-  deliberately skips pre-releases, and every release of this app so far
-  is one.
+- Reads `/releases`, NOT `/releases/latest`. Releases stopped being
+  marked pre-release at 0.1.1-beta so "latest" would now resolve, but the
+  list stays the safer read: it doesn't depend on a flag someone has to
+  set right on every future release, and one accidentally published as a
+  pre-release would make the update check go silent with nothing to show
+  anything was wrong.
 - GitHub rejects requests with no `User-Agent`. Failure of any kind -
   offline, rate-limited, captive portal, an error body - is silent by
   design; the parse simply returns invalid.
@@ -3353,6 +3356,15 @@ release:
   the build's. Both are a couple of `Get-Item` calls. Do that, record
   the installer's SHA-256, and say plainly in the handover that the full
   install/uninstall cycle was skipped and why.
+- **Publish as a normal release, NOT a pre-release.** Every release
+  before 0.1.1-beta was marked pre-release, which has a visible cost now
+  that old releases are pruned: GitHub's repo sidebar shows a release
+  card only for a non-prerelease release, so with nothing but
+  pre-releases it fell back to a bare "47 tags / Create a new release"
+  and never showed the download at all. `/releases/latest` returned 404
+  for the same reason. The `-beta` in the version name is what says it is
+  a beta; the flag was only hiding it. Fixed with
+  `gh release edit <tag> --prerelease=false --latest`.
 - **Every release ships ONE asset as of 0.1.1-beta**:
   `InkwyrdAudio-Portable-<version>.zip`, built by
   `installer/make-portable-zip.ps1` (it reads the version from the

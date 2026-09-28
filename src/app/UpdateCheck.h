@@ -78,9 +78,13 @@ namespace inkwyrd
     // an invalid ReleaseInfo for anything unexpected - a rate-limit
     // message, an error body, or HTML from a captive portal.
     //
-    // Reads a LIST (/releases) rather than /releases/latest, because
-    // GitHub's "latest" deliberately skips pre-releases and every
-    // release of this app so far is one. The first entry is the newest.
+    // Reads a LIST (/releases) rather than /releases/latest. Releases
+    // stopped being marked pre-release at 0.1.1-beta, so "latest" would
+    // now resolve - but the list is still the safer read: it does not
+    // depend on a flag someone has to remember to set correctly on every
+    // future release, and a release published as a pre-release by
+    // accident would otherwise make the update check go silent with no
+    // sign anything was wrong. The first entry is the newest.
     ReleaseInfo parseReleasesJson(const juce::String& json);
 
     // The page an update link may open. The address comes from GitHub's
