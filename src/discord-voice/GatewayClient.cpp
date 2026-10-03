@@ -195,6 +195,27 @@ void GatewayClient::onMessage(const juce::String& text)
         return;
     }
 
+    if (type == "GUILD_CREATE")
+    {
+        // Every channel in the guild, with its type. Kept because a voice
+        // join Discord won't honour is answered with silence, and this is
+        // the only thing on hand that can say why.
+        if (auto* channels = d.getProperty("channels", juce::var()).getArray())
+        {
+            const juce::ScopedLock lock(channelsLock);
+            guildChannels.clearQuick();
+
+            for (auto& c : *channels)
+                guildChannels.add({ c.getProperty("id", "").toString(),
+                                     c.getProperty("name", "").toString(),
+                                     (int) c.getProperty("type", -1) });
+
+            logLine("[Gateway] GUILD_CREATE listed " + juce::String(guildChannels.size())
+                     + " channel(s) in guild " + d.getProperty("id", "").toString());
+        }
+        return;
+    }
+
     // Anything else that arrives while we're waiting on voice info is
     // exactly what's needed to diagnose a silent join failure (missing
     // permission, wrong IDs, etc.) - log it instead of swallowing it.
@@ -248,4 +269,21 @@ bool GatewayClient::waitForVoiceServerInfo(VoiceServerInfo& outInfo, int timeout
         waited += 50;
     }
     return false;
+}
+
+inkwyrd::GuildChannel GatewayClient::findChannel(const juce::String& channelId) const
+{
+    const juce::ScopedLock lock(channelsLock);
+
+    for (const auto& c : guildChannels)
+        if (c.id == channelId)
+            return c;
+
+    return {};
+}
+
+bool GatewayClient::hasChannelList() const
+{
+    const juce::ScopedLock lock(channelsLock);
+    return ! guildChannels.isEmpty();
 }

@@ -33,6 +33,7 @@
 #include "ControlOrigin.h"
 #include "DiscordCredentials.h"
 #include "GatewayCloseCodes.h"
+#include "GuildChannels.h"
 #include "DuckEnvelope.h"
 #include "SceneLibrary.h"
 #include "ScenesComponent.h"
@@ -2915,6 +2916,29 @@ namespace
                    "a truncated ID is caught");
             check(inkwyrd::describeDiscordIdProblem("", "server ID").isEmpty(),
                    "and an empty ID is left alone, like an empty token");
+
+            // Why a voice join went nowhere. Discord answers a join it
+            // won't honour with silence, so the channel list from
+            // GUILD_CREATE is the only thing that can say which of the
+            // several possible causes it was.
+            check(inkwyrd::describeVoiceChannelProblem(true, 2, "General").isEmpty(),
+                   "a real voice channel reports no problem");
+            check(inkwyrd::describeVoiceChannelProblem(false, -1, "").contains("No channel with that ID"),
+                   "an ID that isn't in the server at all is named as such");
+            check(inkwyrd::describeVoiceChannelProblem(true, 0, "general").contains("TEXT channel"),
+                   "a text channel ID - the easiest mistake to make - is called out specifically");
+            check(inkwyrd::describeVoiceChannelProblem(true, 0, "general").contains("general"),
+                   "and names the channel, so it's obvious which one was copied");
+            check(inkwyrd::describeVoiceChannelProblem(true, 4, "Voice Channels").contains("category"),
+                   "a category is distinguished from a channel");
+            check(inkwyrd::describeVoiceChannelProblem(true, 13, "Stage").contains("Stage"),
+                   "a Stage channel is explained rather than silently failing");
+            check(inkwyrd::describeVoiceChannelProblem(true, 15, "help").contains("TEXT channel"),
+                   "a forum counts as text for this purpose");
+            check(inkwyrd::describeVoiceChannelProblem(true, 99, "odd").contains("99"),
+                   "an unknown channel type still reports its number, so a report can say which");
+            check(inkwyrd::describeSilentVoiceJoinFailure("General").contains("Connect"),
+                   "a real voice channel that still won't take the bot points at Connect permission");
 
             // Gateway close codes: the app said "timed out" when Discord
             // had plainly said the token was rejected.

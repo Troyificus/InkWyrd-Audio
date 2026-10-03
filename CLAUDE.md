@@ -3451,6 +3451,54 @@ application. The repair is covered by checks; the select-all behaviour,
 the highlight clearing and the topmost toggling are not, and were handed
 over for a hands-on look.
 
+## Why a voice join fails silently (0.1.4-beta)
+
+Reported after 0.1.3-beta fixed the doubled token: the bot now
+authenticated, appeared in the server, sent its join request - and
+nothing happened.
+
+The log told the story as far as it went:
+
+```
+[Gateway] READY, bot user id 1555882099683237928
+[Gateway] READY lists guild: 699335159798825102 unavailable=true
+[Gateway] dispatch: GUILD_CREATE
+[Gateway] sending: {"op": 4, "d": {"guild_id": "...", "channel_id": "...", ...}}
+[DiscordConnector] Timed out waiting for voice server info - check the server/channel IDs.
+```
+
+**Discord does not report a voice join it will not honour.** No error, no
+close code: VOICE_STATE_UPDATE and VOICE_SERVER_UPDATE simply never come
+back. The causes are several and unrelated - the ID is a text channel,
+the ID is a category, the ID belongs to another server, the bot's role
+cannot Connect to that specific channel, the channel is full - and the
+app said "check the server/channel IDs", which names two things and
+distinguishes none of them.
+
+### It never had to be a guess
+
+**GUILD_CREATE carries every channel in the guild**, each with its `id`,
+`name` and `type`, and it arrives well before any join is attempted. The
+app was logging the dispatch by name and throwing the payload away.
+
+`GatewayClient` now keeps that list, and `DiscordConnector` consults it
+when a join times out: the channel is either missing (wrong server, or
+the server's own ID copied by mistake), the wrong type (text, category,
+forum, Stage - each with its own wording, naming the channel so it is
+obvious which one got copied), or genuinely a voice channel, in which
+case what is left is permissions or capacity and it says so.
+
+`GuildChannels.h` holds the pure part, so every branch is covered by
+checks rather than by waiting for someone to misconfigure a server in
+exactly that way.
+
+### Worth remembering
+
+When a remote service answers a bad request with silence, look for data
+it already volunteered. Discord had described the channel in full,
+seconds earlier, and the app had thrown it away and then complained it
+could not tell what was wrong.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

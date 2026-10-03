@@ -1,6 +1,7 @@
 #include "DiscordConnector.h"
 
 #include "GatewayCloseCodes.h"
+#include "GuildChannels.h"
 #include "Log.h"
 
 #include <chrono>
@@ -78,7 +79,30 @@ void DiscordConnector::runConnectSequence(juce::String botToken, juce::String gu
 
     GatewayClient::VoiceServerInfo serverInfo;
     if (!gateway->waitForVoiceServerInfo(serverInfo, 10000))
-        return fail("Timed out waiting for voice server info - check the server/channel IDs.");
+    {
+        // Discord answers a voice join it won't honour with silence - no
+        // error, no close. "Check the server/channel IDs" named two
+        // things and helped with neither, so look at the channel list
+        // GUILD_CREATE already sent and say which one is actually wrong.
+        if (gateway->hasChannelList())
+        {
+            auto channel = gateway->findChannel(channelId);
+            const bool found = channel.id.isNotEmpty();
+
+            logLine("[DiscordConnector] voice join went unanswered; channel "
+                     + juce::String(found ? "found, type " + juce::String(channel.type)
+                                           + ", name " + channel.name
+                                         : "NOT in this guild's channel list"));
+
+            auto problem = inkwyrd::describeVoiceChannelProblem(found, channel.type, channel.name);
+            return fail(problem.isNotEmpty() ? problem
+                                             : inkwyrd::describeSilentVoiceJoinFailure(channel.name));
+        }
+
+        return fail("Discord never answered the request to join that voice channel, and never sent "
+                     "the server's channel list either - so this is more likely a connection "
+                     "problem than a wrong ID. The log has what arrived: Settings, Open log folder.");
+    }
 
     voiceGateway = std::make_unique<VoiceGatewayClient>(serverInfo.endpoint, serverInfo.guildId, channelId,
                                                           gateway->getBotUserId(), serverInfo.sessionId,

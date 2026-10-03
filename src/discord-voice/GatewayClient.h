@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GuildChannels.h"
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -42,6 +43,13 @@ public:
 
     juce::String getBotUserId() const { return botUserId; }
 
+    // The guild's channels, as GUILD_CREATE listed them. Populated before
+    // any voice join is attempted, which is what lets a silent join
+    // failure be explained rather than reported as a timeout. Empty if
+    // GUILD_CREATE never arrived.
+    inkwyrd::GuildChannel findChannel(const juce::String& channelId) const;
+    bool hasChannelList() const;
+
     void requestJoinVoiceChannel(const juce::String& guildId, const juce::String& channelId);
 
     // Blocks until both VOICE_STATE_UPDATE and VOICE_SERVER_UPDATE have
@@ -56,6 +64,11 @@ private:
 
     juce::String botToken;
     std::unique_ptr<ix::WebSocket> socket;
+
+    // Written on the websocket thread when GUILD_CREATE arrives, read
+    // from the connector's thread after a join times out.
+    juce::CriticalSection channelsLock;
+    juce::Array<inkwyrd::GuildChannel> guildChannels;
 
     std::atomic<long long> lastSequence { -1 };
     std::atomic<bool> heartbeatRunning { false };
