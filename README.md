@@ -713,7 +713,23 @@ own. It's free and takes about five minutes.
 7. In Discord, turn on **User Settings -> Advanced -> Developer Mode**.
 8. Right-click your server's icon and **Copy Server ID**.
 9. Right-click the voice channel the bot should join and **Copy Channel
-   ID**.
+   ID**. Make sure it's the voice channel (the one under the speaker icon
+   that people join), not the text channel above it.
+
+> **If that voice channel is private, the bot needs to be let in.** A
+> private channel only admits the roles and people named in its own
+> permissions, and a bot you've just invited isn't one of them. The
+> **Connect** permission from the invite link applies to the server as a
+> whole and doesn't override a channel's own settings.
+>
+> To fix it: hover the channel in Discord, click the **gear
+> (Edit Channel) -> Permissions**, add your bot's role under **Roles /
+> Members**, and allow **Connect**.
+>
+> You can tell this is the problem because Inkwyrd connects, the bot
+> appears in your member list, and it simply never joins the channel.
+> Discord doesn't report a voice join it won't allow, so there's no error
+> anywhere: it just never happens.
 
 **Put them into Inkwyrd:**
 10. Open **Settings**, paste the **Bot token**, **Server (guild) ID** and
@@ -1118,6 +1134,18 @@ Hover over a track in the Library's **All Tracks** list and click the
 play symbol that appears. If All Tracks is empty, click **Add
 folder...** and add your music first. See
 [Previewing a track](#previewing-a-track).
+
+**The bot is online, but it never joins the voice channel.**
+Nearly always a **private voice channel**. A private channel only admits
+the roles listed in its own permissions, and your bot isn't one of them
+until you add it. Hover the channel, click the gear
+(**Edit Channel -> Permissions**), add your bot's role and allow
+**Connect**. See [Connecting to Discord](#connecting-to-discord).
+
+Failing that, check you copied the **voice** channel's ID rather than a
+text channel's, and that the channel isn't full. Discord never reports a
+voice join it won't allow, so nothing appears as an error; Inkwyrd will
+tell you what it found in the status line.
 
 **Discord says my bot token was rejected, or the bot stays offline.**
 Copy the token again from the Developer Portal (Bot tab), and when you

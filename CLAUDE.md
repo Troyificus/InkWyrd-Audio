@@ -3492,12 +3492,36 @@ case what is left is permissions or capacity and it says so.
 checks rather than by waiting for someone to misconfigure a server in
 exactly that way.
 
+### The actual cause, once the IDs were ruled out
+
+**A private voice channel.** The ID was right, the type was right, and
+the bot still could not get in: a private channel admits only the roles
+and people named in its own permissions, and a bot invited five minutes
+ago is not among them. The `Connect` permission on the invite URL is
+server-wide and does not override a channel's own settings.
+
+Nothing in Discord's UI makes this visible from the bot's side, and
+Discord reports nothing, so from the user's chair the app connects, the
+bot appears in the member list, and it simply never joins.
+
+`describeSilentVoiceJoinFailure` now leads with it rather than listing
+"permissions" generically, the README's Discord setup carries a note at
+the step where the channel ID is copied, and Troubleshooting has an
+entry. This is the one worth keeping in mind for anyone else setting the
+app up: a server that has existed for years is far likelier to have a
+private voice channel than a freshly made one.
+
 ### Worth remembering
 
 When a remote service answers a bad request with silence, look for data
 it already volunteered. Discord had described the channel in full,
 seconds earlier, and the app had thrown it away and then complained it
 could not tell what was wrong.
+
+The limit of that, also worth remembering: the channel list explained
+every cause EXCEPT the one it turned out to be. Permission overwrites are
+in the GUILD_CREATE payload too, so a future version could resolve them
+and answer outright instead of ranking possibilities.
 
 ## Beta release process
 

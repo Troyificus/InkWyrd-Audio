@@ -67,8 +67,8 @@ inline juce::String describeVoiceChannelProblem(bool found, int type, const juce
         case DiscordChannelType::forum:
         case DiscordChannelType::media:
             return "That ID is a TEXT channel" + named + ", not a voice channel. In Discord, "
-                   "right-click the voice channel - the one under the speaker icon that people "
-                   "join - and choose Copy Channel ID.";
+                   "right-click the voice channel (the one under the speaker icon that people "
+                   "join) and choose Copy Channel ID.";
 
         case DiscordChannelType::category:
             return "That ID is a category" + named + ", which is the heading channels sit under "
@@ -76,7 +76,7 @@ inline juce::String describeVoiceChannelProblem(bool found, int type, const juce
                    "choose Copy Channel ID.";
 
         case DiscordChannelType::stageVoice:
-            return "That ID is a Stage channel" + named + ". Inkwyrd can't join those - they need "
+            return "That ID is a Stage channel" + named + ". Inkwyrd can't join those: they need "
                    "a speaker invitation that an ordinary bot can't give itself. Use a normal "
                    "voice channel.";
 
@@ -86,19 +86,30 @@ inline juce::String describeVoiceChannelProblem(bool found, int type, const juce
     }
 }
 
-// When the channel checks out but the join still went unanswered, the
-// remaining causes are permissions and capacity - neither of which is
-// visible in the channel list.
+// When the channel checks out but the join still went unanswered, what is
+// left is permissions and capacity, neither of which the channel list can
+// show.
+//
+// The ordering is not arbitrary. A PRIVATE channel is what this actually
+// turned out to be in the one real case: a private channel admits only
+// the roles and people named in its own permissions, and a bot invited
+// five minutes ago is not among them. Nothing about that is obvious from
+// the Discord UI, and the server-wide Connect permission from the invite
+// URL does not override it.
 inline juce::String describeSilentVoiceJoinFailure(const juce::String& channelName)
 {
     const auto named = channelName.isNotEmpty() ? " (\"" + channelName + "\")" : juce::String();
 
     return "Discord ignored the request to join that voice channel" + named + ", which it does "
-           "without reporting an error. The channel is real and is a voice channel, so the usual "
-           "causes are:\n\n"
-           "- the bot's role isn't allowed to Connect to that particular channel. Check the "
-           "channel's own permissions in Discord, not just the server-wide ones;\n"
-           "- the channel is full, and the bot can't exceed a user limit without Move Members.";
+           "without reporting an error. The ID is right and it is a voice channel, so the bot is "
+           "not being allowed in. In order of likelihood:\n\n"
+           "1. IS IT A PRIVATE CHANNEL? This is far and away the usual cause. A private channel "
+           "only admits the roles and people listed in its own permissions, and a bot you have "
+           "just invited is not one of them. Edit the channel in Discord, add your bot's role, "
+           "and allow Connect.\n\n"
+           "2. Even on a channel that is not private, the bot's role can be denied Connect there "
+           "specifically. Check the channel's own permissions, not only the server-wide ones.\n\n"
+           "3. The channel may be full. A bot cannot go over a user limit without Move Members.";
 }
 
 } // namespace inkwyrd

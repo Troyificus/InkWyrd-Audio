@@ -2939,6 +2939,8 @@ namespace
                    "an unknown channel type still reports its number, so a report can say which");
             check(inkwyrd::describeSilentVoiceJoinFailure("General").contains("Connect"),
                    "a real voice channel that still won't take the bot points at Connect permission");
+            check(inkwyrd::describeSilentVoiceJoinFailure("General").contains("PRIVATE CHANNEL"),
+                   "and leads with a private channel, which is what it actually turned out to be");
 
             // Gateway close codes: the app said "timed out" when Discord
             // had plainly said the token was rejected.
