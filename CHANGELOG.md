@@ -14,6 +14,132 @@ Numbering changed at 0.1.1-beta - see the release process section of
 CLAUDE.md. Everything below `0.1.1-beta` uses the older
 `0.1.0-beta.NN` scheme, where the leading `0.1.0` never moved.
 
+## v0.1.2-beta - a setup trap that left bots offline
+
+*2026-10-03*
+
+A hotfix for a setup trap that could leave your bot sitting offline, with
+nothing on screen to say why.
+
+### If your bot won't connect, this is probably why
+
+Settings fills its boxes with whatever you saved last time. Click into
+one of them and paste, and Windows put the new text *next to* what was
+already there instead of replacing it. Do that with your bot token and
+you end up with the token stored twice over, end to end, which Discord
+rejects.
+
+The token box shows dots rather than characters, so there was no way to
+see it had happened. The server and channel IDs could double up the same
+way, and 36 digits looks much like 18 at a glance.
+
+**The fix:** clicking into any of those boxes now selects what's in it,
+so pasting replaces it, the way you'd expect.
+
+**And Inkwyrd now checks before saving.** Paste something that can't be
+right and it says so straight away, including the specific case above:
+"That bot token looks like it was pasted twice." Paste the Application ID
+where the token goes (they sit on neighbouring pages in Discord's
+Developer Portal) and it tells you that too, instead of letting you find
+out minutes later.
+
+**If you're already affected**, open Settings, click each of the Discord
+boxes in turn and paste again. The click now selects the old contents, so
+a single paste is enough to put it right.
+
+### It now tells you what Discord actually said
+
+When a connection failed, Inkwyrd said "Timed out waiting for Discord
+gateway". That reads like a network problem, and sends you off checking
+your internet, your firewall and your channel ID, when Discord had
+plainly said the token was wrong.
+
+It now reports the real reason: a rejected token says so, privileged
+intents say so, rate limiting says so. It also gives up as soon as
+Discord hangs up, rather than sitting there for ten seconds waiting for
+an answer that already arrived.
+
+## v0.1.1-beta - ready for other people to run
+
+*2026-09-28*
+
+The release that makes Inkwyrd ready for people other than me to run.
+
+Nothing here changes what the app does at the table. It's the groundwork
+for a public beta: the program now starts on computers where it simply
+wouldn't before, it leaves something behind when it crashes, and it has a
+licence.
+
+### It now starts on a clean PC
+
+Inkwyrd needs Microsoft's Visual C++ runtime, and **neither download
+included it**. On a PC that happened to have it - most machines that run
+games do - everything worked. On one that didn't, the app died before it
+opened, showing a Windows error naming a `.dll` and never mentioning
+Inkwyrd at all.
+
+Both downloads now carry that runtime. There's nothing to install first.
+
+If you ever had Inkwyrd refuse to open with an error about a missing
+`MSVCP140.dll`, this was why, and this fixes it.
+
+### When something goes wrong, there's now a record
+
+- **Logs live in `%APPDATA%\Inkwyrd Audio\logs`**, and Settings has an
+  **Open log folder** button to take you there.
+- **The previous run is kept** as `log-previous.txt`. Reopening Inkwyrd
+  after a crash used to wipe the only evidence of it before you could
+  report anything.
+- **A crash now writes a report** into the log, with the time and the
+  version, instead of the app vanishing silently.
+- Logs never contain your Discord bot token.
+
+If you hit a problem, attaching those two files to a bug report is the
+most useful thing you can do.
+
+### Reporting things got easier
+
+There are now proper forms for a
+[bug report](https://github.com/Troyificus/InkWyrd-Audio/issues/new?template=bug_report.yml)
+and a
+[feature request](https://github.com/Troyificus/InkWyrd-Audio/issues/new?template=feature_request.yml).
+The feature one asks what you're trying to do *at the table*, which is
+usually more useful than a description of the button you had in mind.
+
+### A security fix worth mentioning
+
+Inkwyrd listens on your own machine for Stream Deck key presses. Because
+of how browsers work, a web page you happened to have open could reach
+that and send commands - stopping your sounds in the middle of a session,
+for instance. It can't read anything, but it shouldn't be able to do that
+either. Web pages are now refused. Your Stream Deck is unaffected.
+
+### Inkwyrd has a licence now
+
+**It's free to use, for anything, on as many of your own computers as you
+like** - that hasn't changed and won't. The source stays public so you can
+see exactly what the program does before running it, which matters while
+the downloads aren't code-signed.
+
+What's new is that it's written down: you can use it, you can't
+redistribute it or publish your own version of it. See
+[LICENSE](https://github.com/Troyificus/InkWyrd-Audio/blob/main/LICENSE).
+If you want to do something it doesn't allow, ask - it's a small project
+and the answer may well be yes.
+
+### About the version number
+
+**This is `0.1.1-beta`, not `beta.34`.** Every release so far was
+`0.1.0-beta.something`, so the version never actually moved off `0.1.0`.
+From now on it's an ordinary version number: the last digit for fixes,
+the middle for new beta versions, and `1.0.0` when it's finished.
+
+**The old releases have been cleared out** - there were forty-six and the
+list was unreadable. What changed in each one is kept in
+[CHANGELOG.md](https://github.com/Troyificus/InkWyrd-Audio/blob/main/CHANGELOG.md).
+
+Your settings, playlists, scenes, soundboard and skins are untouched by
+any of this - upgrade over the top as usual.
 ## v0.1.0-beta.33 - sounds that fade, and sounds that play by themselves
 
 *2026-09-24*
