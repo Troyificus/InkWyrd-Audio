@@ -2876,6 +2876,22 @@ namespace
                        .contains("pasted twice"),
                    "an ID pasted twice is caught too");
 
+            // Repairing it, which is what actually ships: refusing to
+            // save wasn't enough, because the box is masked and fixing it
+            // by hand is a blind operation. Halving recovers exactly what
+            // was pasted.
+            check(inkwyrd::collapseDoubledValue(goodToken + goodToken) == goodToken,
+                   "a doubled token is repaired back to the original, exactly");
+            check(inkwyrd::collapseDoubledValue(goodGuild + goodGuild) == goodGuild,
+                   "and a doubled ID is too");
+            check(inkwyrd::describeBotTokenProblem(inkwyrd::collapseDoubledValue(goodToken + goodToken)).isEmpty(),
+                   "and what comes out of the repair passes the checks");
+            check(inkwyrd::collapseDoubledValue(goodToken) == goodToken,
+                   "a good token is returned untouched");
+            check(inkwyrd::collapseDoubledValue("") == "", "an empty value survives the repair");
+            check(inkwyrd::collapseDoubledValue("abab") == "ab",
+                   "the rule is purely 'two identical halves', with no length assumptions");
+
             check(inkwyrd::isDoubledValue(goodToken + goodToken), "doubling is detected on a token");
             check(! inkwyrd::isDoubledValue(goodToken), "and a single token is not mistaken for one");
             check(! inkwyrd::isDoubledValue(""), "an empty value isn't 'doubled'");

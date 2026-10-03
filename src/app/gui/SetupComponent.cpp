@@ -226,9 +226,42 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
         result.duckThresholdDb = duckThresholdSlider.getValue();
         result.checkForUpdates = updateCheckToggle.getToggleState();
 
-        // Caught here rather than let through to Discord: a wrong value
-        // comes back as a failed connection some seconds later, with
-        // nothing to say which of the three fields was at fault.
+        // Repair a value that was pasted twice before anything else
+        // looks at it. Refusing to save was the first attempt at this and
+        // it wasn't enough: the box is masked, so putting it right by
+        // hand is a blind operation, and it kept happening. Halving a
+        // doubled value recovers exactly what was pasted - see
+        // collapseDoubledValue.
+        juce::StringArray repaired;
+        auto repair = [&repaired](juce::TextEditor& editor, juce::String& value, const char* whatItIs)
+        {
+            auto collapsed = inkwyrd::collapseDoubledValue(value);
+            if (collapsed == value)
+                return;
+
+            value = collapsed;
+            editor.setText(collapsed, juce::dontSendNotification);
+            repaired.add(whatItIs);
+        };
+
+        repair(botTokenEditor, result.botToken, "bot token");
+        repair(guildIdEditor, result.guildId, "server (guild) ID");
+        repair(channelIdEditor, result.channelId, "voice channel ID");
+        repair(clientSecretEditor, result.discordClientSecret, "client secret");
+
+        if (! repaired.isEmpty())
+            inkwyrd::showMessage(this, juce::MessageBoxIconType::InfoIcon,
+                                  "Fixed a double paste",
+                                  "Your " + repaired.joinIntoString(", your ")
+                                   + " had the same value in it twice, end to end. That happens when a "
+                                     "paste lands next to what was already in the box instead of "
+                                     "replacing it.\n\nInkwyrd has kept the single correct copy and "
+                                     "saved that. Nothing else has changed.");
+
+        // Anything still wrong after that is reported rather than
+        // guessed at: a wrong value otherwise comes back as a failed
+        // connection some seconds later, with nothing to say which of
+        // the fields was at fault.
         for (auto problem : { inkwyrd::describeBotTokenProblem(result.botToken),
                                inkwyrd::describeDiscordIdProblem(result.guildId, "server (guild) ID"),
                                inkwyrd::describeDiscordIdProblem(result.channelId, "voice channel ID") })

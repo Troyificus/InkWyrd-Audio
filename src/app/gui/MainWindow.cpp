@@ -48,3 +48,30 @@ void MainWindow::closeButtonPressed()
 
     juce::JUCEApplication::getInstance()->systemRequestedQuit();
 }
+
+void MainWindow::setFloatAboveApp(bool shouldFloat)
+{
+    if (shouldFloat)
+    {
+        // Immediately, so opening Settings puts it in front rather than
+        // waiting for the first poll.
+        setAlwaysOnTop(true);
+        floatCheck.startTimerHz(4);
+    }
+    else
+    {
+        floatCheck.stopTimer();
+        setAlwaysOnTop(false);
+    }
+}
+
+void MainWindow::syncFloatWithForeground()
+{
+    const auto shouldBeOnTop = juce::Process::isForegroundProcess();
+
+    // Only when it actually changes: setAlwaysOnTop re-creates the native
+    // window's topmost state, and doing that four times a second for no
+    // reason is how you get a window that flickers.
+    if (shouldBeOnTop != isAlwaysOnTop())
+        setAlwaysOnTop(shouldBeOnTop);
+}

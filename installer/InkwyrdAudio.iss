@@ -37,7 +37,7 @@
 ; 0.1.0-beta.33, and there are checks for exactly that, because getting
 ; it wrong means nobody on an old build is ever told about an update
 ; again.
-#define MyAppVersion "0.1.2-beta"
+#define MyAppVersion "0.1.3-beta"
 #define MyAppPublisher "Troy"
 #define MyAppURL "https://github.com/Troyificus/InkWyrd-Audio"
 ; Windows' numeric version fields hold at most four numbers and can't

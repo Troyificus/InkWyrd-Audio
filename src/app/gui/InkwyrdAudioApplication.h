@@ -160,6 +160,11 @@ private:
     // Applies a skin by folder name ({} = the built-in look) and returns
     // what to tell the user: empty when it loaded cleanly, otherwise the
     // warnings, or why it couldn't be used.
+    // Collapses any Discord credential that was stored twice over, once,
+    // at startup. An install that already has one cannot connect at all
+    // until it is fixed.
+    void repairDoubledCredentials();
+
     // Puts the current bot token / client secret / refresh token on the
     // log's redaction list. Called at startup and again whenever one of
     // them changes. See LogRedaction.h.

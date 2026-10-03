@@ -41,6 +41,26 @@ inline bool isDoubledValue(const juce::String& value)
     return value.substring(0, length / 2) == value.substring(length / 2);
 }
 
+// Recovers the original from a value that was pasted twice: returns one
+// copy if the value is exactly itself repeated, and the value unchanged
+// otherwise.
+//
+// Used to REPAIR rather than refuse. Catching the mistake and making the
+// user fix it by hand sounds tidier than it is, because the token box is
+// password-masked - there is nothing to see, so "clear it and paste it
+// again" is a blind operation they have already got wrong once. Halving
+// a doubled value cannot damage anything: it reconstructs exactly what
+// was pasted.
+//
+// It cannot misfire on a good value either. Two halves of a real token
+// being byte-identical does not happen by chance, and a doubled Discord
+// ID lands at 34 to 40 digits, well outside the 17 to 20 a real one has.
+inline juce::String collapseDoubledValue(const juce::String& value)
+{
+    auto trimmed = value.trim();
+    return isDoubledValue(trimmed) ? trimmed.substring(0, trimmed.length() / 2) : value;
+}
+
 // A Discord bot token is three base64url segments separated by dots.
 // The lengths vary between token generations, so only the structure is
 // checked, not how long each piece is - a length rule would start

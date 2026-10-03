@@ -3343,6 +3343,114 @@ select-on-focus, and ideally both. The same reasoning applies to the
 client secret, which is why it got the same treatment despite not being
 implicated in the report.
 
+## Settings window: three fixes after 0.1.2-beta
+
+All three reported together, from a screen recording. Two were caused by
+the 0.1.2-beta fix for the doubled-credentials bug, which is worth being
+plain about: the first attempt at that fix did not work and introduced a
+cosmetic bug of its own.
+
+### setSelectAllWhenFocused was not enough
+
+0.1.2-beta's answer to pasting a credential twice was
+`setSelectAllWhenFocused(true)`, so a paste would replace rather than
+insert. **It did not stop the doubling** - reported straight back, and
+confirmed from the log that the build in use really was 0.1.2-beta and
+the stored token was still 144 characters.
+
+Reading JUCE's own `TextEditor` source rather than guessing: the click
+path is actually handled correctly. `focusGained` selects all, then sets
+`wasFocused = false` when the cause was a mouse click (line 1969), and
+`mouseDown`'s `if (wasFocused || ! selectAllTextWhenFocused)` guard then
+skips the caret move that would collapse the selection. So a plain click
+into an unfocused field does leave everything selected.
+
+Which means the doubling arrives by some other route - pasting into a
+field that already had focus, a second paste into the same field, or the
+right-click menu. **The exact sequence was never reproduced**, and it
+could not be: reproducing it needs synthetic mouse input into a window
+while the user is on the machine, which this project does not do.
+
+So the fix stopped trying to control the input path.
+
+### Repair instead of refuse
+
+`collapseDoubledValue` returns one copy of a value that is exactly itself
+repeated, and the value untouched otherwise. Applied in two places:
+
+- **On Save**, to all four Discord fields, with a dialog naming what was
+  repaired.
+- **At startup**, once, before anything reads the credentials. An install
+  that already stored a doubled value cannot connect to Discord at all,
+  and would otherwise stay broken until the user happened to open
+  Settings and press Save.
+
+This is safe in a way that is worth spelling out, because silently
+halving a credential sounds alarming:
+
+- Halving a doubled value **reconstructs exactly what was pasted**. There
+  is no guessing.
+- It cannot fire on a good value. Two halves of a real token being
+  byte-identical does not happen, and a doubled Discord ID lands at 34 to
+  40 digits, outside the 17 to 20 a real one has.
+
+Refusing to save, which is what 0.1.2-beta did, is worse here than it
+sounds: the token box is password-masked, so "clear it and paste it
+again" is a blind operation the user has already got wrong once.
+
+The validation from 0.1.2-beta stays, and runs after the repair, so
+everything else it catches is still caught.
+
+### The leftover selection highlight
+
+`setSelectAllWhenFocused` had a visible cost: JUCE keeps PAINTING the
+selection after an editor loses focus, so clicking from one box to
+another left the first one showing a highlighted block. Two boxes looked
+active at once.
+
+Fixed with `textEditorFocusLost`, which collapses the highlight to an
+empty range at the current caret position. SetupComponent was already a
+`TextEditor::Listener` for all four fields, so this was one override.
+
+Worth knowing in general: a field that is both masked and pasted into
+hides its own corruption. Validation, repair, or both.
+
+### Settings floating over every other program
+
+`setAlwaysOnTop(true)` is an operating-system topmost flag. The intent
+was "above Inkwyrd's other five windows, so it isn't lost behind them",
+which is reasonable; the effect was that Settings sat over the user's
+browser, game and Discord client until they closed it.
+
+`MainWindow::setFloatAboveApp` now polls `Process::isForegroundProcess()`
+at 4 Hz while Settings is open and clears the topmost flag whenever
+Inkwyrd is not in front.
+
+Polled rather than driven by `activeWindowStatusChanged`, deliberately:
+that fires on whichever top-level window was active, so if the Player
+window had focus at the moment the user alt-tabbed away, Settings is
+never told and stays pinned over the desktop. The JUCE source confirms
+the limitation - `WM_ACTIVATEAPP` only calls
+`TopLevelWindowManager::checkCurrentlyFocusedTopLevelWindow()`, and does
+not clear the focused component, so a `FocusChangeListener` would not
+fire either.
+
+A `juce::TimedCallback` member rather than inheriting `juce::Timer`:
+`DetachableWindow` already inherits it privately for its debounced bounds
+saving, so a second Timer base is both ambiguous and a hijack of that
+one. The compiler says so (C2385), which is how this was found.
+
+The toggle only calls `setAlwaysOnTop` when the state actually changes -
+re-applying a native topmost flag four times a second is how you get a
+window that flickers.
+
+### What is NOT verified by machine
+
+Both window-level behaviours need a real window and a real second
+application. The repair is covered by checks; the select-all behaviour,
+the highlight clearing and the topmost toggling are not, and were handed
+over for a hands-on look.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

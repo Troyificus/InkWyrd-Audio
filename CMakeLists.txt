@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.22)
 # exe's version resource. It has to be a literal (project() runs before
 # the .iss can be read), so a check further down fails the configure if
 # it ever drifts from the real version.
-project(InkwyrdAudio VERSION 0.1.2 LANGUAGES C CXX)
+project(InkwyrdAudio VERSION 0.1.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

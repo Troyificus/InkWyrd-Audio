@@ -72,6 +72,20 @@ private:
     // juce::TextEditor::Listener
     void textEditorTextChanged(juce::TextEditor&) override { updateSaveButtonEnablement(); }
 
+    // Drops the select-all highlight when focus moves on.
+    //
+    // setSelectAllWhenFocused (above) selects the contents so a paste
+    // replaces them, which is what stops the doubled-credentials bug. But
+    // JUCE keeps PAINTING that selection after the editor loses focus, so
+    // clicking from one box to another left the first one still showing a
+    // highlighted block - two boxes looking active at once, which is both
+    // confusing and wrong. The caret is left where it was rather than
+    // jumped to the start.
+    void textEditorFocusLost(juce::TextEditor& editor) override
+    {
+        editor.setHighlightedRegion(juce::Range<int>::emptyRange(editor.getCaretPosition()));
+    }
+
     AppSettings& settings;
     std::function<void(Result)> onSaveAndLaunch;
 

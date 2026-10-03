@@ -9,6 +9,7 @@
 #include "SkinLoader.h"
 #include "InkwyrdSkinData.h"
 #include "ExampleSkins.h"
+#include "DiscordCredentials.h"
 
 #include <ixwebsocket/IXNetSystem.h>
 #include <sodium.h>
@@ -30,6 +31,14 @@ void InkwyrdAudioApplication::initialise(const juce::String& commandLine)
     // is a file testers are asked to attach to a bug report. Registering
     // them here means any line that ever contains one has it replaced on
     // the way to disk. See LogRedaction.h.
+    // Before anything reads them: an install that already stored a
+    // doubled credential cannot connect to Discord at all, and would stay
+    // broken until the user happened to open Settings and press Save.
+    // Repairing here fixes it on the next launch instead. See
+    // collapseDoubledValue - halving recovers exactly what was pasted,
+    // and it cannot fire on a good value.
+    repairDoubledCredentials();
+
     registerSecretsForRedaction();
 
     // A crash currently leaves nothing behind at all - no log line, no
@@ -805,7 +814,7 @@ void InkwyrdAudioApplication::showSetup()
     mainWindow->onCloseRequested = isFirstRun ? std::function<void()>()
                                               : std::function<void()>([this]
     {
-        mainWindow->setAlwaysOnTop(false);
+        mainWindow->setFloatAboveApp(false);
         mainWindow->setVisible(false);
 
         if (playerWindow != nullptr)
@@ -847,8 +856,9 @@ void InkwyrdAudioApplication::showSetup()
 
     // Above the rest of the app while it's open - it is a settings
     // window, and hunting for it behind five others would be worse than
-    // the old behaviour of hiding them.
-    mainWindow->setAlwaysOnTop(true);
+    // the old behaviour of hiding them. Above the APP only: see
+    // MainWindow::setFloatAboveApp.
+    mainWindow->setFloatAboveApp(true);
     mainWindow->toFront(true);
 }
 
@@ -894,7 +904,7 @@ void InkwyrdAudioApplication::showPlayer()
 {
     hasShownPlayer = true;
 
-    mainWindow->setAlwaysOnTop(false);
+    mainWindow->setFloatAboveApp(false);
     mainWindow->setVisible(false);
 
     if (playerWindow == nullptr)
@@ -1120,6 +1130,36 @@ void InkwyrdAudioApplication::applyDiscordRpcSettings()
     // immediately, not on the next toggle.
     if (usable)
         discordRpc.setSelfMuted(! masterEngine.isMicMuted());
+}
+
+void InkwyrdAudioApplication::repairDoubledCredentials()
+{
+    juce::StringArray repaired;
+
+    auto fix = [this, &repaired](juce::String current, const char* whatItIs,
+                                  void (AppSettings::*setter)(const juce::String&))
+    {
+        auto collapsed = inkwyrd::collapseDoubledValue(current);
+        if (collapsed == current)
+            return;
+
+        (settings.*setter)(collapsed);
+        repaired.add(whatItIs);
+    };
+
+    fix(settings.getBotToken(), "bot token", &AppSettings::setBotToken);
+    fix(settings.getGuildId(), "server ID", &AppSettings::setGuildId);
+    fix(settings.getChannelId(), "channel ID", &AppSettings::setChannelId);
+    fix(settings.getDiscordClientSecret(), "client secret", &AppSettings::setDiscordClientSecret);
+
+    if (repaired.isEmpty())
+        return;
+
+    settings.save();
+
+    // Names the fields, never the values.
+    logLine("[App] repaired a double-pasted " + repaired.joinIntoString(", ")
+             + " in your saved settings - see CLAUDE.md, the doubled-credentials bug.");
 }
 
 void InkwyrdAudioApplication::registerSecretsForRedaction()
