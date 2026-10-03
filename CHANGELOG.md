@@ -14,6 +14,46 @@ Numbering changed at 0.1.1-beta - see the release process section of
 CLAUDE.md. Everything below `0.1.1-beta` uses the older
 `0.1.0-beta.NN` scheme, where the leading `0.1.0` never moved.
 
+## v0.1.4-beta - why the bot won't join
+
+*2026-10-04*
+
+When a bot won't join a voice channel, Discord says nothing at all. This
+release works out why and tells you.
+
+### "It connects, but the bot never joins the channel"
+
+If Discord won't let a bot into a voice channel, it doesn't refuse. It
+sends no error, no warning, nothing: the join just never happens. Until
+now all Inkwyrd could say was "Timed out waiting for voice server info,
+check the server/channel IDs", which names two things to check and helps
+with neither.
+
+It doesn't have to guess. Discord already sends the full list of channels
+in your server, with their names and types, before the join is even
+attempted. Inkwyrd now keeps that list and uses it, so instead of a
+timeout you get the actual reason:
+
+- **Is it a private channel?** The usual answer, and the hardest to spot.
+  A private channel only lets in the roles and people named in its own
+  permissions, and a bot you've just invited isn't one of them. The
+  Connect permission on the invite link covers the server as a whole and
+  doesn't override a single channel's settings. Inkwyrd now says so, and
+  tells you where to fix it.
+- **Did you copy a text channel's ID?** Easy to do, since it's the one
+  you can click into. Inkwyrd names the channel you actually picked, so
+  it's obvious which one it was.
+- **A category, a forum, or a Stage channel?** Each gets its own
+  explanation rather than a silent failure.
+- **Is the ID in that server at all?** Copying from a different server,
+  or copying the server's own ID, gives you a number that looks right and
+  isn't.
+- **Is the channel full?** A bot can't go over a user limit.
+
+The setup guide in the README now covers private channels at the step
+where you copy the channel ID, and there's a troubleshooting entry for
+it.
+
 ## v0.1.3-beta - the double paste, fixed properly
 
 *2026-10-03*
