@@ -1119,6 +1119,13 @@ play symbol that appears. If All Tracks is empty, click **Add
 folder...** and add your music first. See
 [Previewing a track](#previewing-a-track).
 
+**Discord says my bot token was rejected, or the bot stays offline.**
+Copy the token again from the Developer Portal (Bot tab), and when you
+paste it into Settings make sure you replace what's in the box rather
+than adding to it. Inkwyrd checks the shape of what you paste and will
+tell you if it looks wrong. If the bot never comes online at all, the
+log says why: Settings, then **Open log folder**.
+
 **My Discord changes didn't do anything.**
 Once Inkwyrd has connected, changes to the bot token, server or channel
 apply the next time it starts. Accept the restart it offers, or close

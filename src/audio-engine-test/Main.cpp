@@ -31,6 +31,8 @@
 #include "Log.h"
 #include "LogRedaction.h"
 #include "ControlOrigin.h"
+#include "DiscordCredentials.h"
+#include "GatewayCloseCodes.h"
 #include "DuckEnvelope.h"
 #include "SceneLibrary.h"
 #include "ScenesComponent.h"
@@ -2847,6 +2849,69 @@ namespace
                 engine.hardStop();
                 engine.releaseResources();
             }
+        }
+
+        {
+            // Discord credential checks (0.1.2-beta). From a real report:
+            // a clean setup left the bot offline and never joining its
+            // voice channel, because the token, server ID and channel ID
+            // had each been stored twice over - Settings loads the saved
+            // value into the field, JUCE puts the caret where you click
+            // rather than selecting, so a paste landed beside what was
+            // already there. The token is masked, so nothing looked wrong.
+            const juce::String goodToken = "MTIzNDU2Nzg5MDEyMzQ1Njc4.GhIjKl.mNoPqRsTuVwXyZ1234567890ab";
+            const juce::String goodGuild = "699335159798825102";
+
+            check(inkwyrd::describeBotTokenProblem(goodToken).isEmpty(), "a real bot token is accepted");
+            check(inkwyrd::describeBotTokenProblem("").isEmpty(),
+                   "an empty token is fine - Discord is optional, and blank means local playback only");
+            check(inkwyrd::describeDiscordIdProblem(goodGuild, "server ID").isEmpty(),
+                   "a real 18-digit snowflake is accepted");
+
+            // The exact failure that was reported.
+            check(inkwyrd::describeBotTokenProblem(goodToken + goodToken)
+                       .contains("pasted twice"),
+                   "a token pasted twice is caught, and says so in those words");
+            check(inkwyrd::describeDiscordIdProblem(goodGuild + goodGuild, "server ID")
+                       .contains("pasted twice"),
+                   "an ID pasted twice is caught too");
+
+            check(inkwyrd::isDoubledValue(goodToken + goodToken), "doubling is detected on a token");
+            check(! inkwyrd::isDoubledValue(goodToken), "and a single token is not mistaken for one");
+            check(! inkwyrd::isDoubledValue(""), "an empty value isn't 'doubled'");
+            check(! inkwyrd::isDoubledValue("abc"), "nor is an odd-length one");
+
+            // The other ways these fields get filled in wrongly.
+            check(inkwyrd::describeBotTokenProblem("1543399962723745792").contains("Application ID"),
+                   "pasting the Application ID instead of the token is named for what it is");
+            check(inkwyrd::describeBotTokenProblem("MTIzNDU2.GhIjKl").isNotEmpty(),
+                   "a token missing a piece is rejected");
+            check(inkwyrd::describeBotTokenProblem("MTIzNDU2Nzg5MDEyMzQ1Njc4..mNoPqRsTuVwXyZ1234567890ab")
+                       .isNotEmpty(),
+                   "so is one with an empty piece, which means something was lost copying it");
+            check(inkwyrd::describeBotTokenProblem("MTIzNDU2Nzg5MDEy MzQ1Njc4.GhIjKl.mNoPqRsTuVwXyZ12345")
+                       .contains("space"),
+                   "a token with a space picked up around it is caught");
+
+            check(inkwyrd::describeDiscordIdProblem("my-server", "server ID").contains("digits only"),
+                   "a server NAME where an ID belongs is explained, not just rejected");
+            check(inkwyrd::describeDiscordIdProblem("1234", "server ID").contains("17 to 20"),
+                   "a truncated ID is caught");
+            check(inkwyrd::describeDiscordIdProblem("", "server ID").isEmpty(),
+                   "and an empty ID is left alone, like an empty token");
+
+            // Gateway close codes: the app said "timed out" when Discord
+            // had plainly said the token was rejected.
+            check(inkwyrd::describeGatewayCloseCode(4004).contains("rejected the bot token"),
+                   "4004 is reported as a rejected token, not a timeout");
+            check(inkwyrd::describeGatewayCloseCode(4014).contains("privileged intents"),
+                   "4014 points at privileged intents");
+            check(inkwyrd::describeGatewayCloseCode(4008).contains("rate-limit"),
+                   "4008 says to wait rather than to change anything");
+            check(inkwyrd::describeGatewayCloseCode(0).isEmpty(),
+                   "no close code means no explanation to give");
+            check(inkwyrd::describeGatewayCloseCode(1006).isEmpty(),
+                   "and an ordinary network close falls through to the generic message");
         }
 
         {

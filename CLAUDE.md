@@ -3264,6 +3264,85 @@ confirming the configure refuses. Before this, Windows' "Installed apps"
 list and the exe's Properties tab both reported 0.1.0 regardless of what
 had shipped.
 
+## The doubled-credentials bug (0.1.2-beta)
+
+Reported as "the bot shows up on the server as offline, and it doesn't
+connect to the voice channel I've given it the Channel ID for". The
+channel ID had nothing to do with it.
+
+The log said it outright, which is what the 0.1.1-beta logging work was
+for:
+
+```
+[Gateway] closed: Authentication failed.
+[DiscordConnector] Timed out waiting for Discord gateway - check the bot token.
+```
+
+Discord closed the gateway with 4004. The bot showed offline because it
+never authenticated, and never reached the point of joining voice.
+
+### What was actually stored
+
+Diagnosed from the settings file WITHOUT ever displaying the token, by
+reporting only its shape: 144 characters, five dot-separated parts of
+lengths 26, 6, 64, 6, 38. A bot token has three parts. 64 is 38 + 26 -
+the tail of one token butted against the head of the next, with no dot
+between them - so this was one token written twice, and 144 is exactly
+2 x 72. Confirmed by comparing the two halves for equality, again
+without printing either.
+
+The server ID and channel ID were doubled too: 36 digits each instead of
+18.
+
+**The technique is worth keeping.** A credential can be diagnosed from
+length, segment count, character class and self-comparison. None of that
+requires seeing it, and none of it can leak into a transcript.
+
+### Why it happened, which is not user error
+
+1. Settings loads the saved values into its fields when it opens.
+2. JUCE's TextEditor puts the caret where you click. It does not select
+   what is already there.
+3. So pasting into a field that already held the value INSERTED a second
+   copy beside the first rather than replacing it.
+4. The token field is password-masked, so there was nothing to see. The
+   IDs were visible but 36 digits of snowflake reads much like 18.
+
+Anyone going through setup a second time would hit this, and it would be
+invisible every time.
+
+### The three fixes
+
+- **`setSelectAllWhenFocused(true)`** on the bot token, server ID,
+  channel ID and client secret fields. A paste now replaces. This alone
+  closes the hole.
+- **`DiscordCredentials.h`** - pure checks that refuse to save a value
+  that cannot be right, run when Save & Apply is pressed. The doubled
+  case gets its own wording ("looks like it was pasted twice"), because
+  that is something somebody can act on where "invalid token" is not.
+  Pasting the Application ID instead of the token is named for what it
+  is, since they sit on adjacent pages of the Developer Portal. Empty is
+  always allowed: Discord is optional.
+- **`GatewayCloseCodes.h`** - Discord's own close code, surfaced. The app
+  said "Timed out waiting for Discord gateway", which reads like a
+  network fault and sends people to check their connection and their
+  channel ID. It now says the token was rejected, because that is what
+  4004 means. `waitForReady` also stops as soon as the connection closes
+  rather than waiting out the full ten seconds, since a rejected token is
+  answered almost immediately.
+
+26 new checks, each confirmed to fail with the fix disabled (11 of them
+on a sabotage run; the rest are the accept-good-input cases, which
+correctly still pass when validation is a no-op).
+
+### Worth remembering
+
+A masked field hides corruption as well as it hides the secret. Any
+field that is both pasted into and masked wants either validation or
+select-on-focus, and ideally both. The same reasoning applies to the
+client secret, which is why it got the same treatment despite not being
+implicated in the report.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

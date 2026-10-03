@@ -1,5 +1,7 @@
 #include "SetupComponent.h"
 
+#include "DiscordCredentials.h"
+#include "Dialogs.h"
 #include "Log.h"
 
 #include "PlaylistLibrary.h"
@@ -50,16 +52,24 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     addAndMakeVisible(botTokenCaption);
     botTokenEditor.setText(settings.getBotToken(), juce::dontSendNotification);
     botTokenEditor.setPasswordCharacter('*');
+    // Selects what is already there the moment the field is focused, so
+    // pasting REPLACES it. Without this JUCE puts the caret where you
+    // clicked and a paste is inserted alongside the existing value - which
+    // is how a token, a server ID and a channel ID all came to be stored
+    // twice over on a real setup, invisibly, the token being masked.
+    botTokenEditor.setSelectAllWhenFocused(true);
     botTokenEditor.addListener(this);
     addAndMakeVisible(botTokenEditor);
 
     addAndMakeVisible(guildIdCaption);
     guildIdEditor.setText(settings.getGuildId(), juce::dontSendNotification);
+    guildIdEditor.setSelectAllWhenFocused(true);
     guildIdEditor.addListener(this);
     addAndMakeVisible(guildIdEditor);
 
     addAndMakeVisible(channelIdCaption);
     channelIdEditor.setText(settings.getChannelId(), juce::dontSendNotification);
+    channelIdEditor.setSelectAllWhenFocused(true);
     channelIdEditor.addListener(this);
     addAndMakeVisible(channelIdEditor);
 
@@ -71,6 +81,7 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
     addAndMakeVisible(clientSecretCaption);
     clientSecretEditor.setText(settings.getDiscordClientSecret(), juce::dontSendNotification);
     clientSecretEditor.setPasswordCharacter('*');
+    clientSecretEditor.setSelectAllWhenFocused(true);
     clientSecretEditor.addListener(this);
     addAndMakeVisible(clientSecretEditor);
 
@@ -214,6 +225,21 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
         result.duckAmountDb = duckAmountSlider.getValue();
         result.duckThresholdDb = duckThresholdSlider.getValue();
         result.checkForUpdates = updateCheckToggle.getToggleState();
+
+        // Caught here rather than let through to Discord: a wrong value
+        // comes back as a failed connection some seconds later, with
+        // nothing to say which of the three fields was at fault.
+        for (auto problem : { inkwyrd::describeBotTokenProblem(result.botToken),
+                               inkwyrd::describeDiscordIdProblem(result.guildId, "server (guild) ID"),
+                               inkwyrd::describeDiscordIdProblem(result.channelId, "voice channel ID") })
+        {
+            if (problem.isNotEmpty())
+            {
+                inkwyrd::showMessage(this, juce::MessageBoxIconType::WarningIcon,
+                                      "Check your Discord details", problem);
+                return;
+            }
+        }
 
         if (onSaveAndLaunch)
             onSaveAndLaunch(result);

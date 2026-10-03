@@ -29,8 +29,16 @@ public:
     void connect();
     void disconnect();
 
-    // Blocks (short polling loop) until READY has been received.
+    // Blocks (short polling loop) until READY has been received, or
+    // until Discord closes the connection - a rejected token is answered
+    // in well under a second, and waiting out the full timeout before
+    // saying so just makes the app look broken rather than misconfigured.
     bool waitForReady(int timeoutMs);
+
+    // Why Discord hung up, when it did. 0 means it hasn't. See
+    // GatewayCloseCodes.h for what the numbers mean; 4004 is a bad token.
+    int getCloseCode() const { return closeCode.load(); }
+    bool isClosed() const { return closeCode.load() != 0; }
 
     juce::String getBotUserId() const { return botUserId; }
 
@@ -54,6 +62,10 @@ private:
     std::unique_ptr<std::thread> heartbeatThread;
 
     std::atomic<bool> ready { false };
+
+    // Set from the websocket's own thread when Discord closes the
+    // connection, read by waitForReady on the caller's thread.
+    std::atomic<int> closeCode { 0 };
     juce::String botUserId;
 
     juce::CriticalSection voiceInfoLock;

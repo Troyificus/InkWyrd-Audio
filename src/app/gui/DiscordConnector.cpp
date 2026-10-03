@@ -1,4 +1,6 @@
 #include "DiscordConnector.h"
+
+#include "GatewayCloseCodes.h"
 #include "Log.h"
 
 #include <chrono>
@@ -49,7 +51,23 @@ void DiscordConnector::runConnectSequence(juce::String botToken, juce::String gu
     gateway->connect();
 
     if (!gateway->waitForReady(10000))
-        return fail("Timed out waiting for Discord gateway - check the bot token.");
+    {
+        // Prefer Discord's own reason over "it didn't answer". A
+        // rejected token closes the connection almost immediately, and
+        // calling that a timeout sent at least one person looking at
+        // their network and their channel ID instead of the token.
+        auto explanation = inkwyrd::describeGatewayCloseCode(gateway->getCloseCode());
+        if (explanation.isNotEmpty())
+            return fail(explanation);
+
+        if (gateway->isClosed())
+            return fail("Discord closed the connection during sign-in (code "
+                         + juce::String(gateway->getCloseCode())
+                         + "). The log has the details - Settings, Open log folder.");
+
+        return fail("Timed out waiting for Discord gateway - check the bot token, "
+                     "and that you're online.");
+    }
 
     logLine("[DiscordConnector] Resetting any stale voice state first...");
     gateway->requestJoinVoiceChannel(guildId, "");

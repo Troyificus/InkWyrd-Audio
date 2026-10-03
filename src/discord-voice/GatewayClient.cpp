@@ -44,7 +44,15 @@ void GatewayClient::connect()
         else if (msg->type == ix::WebSocketMessageType::Error)
             logLine("[Gateway] ws error: " + juce::String(msg->errorInfo.reason));
         else if (msg->type == ix::WebSocketMessageType::Close)
-            logLine("[Gateway] closed: " + juce::String(msg->closeInfo.reason));
+        {
+            // The code is what actually identifies the failure; the
+            // reason is a human string Discord may change. Recorded so
+            // waitForReady can stop early and the app can say WHY rather
+            // than reporting a timeout.
+            closeCode.store(msg->closeInfo.code);
+            logLine("[Gateway] closed: " + juce::String(msg->closeInfo.reason)
+                     + " (code " + juce::String(msg->closeInfo.code) + ")");
+        }
     });
 
     socket->start();
@@ -196,7 +204,7 @@ void GatewayClient::onMessage(const juce::String& text)
 bool GatewayClient::waitForReady(int timeoutMs)
 {
     int waited = 0;
-    while (!ready.load() && waited < timeoutMs)
+    while (!ready.load() && closeCode.load() == 0 && waited < timeoutMs)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         waited += 50;
