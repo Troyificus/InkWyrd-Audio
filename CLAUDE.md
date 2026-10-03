@@ -3570,14 +3570,29 @@ release:
   e.g. `v0.2.1-beta`), not one release with its asset silently swapped
   out - keeps a stable download link per version and a real changelog
   per hotfix.
-- **Old releases are pruned, and `CHANGELOG.md` is where the history
-  lives.** At `0.1.1-beta` the list had reached 46 releases and Troy
-  asked for them to be cleared. Their notes were archived into
-  `CHANGELOG.md` FIRST, because deleting a release destroys its notes
-  along with its downloads; download links and checksums were stripped
-  on the way in, since those assets no longer exist. **Add the new
-  release's notes to `CHANGELOG.md` as part of every release from now
-  on**, so pruning again is free.
+- **ONLY THE CURRENT RELEASE STAYS ON THE RELEASES PAGE.** Standing rule
+  from Troy as of `0.1.4-beta`: pruning is part of publishing, not a
+  question to ask each time. The sequence for every release is
+
+  1. write the notes,
+  2. **add them to `CHANGELOG.md` and push that FIRST**,
+  3. publish the new release,
+  4. verify it (download the published file, check its checksum, check
+     the update banner fires for the version before it),
+  5. **delete every older release**, leaving one on the page.
+
+  Step 2 before step 5 is the whole safety of it: deleting a release
+  destroys its notes along with its downloads, so the notes have to be
+  committed and pushed before anything is removed. Check they really are
+  there (`git show origin/main:CHANGELOG.md`) rather than assuming - this
+  is irreversible and public.
+
+  Download links and checksums are stripped from changelog entries, since
+  those assets stop existing.
+
+  **Git TAGS are kept.** They map a version to the commit it was built
+  from, they are the only remaining record of that, and they live on
+  their own tab so they do not clutter the releases page.
   The git TAGS were deliberately kept - they map a version to the commit
   it was built from, cost nothing on the releases page (tags live on
   their own tab), and are the only remaining record of that mapping.
