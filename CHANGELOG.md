@@ -14,6 +14,50 @@ Numbering changed at 0.1.1-beta - see the release process section of
 CLAUDE.md. Everything below `0.1.1-beta` uses the older
 `0.1.0-beta.NN` scheme, where the leading `0.1.0` never moved.
 
+## v0.1.3-beta - the double paste, fixed properly
+
+*2026-10-03*
+
+0.1.2-beta tried to stop Discord details being pasted in twice. It didn't
+work. This one fixes it properly, and clears up two things the attempt
+broke along the way.
+
+### It now repairs a double paste instead of trying to prevent it
+
+If a paste lands next to what's already in a box rather than replacing
+it, you end up with the same value in there twice, end to end. Discord
+rejects a token like that, which leaves your bot sitting offline with
+nothing on screen to say why. The token box shows dots rather than
+characters, so there's nothing to see either.
+
+0.1.2-beta tried to stop that happening. It still happened.
+
+So Inkwyrd now **fixes it instead of preventing it**. If any of your
+Discord details have the same value in twice, it keeps the single correct
+copy and tells you it did. That happens when you press Save, and once
+automatically when Inkwyrd starts.
+
+**That second one matters if you're affected right now.** A saved token
+that's doubled can't connect at all, so there's no way to get at it
+through the app. Just start this version and it sorts itself out. The log
+will say which fields it repaired (never what they contain).
+
+Halving a doubled value gives back exactly what you pasted, so nothing is
+guessed at, and it can't go off on a value that's actually fine.
+
+### Two things 0.1.2-beta got wrong
+
+**Boxes stayed highlighted after you clicked away.** Clicking from one
+Discord box to another left the first one still showing a highlighted
+block, so two looked active at once. The highlight now clears when you
+move on.
+
+**Settings sat on top of everything.** It was meant to stay above
+Inkwyrd's own windows so it wouldn't get lost behind them. Instead it
+floated over your browser, your game and Discord too, until you closed
+it. It now steps behind as soon as you switch to another program, and
+comes back to the front when you return to Inkwyrd.
+
 ## v0.1.2-beta - a setup trap that left bots offline
 
 *2026-10-03*
