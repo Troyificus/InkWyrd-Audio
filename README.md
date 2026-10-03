@@ -694,7 +694,7 @@ own. It's free and takes about five minutes.
 **Create the bot:**
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
    and sign in.
-2. Click **New Application**, give it a name (for example "Table
+2. Click **New Application**, give it a name (for example "InkWyrd
    Audio"), and create it.
 3. Open the **Bot** tab. Click **Reset Token** and copy the token. Keep
    it private: anyone with it can control the bot.
