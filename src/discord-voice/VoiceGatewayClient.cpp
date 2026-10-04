@@ -91,9 +91,14 @@ void VoiceGatewayClient::connect()
         else if (msg->type == ix::WebSocketMessageType::Error)
             logLine("[VoiceGateway] ws error: " + juce::String(msg->errorInfo.reason));
         else if (msg->type == ix::WebSocketMessageType::Close)
+        {
+            // Recorded, not just logged: the connector watches this to
+            // know it has to rebuild the voice session.
+            closeCode.store(msg->closeInfo.code != 0 ? msg->closeInfo.code : 1006);
             logLine("[VoiceGateway] closed: code=" + juce::String(msg->closeInfo.code)
                      + " reason=" + juce::String(msg->closeInfo.reason)
                      + " remote=" + juce::String(msg->closeInfo.remote ? "true" : "false"));
+        }
     });
 
     socket->start();

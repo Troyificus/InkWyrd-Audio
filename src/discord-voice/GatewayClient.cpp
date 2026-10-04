@@ -271,6 +271,17 @@ bool GatewayClient::waitForVoiceServerInfo(VoiceServerInfo& outInfo, int timeout
     return false;
 }
 
+void GatewayClient::forgetVoiceServerInfo()
+{
+    const juce::ScopedLock lock(voiceInfoLock);
+    haveSessionId = false;
+    haveServerUpdate = false;
+    pendingSessionId.clear();
+    pendingVoiceToken.clear();
+    pendingEndpoint.clear();
+    pendingGuildId.clear();
+}
+
 inkwyrd::GuildChannel GatewayClient::findChannel(const juce::String& channelId) const
 {
     const juce::ScopedLock lock(channelsLock);

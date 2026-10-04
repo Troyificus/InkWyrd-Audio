@@ -3523,6 +3523,89 @@ every cause EXCEPT the one it turned out to be. Permission overwrites are
 in the GUILD_CREATE payload too, so a future version could resolve them
 and answer outright instead of ranking possibilities.
 
+## The voice connection was never supervised (0.1.5-beta)
+
+Reported as "the bot is in the channel, I can't hear any sound, and
+Monitor proves audio is playing". The log had the whole story:
+
+```
+[VoiceGateway] sending dave_mls_key_package (393 bytes)
+[DiscordConnector] DAVE not ready yet - staying in the channel and waiting.
+[VoiceGateway] closed: code=4022 reason=Disconnected: Call terminated. remote=true
+[Gateway] VOICE_SERVER_UPDATE endpoint=c-ams22-...
+[Gateway] VOICE_SERVER_UPDATE endpoint=c-ams08-...
+[Gateway] VOICE_SERVER_UPDATE endpoint=c-ams15-...
+```
+
+No second `Hello received` after that close. **Discord ended the call,
+offered four fresh voice servers in a row, and nothing was listening for
+any of them.** The app stayed parked in its wait-for-DAVE loop on a dead
+socket with the music playing to nobody, and Monitor kept working because
+that is the local output path and never touches Discord.
+
+### Why the call ended
+
+Inkwyrd joined an EMPTY channel. DAVE is an MLS group key exchange, so
+Discord does not complete it until somebody else is there - the app
+already knew that and deliberately waits rather than hanging up, which is
+right. What it did not know is that **Discord terminates a call whose
+channel stays empty** (close 4022), and that
+`disableAutomaticReconnection()` means nothing brings it back.
+
+Joining the voice channel before starting Inkwyrd was the only way
+through, and that is exactly how the diagnosis was confirmed before any
+code was written.
+
+### What changed
+
+The voice side is now SUPERVISED rather than set up once.
+`runConnectSequence` keeps its connect thread alive in a loop:
+`openVoiceSession` (rejoin, voice gateway, UDP discovery, session
+description, DAVE) then sit watching `voiceGateway->isClosed()` for the
+life of the connection, and rebuild when it goes.
+
+Everything in a voice session is rebuilt, not reused, because every piece
+of it is tied to the voice server Discord gave for that attempt: the
+SSRC, the UDP destination and the secret key are all meaningless against
+a different one.
+
+Three details that are easy to get wrong:
+
+- **`forgetVoiceServerInfo()` before a reconnect.** `waitForVoiceServerInfo`
+  returns whatever is stored as soon as both flags are set, so without
+  clearing them it returns INSTANTLY with the details of the connection
+  that just died, and the rebuild is made on a stale token.
+- **Leave, then rejoin, on a reconnect.** Resending the same voice state
+  for a bot Discord still believes is in the channel is not reliably
+  answered with fresh server details. Leaving first makes the rejoin a
+  real change. This mirrors the "reset any stale voice state" step the
+  initial connect has always done.
+- **The FIRST attempt reuses the details the probe already fetched.** The
+  channel diagnostics (0.1.4-beta) do a join and consume a
+  VOICE_SERVER_UPDATE before the loop starts. Having the loop immediately
+  ask again would be a second join for a bot already where it was told to
+  go - no change, so possibly no answer, so a timeout on a connection
+  that was fine.
+
+The wait-for-DAVE loop now watches the socket as well as the handshake,
+since waiting on DAVE forever is precisely when Discord terminates an
+empty call underneath it.
+
+Retries back off (2s per failure, capped at 30s) and never give up: the
+usual reason to be here is that nobody has joined yet, which fixes itself
+the moment somebody does. `onComplete` fires on the first success only,
+so a reconnect does not re-trigger the app's connected-for-the-first-time
+path.
+
+### Not verified by machine
+
+**None of this is covered by the self-test.** It is reconnection logic
+against a live Discord voice call, and there is nothing pure in it to
+check. It compiles, the reasoning is above, and the behaviour was
+confirmed by Troy on a real call. Treat a future change here the same
+way: this is one of the few parts of the app where the only real test is
+a session.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

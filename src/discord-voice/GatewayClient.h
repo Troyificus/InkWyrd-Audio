@@ -56,6 +56,12 @@ public:
     // arrived for our own bot user, or timeoutMs elapses.
     bool waitForVoiceServerInfo(VoiceServerInfo& outInfo, int timeoutMs);
 
+    // Discards whatever voice server details are held, so the next
+    // waitForVoiceServerInfo blocks for genuinely new ones. Needed when
+    // rebuilding a dropped voice session: without it the wait returns
+    // instantly with the details of the connection that just died.
+    void forgetVoiceServerInfo();
+
 private:
     void onMessage(const juce::String& text);
     void sendJson(const juce::var& payload);

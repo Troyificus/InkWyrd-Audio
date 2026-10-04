@@ -48,6 +48,16 @@ public:
     VoiceUdpSocket& getUdpSocket() { return udp; }
 
 private:
+    // One full voice session: rejoin, handshake, encryption, DAVE.
+    // Called again on every reconnect, because everything it sets up is
+    // tied to the specific voice server Discord gave us.
+    // existingInfo: the voice server details already in hand, used for
+    // the FIRST attempt so the join isn't made twice. Null on a
+    // reconnect, which fetches fresh details of its own.
+    bool openVoiceSession(const juce::String& channelId, const juce::String& guildId,
+                           const std::function<void(juce::String)>& reportStatus,
+                           const GatewayClient::VoiceServerInfo* existingInfo);
+
     void runConnectSequence(juce::String botToken, juce::String guildId, juce::String channelId,
                              StatusCallback onStatus, CompleteCallback onComplete);
 

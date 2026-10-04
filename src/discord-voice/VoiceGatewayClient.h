@@ -47,6 +47,17 @@ public:
 
     bool waitForReady(ReadyInfo& outInfo, int timeoutMs);
 
+    // Whether Discord has hung up on this voice connection, and with what
+    // code. 4022 ("Call terminated") is the one seen in practice: Discord
+    // ends a call whose channel has emptied, which happens routinely when
+    // Inkwyrd joins before anybody else does.
+    //
+    // Nothing used to ask. The socket died, Discord offered four fresh
+    // voice servers in a row, and the app sat in its wait-for-DAVE loop on
+    // a dead connection with the music playing to nobody.
+    bool isClosed() const { return closeCode.load() != 0; }
+    int getCloseCode() const { return closeCode.load(); }
+
     // Called once local UDP IP discovery has completed.
     void selectProtocol(const juce::String& externalIp, int externalPort);
 
@@ -63,6 +74,9 @@ public:
     std::vector<uint8_t> encryptOpusFrame(const uint8_t* opusData, size_t opusLen);
 
 private:
+    // Written from the websocket thread, read by the connector's.
+    std::atomic<int> closeCode { 0 };
+
     void onMessage(const juce::String& text);
     void onBinaryMessage(const std::string& bytes);
     void sendJson(const juce::var& payload);
