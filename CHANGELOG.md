@@ -14,6 +14,43 @@ Numbering changed at 0.1.1-beta - see the release process section of
 CLAUDE.md. Everything below `0.1.1-beta` uses the older
 `0.1.0-beta.NN` scheme, where the leading `0.1.0` never moved.
 
+## v0.1.5-beta - the bot that joined too early
+
+*2026-10-04*
+
+Fixes a silence that had an obvious-looking cause and a completely
+different real one.
+
+### "The bot's in the channel but nobody can hear anything"
+
+If Inkwyrd joined the voice channel **before anyone else was in it**, the
+music would play, the Monitor button would prove it was playing, and
+Discord would get nothing at all. Rejoining didn't help. The only way
+through was to be in the voice channel yourself before starting Inkwyrd.
+
+Here's what was actually happening. Discord encrypts voice with a group
+key, and it doesn't finish setting that up until there's somebody to
+share it with, so a bot that joins an empty channel waits. Inkwyrd knew
+that and waited, which is right. What it didn't know is that **Discord
+ends a call whose channel stays empty**, and when it did, Inkwyrd carried
+on waiting on a connection that no longer existed. Discord offered it a
+fresh connection four times over; nothing was listening.
+
+**Inkwyrd now watches its voice connection and rebuilds it whenever it
+drops.** Join an empty channel, go and make a cup of tea, and when your
+players arrive the sound is there. It also covers Discord moving bots
+between its own servers mid-session, which it does unannounced and which
+had the same effect.
+
+Retries back off and keep going, so there's no window where it gives up
+and needs restarting. If you're watching the status line you'll see
+"Reconnecting to the voice channel..." rather than silence.
+
+**One thing to know:** this is the hardest part of the app to test, and
+it can only really be proven on a live call. If you see it drop and fail
+to come back, the log will say so (**Settings -> Open log folder**), and
+that's worth an issue.
+
 ## v0.1.4-beta - why the bot won't join
 
 *2026-10-04*
