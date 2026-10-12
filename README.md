@@ -174,7 +174,7 @@ The real fix is code signing, which Inkwyrd doesn't have yet.
 Check yours matches before running it:
 
 ```powershell
-Get-FileHash InkwyrdAudio-Portable-0.1.1-beta.zip
+Get-FileHash InkwyrdAudio-Portable-*.zip
 ```
 
 ## Quick start
@@ -760,6 +760,20 @@ own. It's free and takes about five minutes.
 > it to, so the worst case is somebody playing audio at your group, not
 > access to your Discord account.
 
+**Starting before anyone else has joined is fine.** Discord sets its
+voice encryption up as a group, and it won't finish doing that until
+there's somebody to share it with, so a bot sitting alone in a channel
+waits. While it's waiting, the status line says **"In the voice channel,
+nobody else here yet, so nothing is being sent to Discord"** and your
+music plays locally only. The moment a player joins, sound starts
+reaching the channel on its own. Nothing to press.
+
+**Inkwyrd rebuilds the connection by itself if Discord drops it.**
+Discord ends a call whose channel has been empty for a while, and moves
+bots between its own servers from time to time. Either way you'll see
+**"Reconnecting to the voice channel..."** and it carries on. You don't
+need to restart it.
+
 **Once you're connected, turn Monitor off.** You're in the call too, so
 you already hear everything through the bot.
 
@@ -1134,6 +1148,13 @@ Hover over a track in the Library's **All Tracks** list and click the
 play symbol that appears. If All Tracks is empty, click **Add
 folder...** and add your music first. See
 [Previewing a track](#previewing-a-track).
+
+**The status line says nobody else is here, and Discord gets no sound.**
+That's expected rather than a fault. Discord won't finish setting up its
+voice encryption until someone else is in the channel, so Inkwyrd waits
+there with the music playing locally. As soon as a player joins, the
+sound starts going out on its own. See
+[Connecting to Discord](#connecting-to-discord).
 
 **The bot is online, but it never joins the voice channel.**
 Nearly always a **private voice channel**. A private channel only admits
