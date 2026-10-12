@@ -14,7 +14,17 @@ which is the easiest way to try it.
 
 Inspired by Kenku FM and Winamp.
 
+## Watch the tutorial
+
+[![Inkwyrd Audio: Getting Started. A five minute tutorial covering setup, playlists, the soundboard and connecting to Discord.](https://img.youtube.com/vi/cOGuEKsksTQ/maxresdefault.jpg)](https://youtu.be/cOGuEKsksTQ)
+
+**[Inkwyrd Audio Tutorial](https://youtu.be/cOGuEKsksTQ)** walks through
+setting it up and using it. If you'd rather read, the guides below cover
+the same ground in more detail.
+
 ## Contents
+
+- [Watch the tutorial](#watch-the-tutorial)
 
 - [What it can do](#what-it-can-do)
 - [Download and install](#download-and-install)
