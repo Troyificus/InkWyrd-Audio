@@ -54,6 +54,7 @@ the same ground in more detail.
 - [Known limitations](#known-limitations)
 - [Reporting a problem, or asking for something](#reporting-a-problem-or-asking-for-something)
 - [Licence](#licence)
+- [Support the project](#support-the-project)
 
 ## What it can do
 
@@ -1272,3 +1273,14 @@ licensed and credited in
 installed next to the program. Those licences are theirs, not affected by
 the one above, and a few of them grant you rights this licence can't take
 away.
+
+## Support the project
+
+Inkwyrd Audio is free, and it stays free. If it's saved you some faff at
+the table and you'd like to put something in the hat:
+
+[![Support Inkwyrd Audio on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/troyificus)
+
+Entirely optional, and no part of the app is held back for it. Bug
+reports and suggestions are every bit as useful, and those are free to
+give.

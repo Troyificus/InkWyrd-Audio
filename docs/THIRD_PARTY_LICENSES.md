@@ -132,8 +132,12 @@ whole project:
 > **including donations**, sponsorship, advertising, and any other
 > indirect revenue."
 
-So if Inkwyrd ever takes donations, that total is what matters - not
-profit, and not sales, of which there are none.
+**This stopped being hypothetical when the Ko-fi button went into the
+README.** Inkwyrd now actively asks for donations, so the figure that
+matters against the cap is the Ko-fi total, not profit and not sales, of
+which there are none. Nothing to do about it at realistic amounts, but it
+is now a number with a threshold attached rather than one nobody is
+counting.
 
 | Tier | Cap | Price | Closed source |
 |---|---|---|---|
