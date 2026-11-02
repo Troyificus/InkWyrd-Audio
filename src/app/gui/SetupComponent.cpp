@@ -162,8 +162,8 @@ SetupComponent::SetupComponent(AppSettings& settingsToUse,
 
     addAndMakeVisible(logFilesCaption);
     openLogFolderButton.onClick = [] { inkwyrdLogFolder().startAsProcess(); };
-    openLogFolderButton.setTooltip("Opens the folder holding log.txt (this run) and log-previous.txt"
-                                   " (the run before). Attach these to a bug report - they say"
+    openLogFolderButton.setTooltip("Opens the folder holding log.txt (this run) and the last twenty"
+                                   " runs before it, dated. Attach these to a bug report: they say"
                                    " what the app was doing, and record a crash if there was one.");
     addAndMakeVisible(openLogFolderButton);
 

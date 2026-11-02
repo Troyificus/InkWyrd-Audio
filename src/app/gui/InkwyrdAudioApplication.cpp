@@ -543,9 +543,15 @@ void InkwyrdAudioApplication::handlePlaylistEdited(const juce::Uuid& id)
 
 void InkwyrdAudioApplication::shutdown()
 {
-    if (sender != nullptr)
-        sender->stop();
-    masterEngine.setDiscordSender(nullptr);
+    {
+        // Same lock as the voice-session handlers: those run on the
+        // connector's thread and can be rebuilding the sender right now.
+        const std::lock_guard<std::mutex> lock(senderLock);
+        masterEngine.detachDiscordSender();
+        if (sender != nullptr)
+            sender->stop();
+        sender.reset();
+    }
     discordConnector.disconnect();
 
     masterEngine.getPreviewBroadcaster().removeChangeListener(this);
@@ -1315,6 +1321,43 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
 
     discordConnectStarted = true;
 
+    // The audio sender is bound to ONE voice session: it holds a
+    // reference to that session's VoiceGatewayClient. So it is built and
+    // destroyed with the session rather than once per run. Before this,
+    // reconnecting destroyed the gateway while the audio thread was
+    // still calling through the old reference, which is a use-after-free
+    // on a realtime thread and crashed as heap corruption.
+    //
+    // Both handlers run on the connector's thread, and both are
+    // synchronous - the connector starts tearing down the moment
+    // onVoiceSessionEnding returns.
+    discordConnector.onVoiceSessionReady = [this]
+    {
+        const std::lock_guard<std::mutex> lock(senderLock);
+
+        auto* voiceGateway = discordConnector.getVoiceGateway();
+        if (voiceGateway == nullptr)
+            return;
+
+        sender = std::make_unique<DiscordAudioSender>(*voiceGateway, discordConnector.getUdpSocket());
+        sender->start();
+        masterEngine.setDiscordSender(sender.get());
+    };
+
+    discordConnector.onVoiceSessionEnding = [this]
+    {
+        const std::lock_guard<std::mutex> lock(senderLock);
+
+        if (sender == nullptr)
+            return;
+
+        // detachDiscordSender does not return until the audio thread is
+        // out of the sender, which is what makes destroying it safe.
+        masterEngine.detachDiscordSender();
+        sender->stop();
+        sender.reset();
+    };
+
     discordConnector.connectAsync(settings.getBotToken(), settings.getGuildId(), settings.getChannelId(),
         [this](juce::String status)
         {
@@ -1326,10 +1369,10 @@ void InkwyrdAudioApplication::startDiscordConnectIfConfigured()
             if (!success || playerWindow == nullptr)
                 return;
 
-            sender = std::make_unique<DiscordAudioSender>(*discordConnector.getVoiceGateway(), discordConnector.getUdpSocket());
-            sender->start();
-            masterEngine.setDiscordSender(sender.get());
-
+            // The sender itself is built by onVoiceSessionReady, which
+            // runs for every voice session rather than only the first.
+            // This callback is just "the first connect worked".
+            //
             // The host is in the Discord call too, so they hear this mix
             // via the bot. Playing it locally as well doubles everything
             // with a slight offset, which reads as an annoying delay.

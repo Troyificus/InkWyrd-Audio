@@ -3606,6 +3606,113 @@ confirmed by Troy on a real call. Treat a future change here the same
 way: this is one of the few parts of the app where the only real test is
 a session.
 
+## Four crashes in one stream: a use-after-free on the audio thread (0.1.6-beta)
+
+Reported after a three and a half hour live stream on 0.1.5-beta that
+crashed four times. **This was a regression introduced by 0.1.5's voice
+reconnection**, and it is the most serious bug the project has had.
+
+### The logs were useless, which was a design failure
+
+Rotation kept exactly ONE previous run. Four crashes meant five runs, so
+each restart overwrote the evidence of the crash before it. By the time
+anyone looked, the only surviving log was a clean shutdown.
+
+**The act of carrying on destroyed the evidence**, and carrying on is
+what everybody does. Retention is now twenty runs, archived as
+`log-<date>_<time>.txt`.
+
+### Windows had kept everything
+
+- **Application event log**: all four, at 19:31, 21:50, 22:40 and 23:58,
+  every one identical. Faulting module `ntdll.dll`, exception
+  `0xC0000374`, fault offset `0x118095`, app version 0.1.5.0.
+- **`%LOCALAPPDATA%\CrashDumps`**: all four minidumps, 37-44 MB, PIDs
+  matching the event log.
+
+`0xC0000374` is STATUS_HEAP_CORRUPTION. The ntdll address is not the bug;
+it is the heap manager noticing damage done earlier by someone else.
+
+**Check these two places first for any future crash report.** They
+survive restarts, they survive log rotation, and they cost nothing to
+read.
+
+### The bug
+
+`DiscordAudioSender` holds a `VoiceGatewayClient&` captured at
+construction, and calls `encryptOpusFrame` through it from the audio
+thread every 20 ms.
+
+0.1.5's `openVoiceSession` destroys and recreates that object on every
+reconnect:
+
+```cpp
+voiceGateway->disconnect();
+voiceGateway.reset();          // the sender's reference now dangles
+```
+
+Nothing detached the audio path. `setDiscordSender(nullptr)` appeared
+only in `shutdown()`, and `DiscordConnector` had no idea the sender
+existed, so it could not have told it to stop. The audio thread kept
+calling into freed memory until the heap noticed.
+
+Before 0.1.5 this could not happen: the voice gateway was built once and
+lived for the session. Reconnection is what made mid-session destruction
+possible.
+
+A second bug sat behind it: `onComplete` fires on first success only, so
+the sender was never rebuilt. Even without the crash, audio went nowhere
+after any reconnect.
+
+### Why the crash handler caught nothing
+
+Heap corruption fails through `__fastfail`, which **bypasses
+`SetUnhandledExceptionFilter` entirely**. The handler added in
+0.1.1-beta is structurally incapable of logging this class of failure.
+Do not expect it to; WER is what records these.
+
+### The fix, and the part that is easy to get wrong
+
+Clearing the pointer is NOT enough. `std::atomic<DiscordAudioSender*>`
+means the audio thread may already have loaded it and be inside
+`pushSamples` when the main thread frees the object.
+
+`MasterEngine::detachDiscordSender()` clears the pointer and then waits
+for the audio thread to leave, using a busy flag the audio thread raises
+**before** it reads the pointer:
+
+```cpp
+// audio thread
+discordSenderInUse.store(true);          // raised FIRST
+if (auto* s = discordSender.load())
+    s->pushSamples(...);
+discordSenderInUse.store(false);
+```
+
+The ordering is the whole thing. Raise the flag after the load and the
+detaching thread can see "not busy" in the gap between the load and the
+call, free the sender, and the race is back. No lock on the audio
+thread; two atomic stores per block.
+
+`DiscordConnector` now owns the relationship through
+`onVoiceSessionReady` / `onVoiceSessionEnding`. **Both are synchronous on
+the connect thread** - teardown begins the moment `onVoiceSessionEnding`
+returns, so it has to have finished detaching by then. The app's handlers
+take a mutex that `shutdown()` also takes, because the connector thread
+can be rebuilding the sender while the message thread is quitting.
+
+### Checks
+
+Nine new ones, all on the log pruning, because that code DELETES the only
+record of what went wrong and a slightly too-greedy pattern would destroy
+exactly what it exists to preserve. Confirmed by sabotage: widening the
+glob to `log*.txt` fails four of them.
+
+**The lifetime fix itself is not covered**, and cannot easily be: it is a
+race between a realtime thread and a connector thread against a live
+Discord call. It is reasoned through above and compiles; proving it takes
+a real session. Watch for it in the next long stream.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

@@ -78,11 +78,11 @@ body:
     attributes:
       label: Log files
       description: >
-        Settings -> **Open log folder**, then drag `log.txt` and
-        `log-previous.txt` into this box. These say what the app was
-        doing and record a crash if there was one. They do not contain
-        your bot token. This is the single most useful thing you can
-        include.
+        Settings -> **Open log folder**, then drag in `log.txt` and the
+        dated logs from around the time it went wrong. These say what the
+        app was doing and record a crash if there was one. They do not
+        contain your bot token. This is the single most useful thing you
+        can include.
       placeholder: Drag the log files here, or paste the last 50 lines.
 
   - type: textarea

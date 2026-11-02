@@ -58,6 +58,11 @@ public:
     // audio thread, never dereferenced for mutation here.
     void setDiscordSender(DiscordAudioSender* sender);
 
+    // Clears the sender and does not return until the audio thread is
+    // out of it, so the caller can safely destroy it. Call this before
+    // tearing down anything the sender holds a reference to.
+    void detachDiscordSender();
+
     // Silences the mic before it reaches the VST chain - affects both
     // local monitoring and whatever's sent to Discord. Safe to call
     // from any thread (Stream Deck control commands land on the
@@ -165,6 +170,10 @@ private:
     SpectrumTap spectrumTap;
 
     std::atomic<DiscordAudioSender*> discordSender { nullptr };
+
+    // Raised by the audio thread around its use of discordSender, so
+    // detachDiscordSender can tell when it is safe to destroy it.
+    std::atomic<bool> discordSenderInUse { false };
     std::atomic<bool> micMuted { false };
     std::atomic<bool> localMonitoring { true };
     std::atomic<float> masterGain { 1.0f };

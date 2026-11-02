@@ -47,6 +47,21 @@ public:
     VoiceGatewayClient* getVoiceGateway() const { return voiceGateway.get(); }
     VoiceUdpSocket& getUdpSocket() { return udp; }
 
+    // The voice session's lifetime, announced to whoever is sending
+    // audio into it.
+    //
+    // This exists because the audio path used to hold a reference to a
+    // VoiceGatewayClient that reconnection destroyed underneath it. The
+    // connector could not say "stop using it" because it had no idea
+    // anybody was.
+    //
+    // Both run on the connect thread, and BOTH MUST BE SYNCHRONOUS:
+    // onVoiceSessionEnding has to have fully detached the audio path by
+    // the time it returns, because the teardown starts the moment it
+    // does.
+    std::function<void()> onVoiceSessionReady;
+    std::function<void()> onVoiceSessionEnding;
+
 private:
     // One full voice session: rejoin, handshake, encryption, DAVE.
     // Called again on every reconnect, because everything it sets up is

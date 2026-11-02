@@ -146,6 +146,14 @@ void DiscordConnector::runConnectSequence(juce::String botToken, juce::String gu
         }
 
         consecutiveFailures = 0;
+
+        // Attach the audio path to THIS session, before declaring the
+        // connection up. On a reconnect this is what rebuilds the sender
+        // against the new voice gateway; without it the app kept sending
+        // into the previous one.
+        if (onVoiceSessionReady)
+            onVoiceSessionReady();
+
         connected = true;
         logLine("[DiscordConnector] Connected and streaming to Discord.");
         reportStatus("Connected - streaming to Discord.");
@@ -162,9 +170,24 @@ void DiscordConnector::runConnectSequence(juce::String botToken, juce::String gu
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
         if (shouldAbort.load())
+        {
+            // disconnect() tears the sockets down the moment this thread
+            // joins, so the audio path has to be off them first.
+            if (onVoiceSessionEnding)
+                onVoiceSessionEnding();
             break;
+        }
 
         connected = false;
+
+        // Detach the audio path BEFORE anything is torn down. This has to
+        // complete before openVoiceSession destroys the voice gateway,
+        // because the sender holds a reference to it and the audio thread
+        // is calling through that reference every twenty milliseconds.
+        // Getting this order wrong is what corrupted the heap.
+        if (onVoiceSessionEnding)
+            onVoiceSessionEnding();
+
         logLine("[DiscordConnector] voice connection closed (code "
                  + juce::String(voiceGateway->getCloseCode()) + ") - rebuilding it.");
         reportStatus("Reconnecting to the voice channel...");

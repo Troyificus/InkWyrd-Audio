@@ -29,6 +29,7 @@
 #include "LibraryFolderTree.h"
 #include "TrackSearch.h"
 #include "Log.h"
+#include "Log.h"
 #include "LogRedaction.h"
 #include "ControlOrigin.h"
 #include "DiscordCredentials.h"
@@ -2954,6 +2955,62 @@ namespace
                    "no close code means no explanation to give");
             check(inkwyrd::describeGatewayCloseCode(1006).isEmpty(),
                    "and an ordinary network close falls through to the generic message");
+        }
+
+        {
+            // Log retention. Two runs was the wrong number: a three and a
+            // half hour stream crashed four times, and every crash log had
+            // been overwritten by the restarts that followed before anyone
+            // looked. These checks exist because the pruning DELETES the
+            // only record of what went wrong.
+            auto logScratch = scratch.getChildFile("log-archive");
+            logScratch.deleteRecursively();
+            logScratch.createDirectory();
+
+            auto write = [&logScratch](const juce::String& name)
+            {
+                auto f = logScratch.getChildFile(name);
+                f.replaceWithText("x");
+                return f;
+            };
+
+            // Files that must survive pruning whatever else happens.
+            auto current = write("log.txt");
+            auto oldPrevious = write("log-previous.txt");
+            auto beforeUpgrade = write("log-before-upgrade.txt");
+
+            for (int day = 1; day <= 25; ++day)
+                write("log-2026-10-" + juce::String(day).paddedLeft('0', 2) + "_120000.txt");
+
+            inkwyrdPruneLogArchive(logScratch, 20);
+
+            juce::Array<juce::File> left;
+            logScratch.findChildFiles(left, juce::File::findFiles, false, "log-2*.txt");
+            check(left.size() == 20, "pruning keeps exactly the number of runs asked for");
+
+            check(! logScratch.getChildFile("log-2026-10-01_120000.txt").existsAsFile(),
+                   "and it is the OLDEST that goes");
+            check(logScratch.getChildFile("log-2026-10-25_120000.txt").existsAsFile(),
+                   "while the newest is kept");
+            check(logScratch.getChildFile("log-2026-10-06_120000.txt").existsAsFile(),
+                   "and the boundary one just inside the limit survives");
+
+            check(current.existsAsFile(), "the run in progress is never pruned");
+            check(oldPrevious.existsAsFile(), "nor log-previous.txt from the old scheme");
+            check(beforeUpgrade.existsAsFile(), "nor the pre-upgrade log");
+
+            // Idempotent, and a no-op when there is nothing to do.
+            inkwyrdPruneLogArchive(logScratch, 20);
+            left.clear();
+            logScratch.findChildFiles(left, juce::File::findFiles, false, "log-2*.txt");
+            check(left.size() == 20, "running it again changes nothing");
+
+            inkwyrdPruneLogArchive(logScratch, 100);
+            left.clear();
+            logScratch.findChildFiles(left, juce::File::findFiles, false, "log-2*.txt");
+            check(left.size() == 20, "asking to keep more than exist deletes nothing");
+
+            logScratch.deleteRecursively();
         }
 
         {

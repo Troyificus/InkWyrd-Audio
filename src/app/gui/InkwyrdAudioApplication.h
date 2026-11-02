@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -274,6 +275,9 @@ private:
     VolumeGlide volumeGlide;
 
     DiscordConnector discordConnector;
+    // Guards `sender` against the connector thread building or
+    // destroying it while the message thread is shutting down.
+    std::mutex senderLock;
     std::unique_ptr<DiscordAudioSender> sender;
 
     // Mutes the user's own Discord client while their mic is live here.

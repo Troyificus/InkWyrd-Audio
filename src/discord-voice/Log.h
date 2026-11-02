@@ -43,6 +43,9 @@ inline juce::File inkwyrdLogFile()
     return inkwyrdLogFolder().getChildFile("log.txt");
 }
 
+// How many finished runs to keep alongside the current one.
+inline constexpr int kLogRunsKept = 20;
+
 inline juce::File inkwyrdPreviousLogFile()
 {
     return inkwyrdLogFolder().getChildFile("log-previous.txt");
@@ -56,6 +59,40 @@ inline juce::File inkwyrdPreviousLogFile()
 // program again - which, when the log was simply truncated at startup,
 // destroyed the only record of what had just happened before they ever
 // got as far as reporting it.
+// Keeps the newest `keep` archived runs in `folder` and deletes the rest.
+//
+// Separated out and given its own checks because it DELETES FILES, and
+// the files it deletes are the only record of what the app was doing
+// when something went wrong. A pattern that was slightly too greedy
+// would quietly destroy exactly what it exists to preserve.
+//
+// Only matches the timestamped archive (log-2*.txt). log.txt itself,
+// log-previous.txt from before this scheme, and log-before-upgrade.txt
+// are all left alone.
+inline void inkwyrdPruneLogArchive(const juce::File& folder, int keep)
+{
+    juce::Array<juce::File> archived;
+    folder.findChildFiles(archived, juce::File::findFiles, false, "log-2*.txt");
+
+    if (archived.size() <= keep)
+        return;
+
+    // Every name begins with its timestamp, so sorting by name sorts by
+    // age, oldest first.
+    struct ByName
+    {
+        static int compareElements(const juce::File& a, const juce::File& b)
+        {
+            return a.getFileName().compare(b.getFileName());
+        }
+    };
+    ByName sorter;
+    archived.sort(sorter);
+
+    for (int i = 0; i < archived.size() - keep; ++i)
+        archived[i].deleteFile();
+}
+
 inline void inkwyrdRotateLogsOnce()
 {
     // Atomic, not a plain bool: logLine() calls this under its mutex but
@@ -68,13 +105,30 @@ inline void inkwyrdRotateLogsOnce()
     auto folder = inkwyrdLogFolder();
     folder.createDirectory();
 
+    // Archive the run that just ended, named for when it ended so the
+    // files sort chronologically.
+    //
+    // This used to keep exactly ONE previous run, which turned out to be
+    // the wrong number by a long way. A three and a half hour stream
+    // crashed four times, and by the time anyone looked, every crash log
+    // had been overwritten by the restarts that followed it - the
+    // evidence was destroyed by the act of carrying on. That is the
+    // normal way a bad session goes, not an unusual one.
     auto current = inkwyrdLogFile();
     if (current.existsAsFile())
     {
-        auto previous = inkwyrdPreviousLogFile();
-        previous.deleteFile();
-        current.moveFileTo(previous);
+        auto stamp = current.getLastModificationTime().formatted("%Y-%m-%d_%H%M%S");
+        current.moveFileTo(folder.getChildFile("log-" + stamp + ".txt"));
     }
+
+    // The single kept-previous file from before this change, given a real
+    // timestamp so it joins the archive rather than sitting outside it.
+    auto previous = inkwyrdPreviousLogFile();
+    if (previous.existsAsFile())
+        previous.moveFileTo(folder.getChildFile(
+            "log-" + previous.getLastModificationTime().formatted("%Y-%m-%d_%H%M%S") + ".txt"));
+
+    inkwyrdPruneLogArchive(folder, kLogRunsKept);
 
     // The single log.txt this app wrote before logs moved into their own
     // folder. Moved rather than left behind, so a tester who upgrades

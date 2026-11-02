@@ -1,5 +1,8 @@
 #include "MasterEngine.h"
 
+#include <chrono>
+#include <thread>
+
 MasterEngine::MasterEngine(PlaylistEngine& playlistToUse, SoundboardEngine& soundboardToUse,
                             PluginChain& voiceChainToUse, juce::AudioFormatManager& formatManagerToUse)
     : playlist(playlistToUse), soundboard(soundboardToUse), voiceChain(voiceChainToUse),
@@ -45,6 +48,27 @@ void MasterEngine::stopPreview()
 void MasterEngine::setDiscordSender(DiscordAudioSender* sender)
 {
     discordSender.store(sender);
+}
+
+void MasterEngine::detachDiscordSender()
+{
+    // Clearing the pointer is NOT enough on its own. The audio thread may
+    // already have loaded it and be inside pushSamples, and destroying
+    // the sender underneath that is a use-after-free on a realtime
+    // thread. That is what crashed four times during a three and a half
+    // hour stream, reported by Windows as heap corruption.
+    //
+    // So: clear it, then wait for the audio thread to leave. The flag is
+    // raised before the pointer is read (see audioDeviceIOCallback...),
+    // so once the store below is visible, any thread that has not already
+    // claimed the sender will read null and skip it.
+    discordSender.store(nullptr);
+
+    // One audio block is all this should ever take. The bound is a
+    // safety net against waiting forever if the device has stopped
+    // calling back at all, which would otherwise hang shutdown.
+    for (int waited = 0; discordSenderInUse.load() && waited < 2000; ++waited)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
 void MasterEngine::setMicMuted(bool muted)
@@ -204,6 +228,14 @@ void MasterEngine::audioDeviceIOCallbackWithContext(const float* const* inputCha
 
     // Unaffected by local monitoring - what Discord receives is the same
     // master mix either way.
+    //
+    // The busy flag is raised BEFORE the pointer is read, which is what
+    // makes detachDiscordSender safe. If it were raised after, the
+    // detaching thread could see "not busy" in the window between the
+    // load and the call, and free the sender while this thread was about
+    // to use it. See detachDiscordSender for the other half.
+    discordSenderInUse.store(true);
     if (auto* sender = discordSender.load())
         sender->pushSamples(masterBuffer, currentSampleRate);
+    discordSenderInUse.store(false);
 }

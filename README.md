@@ -1101,8 +1101,9 @@ bot token as plain text (see
 
 **Log files** are in `%APPDATA%\Inkwyrd Audio\logs`, and **Open log
 folder** in Settings takes you straight there. `log.txt` covers the run
-you're in; `log-previous.txt` is the run before it, kept so that a crash
-you reported after restarting still has its evidence. They record what
+you're in, and each run before it is kept as `log-<date>_<time>.txt`,
+twenty of them. That matters after a bad session: restarting the app
+used to overwrite the evidence of the crash you were about to report. They record what
 Inkwyrd did; which files it loaded, how the Discord connection went,
 how long startup took, and a report if it stopped unexpectedly. They
 never contain your bot token. **Attaching both to a bug report is the
@@ -1251,9 +1252,9 @@ This is a beta, and reports are what make it better.
   imagined.
 
 **Please attach your log files** to a bug report. Settings -> **Open log
-folder**, then attach `log.txt` and `log-previous.txt`. They say what the
-app was doing and record a crash if there was one, and they don't contain
-your bot token. A screenshot of the Player's status line or warning
+folder**, then attach `log.txt` and the dated logs from around the time
+it went wrong. They say what the app was doing and record a crash if
+there was one, and they don't contain your bot token. A screenshot of the Player's status line or warning
 banner helps too.
 
 ## Licence
