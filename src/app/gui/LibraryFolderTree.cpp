@@ -294,7 +294,25 @@ public:
                             : (playing ? inkwyrd::theme::accent : inkwyrd::theme::text));
         g.setFont(juce::Font(juce::FontOptions(14.0f)));
         auto textLeft = glyph.getRight() + 4;
-        g.drawText(text, juce::Rectangle<int>(textLeft, 0, width - textLeft - 6, height),
+
+        // Length on the right, as the Table view and the Playlist window
+        // both show it. Blank until the tag scan has reached this track,
+        // which is why the title is laid out around whatever width is
+        // left rather than assuming the column is always there.
+        auto length = owner.trackMetadata.get(file).displayLength();
+        int lengthWidth = 0;
+
+        if (length.isNotEmpty())
+        {
+            lengthWidth = 54;
+            g.setColour(inkwyrd::theme::textDim);
+            g.drawText(length, juce::Rectangle<int>(width - lengthWidth - 6, 0, lengthWidth, height),
+                        juce::Justification::centredRight, false);
+            g.setColour(missing ? inkwyrd::theme::warning
+                                : (playing ? inkwyrd::theme::accent : inkwyrd::theme::text));
+        }
+
+        g.drawText(text, juce::Rectangle<int>(textLeft, 0, width - textLeft - 6 - lengthWidth, height),
                     juce::Justification::centredLeft, true);
     }
 

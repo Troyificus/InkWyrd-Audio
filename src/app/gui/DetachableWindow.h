@@ -93,6 +93,21 @@ public:
     // destroys what they point into".
     static const juce::Array<DetachableWindow*>& getActiveWindows() { return activeWindows; }
 
+    // Only the master window gets a taskbar button.
+    //
+    // JUCE puts every top-level window on the taskbar, so all six of
+    // these had one. Windows groups them under the single app icon, and
+    // a group of several does not restore on a click: it opens the
+    // thumbnail flyout and waits for you to pick one. So bringing
+    // Inkwyrd back took two clicks and a decision, every time.
+    //
+    // The satellites are already Win32 OWNED windows of the Player (see
+    // applyOwnershipToAll), so they travel with it in z-order and
+    // minimise and restore with it. Taking them off the taskbar costs
+    // nothing except being able to alt-tab to one individually, which
+    // for a satellite of a single app is not much of a loss.
+    int getDesktopWindowStyleFlags() const override;
+
     const juce::String& getWindowId() const { return windowId; }
     bool wasVisibleWhenSaved() const { return restoredVisible; }
 

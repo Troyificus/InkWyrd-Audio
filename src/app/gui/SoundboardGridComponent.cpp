@@ -659,6 +659,9 @@ void SoundboardGridComponent::renameSlot(int index)
         if (randomFrequency != RandomFrequency::off)
             soundboard.startRandom(layout.getSlot(index).name, randomFrequency);
     }));
+
+    // Typed into straight away - see inkwyrd::focusSingleTextField.
+    inkwyrd::focusSingleTextField(*window, "name", 1);
 }
 
 void SoundboardGridComponent::clearSlot(int index)

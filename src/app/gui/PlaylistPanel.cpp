@@ -1059,15 +1059,6 @@ void PlaylistPanel::renameSelected()
     window->addButton("Rename", 1);
     window->addButton("Cancel", 0);
 
-    if (auto* editor = window->getTextEditor("name"))
-    {
-        // Enter commits, which is what everyone expects of a one-field
-        // dialog, and the existing name starts selected so typing simply
-        // replaces it.
-        editor->onReturnKey = [window] { window->exitModalState(1); };
-        editor->selectAll();
-    }
-
     window->enterModalState(true, juce::ModalCallbackFunction::create(
         [this, safeThis = juce::Component::SafePointer<PlaylistPanel>(this), id, window](int result)
     {
@@ -1089,6 +1080,9 @@ void PlaylistPanel::renameSelected()
         if (onPlaylistSelected)
             onPlaylistSelected(selectedId);
     }));
+
+    // Typed into straight away - see inkwyrd::focusSingleTextField.
+    inkwyrd::focusSingleTextField(*window, "name", 1);
 }
 
 void PlaylistPanel::deleteSelected()

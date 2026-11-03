@@ -409,6 +409,9 @@ void SetupComponent::exportCurrentSkin()
         applySelectedSkin();
         folder.startAsProcess();
     }));
+
+    // Typed into straight away - see inkwyrd::focusSingleTextField.
+    inkwyrd::focusSingleTextField(*window, "name", 1);
 }
 
 void SetupComponent::updateDuckEnablement()

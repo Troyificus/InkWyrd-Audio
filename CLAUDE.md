@@ -3713,6 +3713,73 @@ race between a realtime thread and a connector thread against a live
 Discord call. It is reasoned through above and compiles; proving it takes
 a real session. Watch for it in the next long stream.
 
+## Four small things from real use (0.1.7-beta)
+
+### Delete in the Playlist window never worked
+
+The model's `deleteKeyPressed` has been there all along. It had never
+once fired.
+
+`ListBox::keyPressed` only dispatches it when
+`isRowSelected (lastRowSelected)`, and `lastRowSelected` is ListBox's own
+bookkeeping, maintained by its own `selectRow`/`selectRangeOfRows`. This
+list does its selection itself - the drag-select, Ctrl and Shift clicks
+and `reselectFiles` added in beta.29 and beta.30 - so that member is
+stale or -1 most of the time, the condition fails, and the key falls
+through as unhandled.
+
+Handled in the component's `keyPressed` instead, on
+`getNumSelectedRows() > 0`, which is the question actually worth asking.
+
+**The lesson worth keeping:** implementing a JUCE model callback is not
+the same as it being called. The README's shortcuts table had promised
+this since beta.29, and the code looked right the whole time.
+
+The Library list's Delete does work, because that list uses ListBox's own
+selection and keeps `lastRowSelected` honest.
+
+### Track lengths in the Folders view
+
+The Table view and the Playlist window both showed them; the folder tree
+did not. Drawn right-aligned, and only once the tag scan has reached that
+track, so the title is laid out around whatever width is left rather than
+assuming the column is always there.
+
+### Rename dialogs ignored the keyboard until clicked
+
+Every single-field AlertWindow in the app selected its text and then sat
+there, because **JUCE does not focus the editor for you**. Renaming
+anything meant clicking into a box that already looked ready.
+
+`inkwyrd::focusSingleTextField` now does the three things such a dialog
+always wants: focus, select-all, and Enter as OK. Applied to all three
+(playlist rename, soundboard button rename, skin export) rather than
+only the one reported.
+
+The focus grab is deferred through `callAsync` because the window needs
+its peer before it can take focus, and guarded by a `SafePointer`
+because a modal dialog can be dismissed before the deferred call runs.
+
+### One taskbar button instead of six
+
+Clicking the taskbar icon opened the thumbnail flyout and waited for a
+choice, rather than restoring the app. Windows does that when an app has
+several taskbar buttons grouped, and JUCE puts **every** top-level window
+on the taskbar - so all six were there.
+
+`DetachableWindow::getDesktopWindowStyleFlags` now strips
+`windowAppearsOnTaskbar` from everything except the master Player window.
+The satellites were already Win32 OWNED windows of the Player, so they
+travel with it in z-order and minimise and restore with it; the taskbar
+button was the only thing making them look independent.
+
+Cost: a satellite cannot be alt-tabbed to individually any more. For a
+satellite of a single app that is not much of a loss.
+
+**None of these four are covered by checks.** Three are drawing or
+windowing behaviour, and the fourth is a keyboard path through a modal
+dialog. They need a person at the machine.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

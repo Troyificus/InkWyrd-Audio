@@ -23,4 +23,21 @@ namespace inkwyrd
                       juce::MessageBoxIconType icon,
                       const juce::String& title,
                       const juce::String& message);
+
+    // Makes a one-field AlertWindow behave the way a one-field dialog
+    // obviously should: the box is typed into straight away, its
+    // contents are selected so typing replaces them, and Enter is the
+    // OK button.
+    //
+    // JUCE does not focus the editor itself. Every rename dialog in this
+    // app selected its text and then sat there ignoring the keyboard
+    // until the user clicked into the box, which is a small thing that
+    // happens every single time anyone renames anything.
+    //
+    // Call AFTER enterModalState: the focus grab is deferred to the
+    // message loop, because the window needs its peer before it can take
+    // focus at all.
+    void focusSingleTextField(juce::AlertWindow& window,
+                               const juce::String& fieldName,
+                               int okButtonResult);
 }

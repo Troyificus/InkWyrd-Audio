@@ -526,6 +526,35 @@ bool PlaylistTrackListComponent::keyPressed(const juce::KeyPress& key, juce::Com
         }
     }
 
+    // Delete removes the selection, however it was built: one track, a
+    // Shift-click range, or a Ctrl-click scatter. Same path as the
+    // Remove button, so the linked-folder explanation and the
+    // are-you-sure for a big selection both still happen.
+    //
+    // Handled HERE rather than through the model's deleteKeyPressed,
+    // which has existed all along and never once fired. JUCE's
+    // ListBox::keyPressed only dispatches it when
+    //
+    //     isRowSelected (lastRowSelected)
+    //
+    // and lastRowSelected is ListBox's own bookkeeping, updated by its
+    // own selectRow/selectRangeOfRows. This list does its selection
+    // itself - drag-select, Ctrl and Shift clicks, and reselectFiles
+    // after a move - so that member is stale or -1 most of the time, the
+    // condition fails, and the key falls through as unhandled.
+    //
+    // getNumSelectedRows() is the question actually worth asking, and it
+    // is true whenever the user can see something selected. The README's
+    // shortcuts table has promised this since beta.29.
+    if (key == juce::KeyPress::deleteKey)
+    {
+        if (trackTable.getNumSelectedRows() > 0)
+        {
+            removeSelectedTracks();
+            return true;
+        }
+    }
+
     return false;
 }
 

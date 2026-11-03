@@ -472,6 +472,19 @@ void DetachableWindow::applyOwnershipIfNeeded()
 #endif
 }
 
+int DetachableWindow::getDesktopWindowStyleFlags() const
+{
+    auto flags = juce::DocumentWindow::getDesktopWindowStyleFlags();
+
+    // Called when the window is put on the desktop, which happens on the
+    // first setVisible - after construction, so the virtual dispatch to
+    // the subclass's isMasterWindow() is live by then.
+    if (! isMasterWindow())
+        flags &= ~juce::ComponentPeer::windowAppearsOnTaskbar;
+
+    return flags;
+}
+
 void DetachableWindow::applyThemeMetricsToAll()
 {
     // Title bar height is applied per window when it is built, so a skin
