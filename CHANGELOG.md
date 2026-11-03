@@ -14,6 +14,60 @@ Numbering changed at 0.1.1-beta - see the release process section of
 CLAUDE.md. Everything below `0.1.1-beta` uses the older
 `0.1.0-beta.NN` scheme, where the leading `0.1.0` never moved.
 
+## v0.1.7-beta - the crash during long sessions
+
+*2026-11-03*
+
+_0.1.6-beta was built but never released; its changes ship here._
+
+**If you are on 0.1.5-beta, please update.** This fixes a crash that
+could take the app down in the middle of a session.
+
+### The crash
+
+A three and a half hour stream on 0.1.5-beta crashed four times. The
+cause was in the reconnection added in that same version: when Inkwyrd
+rebuilt its voice connection, it threw away the piece that was encrypting
+your audio while the audio was still being fed into it. Sometimes that
+does nothing for a while. Sometimes it brings the whole app down.
+
+So the crash arrived minutes after a reconnection, with nothing on screen
+connecting the two, and reconnections happen on their own when a channel
+empties or Discord moves your bot between its servers. In other words it
+hit hardest during exactly the long sessions the app is for.
+
+It also meant that after any reconnection the audio was going nowhere
+even when the app survived.
+
+Fixed properly: the audio is now stopped before the connection is rebuilt
+and reattached to the new one afterwards.
+
+### Logs now go back twenty runs
+
+Restarting Inkwyrd used to overwrite the evidence of the crash you were
+about to report, because only the previous run was kept. After four
+crashes there was nothing left to look at.
+
+The logs folder now keeps the last twenty runs, dated. If something goes
+wrong, **Settings -> Open log folder** and attach the ones from around
+the time it happened.
+
+### Smaller things
+
+- **Delete works in the Playlist window.** Select a track and press
+  Delete. Ctrl-click or Shift-click several and they all go together.
+  This was in the shortcuts list a long time before it was in the
+  program.
+- **The Folders view shows track lengths**, as the Table view and the
+  Playlist window already did.
+- **Rename boxes can be typed into straight away.** Renaming a playlist
+  or a soundboard button used to need a click inside the box first, even
+  though the text was already highlighted.
+- **One click on the taskbar brings Inkwyrd back.** It used to show a row
+  of thumbnails and wait for you to pick one, because every window had
+  its own taskbar button. Only the Player has one now, and the rest come
+  with it.
+
 ## v0.1.5-beta - the bot that joined too early
 
 *2026-10-04*
