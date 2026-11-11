@@ -25,7 +25,13 @@ PlaylistWindow::PlaylistWindow(AppSettings& settingsToUse,
                                                       std::move(onPlaylistEdited),
                                                       std::move(onPlayTrack),
                                                       std::move(onPreviewTrack),
-                                                      std::move(onEditTags));
+                                                      std::move(onEditTags),
+                                                      settingsToUse.getPlaylistColumnLayout(),
+                                                      [&settings = settingsToUse](const juce::String& layout)
+                                                      {
+                                                          settings.setPlaylistColumnLayout(layout);
+                                                          settings.save(); // AppSettings has no autosave
+                                                      });
     component->setSize(320, 480);
     trackList = component;
 

@@ -387,6 +387,26 @@ void AppSettings::setDiscordRpcRefreshToken(const juce::String& token)
     settings()->setValue(kDiscordRpcRefreshTokenKey, token);
 }
 
+juce::String AppSettings::getLibraryColumnLayout() const
+{
+    return settings()->getValue("libraryColumnLayout", {});
+}
+
+void AppSettings::setLibraryColumnLayout(const juce::String& state)
+{
+    settings()->setValue("libraryColumnLayout", state);
+}
+
+juce::String AppSettings::getPlaylistColumnLayout() const
+{
+    return settings()->getValue("playlistColumnLayout", {});
+}
+
+void AppSettings::setPlaylistColumnLayout(const juce::String& state)
+{
+    settings()->setValue("playlistColumnLayout", state);
+}
+
 bool AppSettings::isPlaylistFolderSet() const
 {
     auto folder = getPlaylistFolder();

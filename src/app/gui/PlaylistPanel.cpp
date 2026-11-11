@@ -114,7 +114,9 @@ public:
     // length is numbered after volume, not beside genre where it SHOWS:
     // these numbers are ids that end up in the saved sort state, so an
     // existing one must never change meaning.
-    enum ColumnId { title = 1, artist, album, genre, volume, length };
+    // Appended rather than inserted: these values are column IDs, and
+    // the saved column layout stores them by number.
+    enum ColumnId { title = 1, artist, album, genre, volume, length, trackNo };
 
     explicit LibraryTrackTableModel(PlaylistPanel& ownerToUse) : owner(ownerToUse) {}
 
@@ -165,6 +167,10 @@ public:
             case album:  text = metadata.album; break;
             case genre:  text = metadata.genre; break;
             case length: text = metadata.displayLength(); break;
+            // 0 means "no track number in the tags", which is different
+            // from track zero, so it shows as blank rather than "0".
+            case trackNo: text = metadata.trackNumber > 0
+                                     ? juce::String(metadata.trackNumber) : juce::String(); break;
             default: break;
         }
 
@@ -292,7 +298,9 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
                               std::function<void(bool)> onTrackViewChangedToUse,
                               std::function<void(const juce::File&)> onPreviewTrackToUse,
                               std::function<void()> onStopPreviewToUse,
-                              std::function<void(const juce::Array<juce::File>&)> onEditTagsToUse)
+                              std::function<void(const juce::Array<juce::File>&)> onEditTagsToUse,
+                              juce::String startColumnLayout,
+                              std::function<void(const juce::String&)> onColumnLayoutChangedToUse)
     : library(libraryToUse),
       trackLibrary(trackLibraryToUse),
       engine(engineToUse),
@@ -351,6 +359,8 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
     // Proportional widths: the last argument to addColumn is a minimum,
     // and setStretchToFitActiveColumns below shares the real width out
     // in proportion to these.
+    // Narrow and first, the way a track number reads on a CD sleeve.
+    header.addColumn("#",      Column::trackNo, 46, 36, 70);
     header.addColumn("Title",  Column::title,  260, 120);
     header.addColumn("Artist", Column::artist, 150, 70);
     header.addColumn("Album",  Column::album,  150, 70);
@@ -369,7 +379,20 @@ PlaylistPanel::PlaylistPanel(PlaylistLibrary& libraryToUse,
                       juce::TableHeaderComponent::visible);
 
     header.setStretchToFitActive(true);
+    // Right-click the headers to hide or show columns. JUCE builds the
+    // menu from the columns that carry appearsOnColumnMenu, which the
+    // default flags include.
+    header.setPopupMenuActive(true);
+
     header.setSortColumnId(sortColumnId, sortForwards);
+
+    // Restored BEFORE the listener is attached, so replaying a saved
+    // layout doesn't immediately save it straight back.
+    if (startColumnLayout.isNotEmpty())
+        header.restoreFromString(startColumnLayout);
+
+    onColumnLayoutChanged = std::move(onColumnLayoutChangedToUse);
+    header.addListener(this);
 
     // true: events from the row components too, which is the whole point
     // - see mouseDrag().
@@ -699,6 +722,22 @@ void PlaylistPanel::sortLibraryTracks()
         // Length sorts by the NUMBER - as text, "10:00" would come before
         // "9:59". Tracks not measured yet go last either way, like empty
         // tags do.
+        // Numbers sort as numbers. As a string, track 10 lands between
+        // 1 and 2, and tracks with no number at all sink to the bottom
+        // rather than clumping at the top as "".
+        if (sortColumnId == Column::trackNo)
+        {
+            auto numberA = trackMetadata.get(a).trackNumber, numberB = trackMetadata.get(b).trackNumber;
+
+            if ((numberA > 0) != (numberB > 0))
+                return numberA > 0;
+
+            if (numberA != numberB)
+                return sortForwards ? numberA < numberB : numberB < numberA;
+
+            return a.getFullPathName().toLowerCase() < b.getFullPathName().toLowerCase();
+        }
+
         if (sortColumnId == Column::length)
         {
             auto lengthA = trackMetadata.get(a).lengthMs, lengthB = trackMetadata.get(b).lengthMs;
@@ -1242,4 +1281,10 @@ void PlaylistPanel::resized()
     addToPlaylistButton.setBounds(bottom.removeFromLeft(halfTwo));
     bottom.removeFromLeft(kButtonGap);
     removeFromLibraryButton.setBounds(bottom);
+}
+
+void PlaylistPanel::saveColumnLayout()
+{
+    if (onColumnLayoutChanged)
+        onColumnLayoutChanged(trackTable->getHeader().toString());
 }

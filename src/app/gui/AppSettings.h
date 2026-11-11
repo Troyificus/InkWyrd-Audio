@@ -189,6 +189,17 @@ public:
     juce::String getDiscordRpcRefreshToken() const;
     void setDiscordRpcRefreshToken(const juce::String& token);
 
+    // Which columns each track table shows, how wide, and in what order.
+    // TableHeaderComponent::toString()/restoreFromString() round-trips
+    // all of that, so this is just somewhere to keep the string. A
+    // column someone hid must stay hidden across a restart, or the
+    // right-click chooser is a toy.
+    juce::String getLibraryColumnLayout() const;
+    void setLibraryColumnLayout(const juce::String& state);
+
+    juce::String getPlaylistColumnLayout() const;
+    void setPlaylistColumnLayout(const juce::String& state);
+
     bool isPlaylistFolderSet() const;
     bool hasDiscordCredentials() const;
 

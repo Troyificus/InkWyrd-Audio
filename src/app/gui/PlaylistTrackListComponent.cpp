@@ -13,7 +13,9 @@ namespace
 class PlaylistTrackListComponent::Model : public juce::TableListBoxModel
 {
 public:
-    enum ColumnId { title = 1, artist, length };
+    // Appended, not inserted: these are column IDs and the saved
+    // column layout stores them by number.
+    enum ColumnId { title = 1, artist, length, trackNo, album, genre };
 
     explicit Model(PlaylistTrackListComponent& ownerToUse) : owner(ownerToUse) {}
 
@@ -57,11 +59,19 @@ public:
             text = metadata.artist;
         else if (columnId == length)
             text = metadata.displayLength();
+        else if (columnId == album)
+            text = metadata.album;
+        else if (columnId == genre)
+            text = metadata.genre;
+        // 0 means the tags carry no track number, which is not track
+        // zero, so it reads as blank rather than "0".
+        else if (columnId == trackNo)
+            text = metadata.trackNumber > 0 ? juce::String(metadata.trackNumber) : juce::String();
 
         g.setColour(playing ? inkwyrd::theme::accent : inkwyrd::theme::text);
         g.setFont(juce::Font(juce::FontOptions(14.0f)));
         g.drawText(text, juce::Rectangle<int>(6, 0, width - 12, height),
-                    columnId == length ? juce::Justification::centredRight
+                    (columnId == length || columnId == trackNo) ? juce::Justification::centredRight
                                        : juce::Justification::centredLeft, true);
     }
 
@@ -96,7 +106,9 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
                                                         std::function<void(const juce::Uuid&)> onPlaylistEditedToUse,
                                                         std::function<void(const juce::Uuid&, const juce::File&)> onPlayTrackToUse,
                                                         std::function<void(const juce::File&)> onPreviewTrackToUse,
-                                                        std::function<void(const juce::Array<juce::File>&)> onEditTagsToUse)
+                                                        std::function<void(const juce::Array<juce::File>&)> onEditTagsToUse,
+                                                        juce::String startColumnLayout,
+                                                        std::function<void(const juce::String&)> onColumnLayoutChangedToUse)
     : library(libraryToUse),
       trackMetadata(trackMetadataToUse),
       engine(engineToUse),
@@ -116,8 +128,19 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
     // visible | resizable only: no sortable flag (see the header comment -
     // the playlist's order IS the play order) and no dragging columns
     // about, which is noise on a two-column table.
+    // appearsOnColumnMenu is what puts a column in the right-click
+    // chooser, and it was missing - so this header had no way to hide
+    // anything. Deliberately NOT sortable: the order here is the order
+    // the playlist plays in, and a header click that reordered the view
+    // would make the list lie about what comes next.
     constexpr int kColumnFlags = juce::TableHeaderComponent::visible
-                                  | juce::TableHeaderComponent::resizable;
+                                  | juce::TableHeaderComponent::resizable
+                                  | juce::TableHeaderComponent::appearsOnColumnMenu;
+
+    // Hidden until asked for, so the window still opens on Title, Artist
+    // and Length as it always has.
+    constexpr int kOptionalColumnFlags = juce::TableHeaderComponent::resizable
+                                          | juce::TableHeaderComponent::appearsOnColumnMenu;
 
     // Ctrl+click picks tracks one by one, Shift+click picks everything
     // between, Ctrl+A picks the lot - all JUCE's own, once this is on.
@@ -133,6 +156,20 @@ PlaylistTrackListComponent::PlaylistTrackListComponent(PlaylistLibrary& libraryT
     header.addColumn("Title",  Model::title,  240, 120, -1, kColumnFlags);
     header.addColumn("Artist", Model::artist, 140, 70,  -1, kColumnFlags);
     header.addColumn("Length", Model::length, 62,  56,  80, kColumnFlags);
+    header.addColumn("#",      Model::trackNo, 46,  36,  70, kOptionalColumnFlags);
+    header.addColumn("Album",  Model::album,   150, 70,  -1, kOptionalColumnFlags);
+    header.addColumn("Genre",  Model::genre,   110, 60,  -1, kOptionalColumnFlags);
+
+    // Right-click the headers to hide or show columns.
+    header.setPopupMenuActive(true);
+
+    // Restored BEFORE the listener is attached, so replaying a saved
+    // layout doesn't immediately save it straight back.
+    if (startColumnLayout.isNotEmpty())
+        header.restoreFromString(startColumnLayout);
+
+    onColumnLayoutChanged = std::move(onColumnLayoutChangedToUse);
+    header.addListener(this);
     header.setStretchToFitActive(true);
 
     addAndMakeVisible(trackTable);
@@ -748,4 +785,10 @@ void PlaylistTrackListComponent::resized()
     area.removeFromBottom(6);
 
     trackTable.setBounds(area);
+}
+
+void PlaylistTrackListComponent::saveColumnLayout()
+{
+    if (onColumnLayoutChanged)
+        onColumnLayoutChanged(trackTable.getHeader().toString());
 }

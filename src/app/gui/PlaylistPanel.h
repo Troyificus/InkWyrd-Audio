@@ -30,7 +30,8 @@
 // dropped anywhere on this panel are added to the library.
 class PlaylistPanel : public juce::Component,
                        public juce::FileDragAndDropTarget,
-                       private juce::Timer
+                       private juce::Timer,
+                       private juce::TableHeaderComponent::Listener
 {
 public:
     PlaylistPanel(PlaylistLibrary& libraryToUse,
@@ -59,7 +60,12 @@ public:
                    std::function<void(const juce::File&)> onPreviewTrack = {},
                    std::function<void()> onStopPreview = {},
                    // Open the tag editor on these tracks.
-                   std::function<void(const juce::Array<juce::File>&)> onEditTags = {});
+                   std::function<void(const juce::Array<juce::File>&)> onEditTags = {},
+                   // Saved column layout to restore, and a way to record a
+                   // change. Passed in for the same reason as the view flag
+                   // above: the headless tests must not touch settings.
+                   juce::String startColumnLayout = {},
+                   std::function<void(const juce::String&)> onColumnLayoutChanged = {});
 
     // Defined in the .cpp: the ListBoxModels below are forward-declared
     // here, and destroying a unique_ptr needs the complete type.
@@ -161,6 +167,14 @@ private:
     // here rather than read back off the header so the order survives the
     // list being rebuilt - a track added, or the background tag scan
     // finishing and changing what half the rows say.
+    // juce::TableHeaderComponent::Listener
+    void tableColumnsChanged(juce::TableHeaderComponent*) override { saveColumnLayout(); }
+    void tableColumnsResized(juce::TableHeaderComponent*) override { saveColumnLayout(); }
+    void tableSortOrderChanged(juce::TableHeaderComponent*) override { saveColumnLayout(); }
+    void saveColumnLayout();
+
+    std::function<void(const juce::String&)> onColumnLayoutChanged;
+
     int sortColumnId = 1;
     bool sortForwards = true;
 

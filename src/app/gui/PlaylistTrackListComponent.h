@@ -29,7 +29,8 @@
 class PlaylistTrackListComponent : public juce::Component,
                                     public juce::FileDragAndDropTarget,
                                     private juce::Timer,
-                                    private juce::KeyListener
+                                    private juce::KeyListener,
+                                    private juce::TableHeaderComponent::Listener
 {
 public:
     PlaylistTrackListComponent(PlaylistLibrary& libraryToUse,
@@ -46,7 +47,15 @@ public:
                                 // Library's: audition a track, or edit
                                 // what the file says it is.
                                 std::function<void(const juce::File&)> onPreviewTrack = {},
-                                std::function<void(const juce::Array<juce::File>&)> onEditTags = {});
+                                std::function<void(const juce::Array<juce::File>&)> onEditTags = {},
+                                // Saved column layout to restore, and a way to
+                                // record a change. Passed in rather than read
+                                // from AppSettings here, for the same reason
+                                // PlaylistPanel does it: the headless tests
+                                // build this and must not touch the real
+                                // settings file.
+                                juce::String startColumnLayout = {},
+                                std::function<void(const juce::String&)> onColumnLayoutChanged = {});
 
     ~PlaylistTrackListComponent() override;
 
@@ -148,6 +157,15 @@ private:
     juce::TableListBox trackTable;
     std::unique_ptr<Model> model;
     juce::TextButton removeButton { "Remove from playlist" };
+
+    // juce::TableHeaderComponent::Listener - all three mean "the user
+    // changed the columns", and all three are worth remembering.
+    void tableColumnsChanged(juce::TableHeaderComponent*) override { saveColumnLayout(); }
+    void tableColumnsResized(juce::TableHeaderComponent*) override { saveColumnLayout(); }
+    void tableSortOrderChanged(juce::TableHeaderComponent*) override { saveColumnLayout(); }
+    void saveColumnLayout();
+
+    std::function<void(const juce::String&)> onColumnLayoutChanged;
 
     juce::File lastSeenPlayingTrack;
     bool dragActive = false;

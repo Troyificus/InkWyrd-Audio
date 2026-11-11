@@ -3780,6 +3780,73 @@ satellite of a single app that is not much of a loss.
 windowing behaviour, and the fourth is a keyboard path through a modal
 dialog. They need a person at the machine.
 
+## Columns, and a regression I could not reproduce (0.1.8-beta)
+
+### Column chooser and the new columns
+
+A Track number column in both track tables, Album and Genre added to the
+Playlist window, and right-click-the-header to hide or show columns.
+
+Almost all of it was already there. `TrackMetadataStore` has carried
+`trackNumber` since the tag work, and JUCE's
+`TableHeaderComponent::setPopupMenuActive(true)` IS the column chooser.
+The Playlist window's header had no menu for one reason: its
+`kColumnFlags` omitted `appearsOnColumnMenu`, so no column ever offered
+itself. The Library table uses JUCE's default flags and had the menu
+all along, just nothing worth hiding.
+
+Two things worth keeping in mind here:
+
+- **Column IDs are appended to the enums, never inserted.** They are
+  stored by number in the saved layout, so renumbering silently
+  reinterprets somebody's saved columns.
+- **Layout is passed in and reported back through callbacks**, not read
+  from AppSettings inside the panels. That convention already existed,
+  documented on PlaylistPanel's folder-view flag, so the headless tests
+  that build these panels never touch the real settings file. Worth
+  following rather than breaking.
+
+The restore happens BEFORE the listener is attached, or replaying a
+saved layout immediately saves it straight back.
+
+### The satellites stopped following the main window
+
+Reported right after 0.1.7, which makes
+`getDesktopWindowStyleFlags` the obvious suspect: taking
+`windowAppearsOnTaskbar` off the satellites makes JUCE give them
+`WS_EX_TOOLWINDOW` instead of `WS_EX_APPWINDOW`, which is a real change
+and not just a taskbar one.
+
+**I could not find the cause by reading, and could not reproduce it.**
+What was ruled out, against the live running app rather than by
+inference:
+
+- Ownership is correct. All six satellites report the Player as their
+  Win32 owner.
+- Flags are correct. The Player alone has `WS_EX_APPWINDOW`; the
+  satellites have `WS_EX_TOOLWINDOW`.
+- The windows really are docked: edges touching at 0px against a
+  tolerance of 4, with near-total vertical overlap.
+- No frame difference. `GetWindowRect` equals the DWM extended frame
+  bounds on every window, so a tool window's thinner border is not
+  shifting JUCE's bounds out of adjacency.
+- `otherLiveWindows()` filters on visible and not-minimised, which the
+  satellites pass.
+
+So the geometry, the ownership and the window list are all fine, which
+leaves the native drag hook: either `WM_ENTERSIZEMOVE` is not reaching
+`beginNativeDragFromHook`, or it is and the group comes back empty.
+Those need completely different fixes.
+
+**One log line per drag start** now says which it is, giving the docked
+count and the number of open windows. Added rather than guessed at,
+because a guess here is a change to window handling that could break
+docking for everyone.
+
+**If it turns out to be the taskbar change**, the honest trade is
+reverting it and going back to six taskbar buttons, because carrying the
+docked group is worth more than a one-click restore.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

@@ -37,7 +37,13 @@ LibraryWindow::LibraryWindow(AppSettings& settingsToUse,
                                      },
                                      std::move(onPreviewTrack),
                                      std::move(onStopPreview),
-                                     std::move(onEditTags));
+                                     std::move(onEditTags),
+                                     settingsToUse.getLibraryColumnLayout(),
+                                     [&settings = settingsToUse](const juce::String& layout)
+                                     {
+                                         settings.setLibraryColumnLayout(layout);
+                                         settings.save(); // AppSettings has no autosave
+                                     });
     panel->setSize(440, 620);
     playlistPanel = panel;
 

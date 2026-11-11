@@ -1,5 +1,7 @@
 ﻿#include "DetachableWindow.h"
 
+#include "Log.h"
+
 #include "InkwyrdTheme.h"
 #include "WindowLayoutStore.h"
 #include "WindowSnapping.h"
@@ -281,9 +283,23 @@ void DetachableWindow::beginNativeDragFromHook()
     // Captured here, before anything has moved, so the current bounds
     // ARE the pre-drag bounds - no need to reconstruct them afterwards.
     if (carriesDockedWindows())
+    {
         captureDockedGroup(getBounds());
+
+        // One line per drag START, not per move. A report of "the
+        // satellites stopped following the main window" is otherwise
+        // unanswerable from outside the process: this says whether the
+        // native hook fired at all, and whether anything was found
+        // docked to carry. Those are the two halves of that failure and
+        // they need completely different fixes.
+        logLine("[Window] drag started on " + windowId + ", carrying "
+                 + juce::String(dockedGroup.size()) + " docked window(s) of "
+                 + juce::String(otherLiveWindows().size()) + " open");
+    }
     else
+    {
         dockedGroup.clear();
+    }
 }
 
 void DetachableWindow::endNativeDragFromHook()

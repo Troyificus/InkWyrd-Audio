@@ -389,6 +389,11 @@ resumes it where it left off.
 Playlist window, without changing what's playing, so you can look
 through one list while another plays.
 
+**Right-click any column header** in the Library or the Playlist window
+to choose which columns you see. Both offer Track number, Title, Artist,
+Album, Genre and Length, and the Library adds Volume. What you pick is
+remembered.
+
 **Rename** and **Delete** manage the list. **Refresh** re-reads a
 playlist's linked folder (see below).
 
