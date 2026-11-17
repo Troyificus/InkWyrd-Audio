@@ -2742,6 +2742,85 @@ namespace
                 engine.releaseResources();
             }
 
+            // Looping with crossfade ON. The loop is supposed to IGNORE
+            // the crossfade: a track dissolving into itself just makes
+            // the loop point mushy, and the fade exists for changing
+            // track. Reported from real use.
+            //
+            // The existing loop test below deliberately turns crossfade
+            // off, which is exactly why this went unnoticed.
+            auto fadeTone = scratch.getChildFile("tone-loopfade.wav");
+            if (makeTone(fadeTone, 220.0, 2))
+            {
+                juce::Array<juce::File> loopAndNext;
+                loopAndNext.add(fadeTone);
+                loopAndNext.add(folderTracks[0]); // something else to skip to
+
+                PlaylistEngine engine(formatManager);
+                engine.setShuffle(false);
+                engine.setCrossfadeEnabled(true);
+                engine.setCrossfadeSeconds(2.0); // long, so a fade would be unmissable
+                engine.setTracks(loopAndNext);
+                engine.prepareToPlay(512, 44100.0);
+
+                engine.setLoopEnabled(true);
+                engine.setLoopGapSeconds(0.0); // no gap: the path that crossfaded into itself
+
+                std::atomic<bool> pulling { true };
+                std::atomic<float> magnitude { 0.0f };
+                std::thread puller([&]
+                {
+                    juce::AudioBuffer<float> buffer(2, 512);
+                    auto startTime = std::chrono::steady_clock::now();
+                    juce::int64 samplesPulled = 0;
+                    while (pulling.load())
+                    {
+                        auto elapsed = std::chrono::duration<double>(
+                                            std::chrono::steady_clock::now() - startTime).count();
+                        auto owed = (juce::int64) (elapsed * 44100.0);
+                        while (samplesPulled < owed && pulling.load())
+                        {
+                            buffer.clear();
+                            juce::AudioSourceChannelInfo info(&buffer, 0, 512);
+                            engine.getNextAudioBlock(info);
+                            magnitude.store(buffer.getMagnitude(0, 512));
+                            samplesPulled += 512;
+                        }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    }
+                });
+
+                engine.resume();
+
+                // Watch right across the loop point. A two second tone
+                // with a two second fade would be crossfading for its
+                // whole second pass if the fade were being applied.
+                bool everCrossfaded = false;
+                for (int i = 0; i < 70; ++i)
+                {
+                    juce::MessageManager::getInstance()->runDispatchLoopUntil(50);
+                    if (engine.isCrossfading())
+                        everCrossfaded = true;
+                }
+
+                check(! everCrossfaded,
+                       "a looping track never crossfades into itself, however long the fade is");
+                check(magnitude.load() > 0.01f, "and it is still playing after the loop point");
+                check(engine.getCurrentTrackFile() == fadeTone,
+                       "still on the same track - looping did not advance the playlist");
+
+                // The other half of the ask: changing TRACK still fades.
+                engine.skipToNext();
+                juce::MessageManager::getInstance()->runDispatchLoopUntil(100);
+                check(engine.isCrossfading(),
+                       "but skipping to a different track still crossfades, loop or no loop");
+
+                pulling.store(false);
+                puller.join();
+                engine.hardStop();
+                engine.releaseResources();
+            }
+
             // Looping a single track. A SHORT tone, so a whole loop cycle
             // - play out, hold the gap, start again - happens inside the
             // test rather than eight seconds later. The entire feature is

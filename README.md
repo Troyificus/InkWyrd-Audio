@@ -544,6 +544,12 @@ ambience bed quietly under the music and leave it.
 
 Loops are what [scenes](#scenes) switch on and off.
 
+
+**Looping ignores the crossfade.** A track that repeats goes straight
+back to its start rather than fading into itself, which would blur the
+loop point. The crossfade is for changing track, and it still applies
+when you skip, when a non-looping track ends, and when you switch
+playlist.
 ## Fading sounds in and out
 
 Any button can fade in when it starts and fade out when it stops,

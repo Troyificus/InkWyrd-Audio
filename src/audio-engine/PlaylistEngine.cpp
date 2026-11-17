@@ -586,10 +586,27 @@ void PlaylistEngine::advanceLooping(Deck& deck, double dt)
         return;
     }
 
-    // No gap: hand over exactly as a normal transition would, but to the
-    // same file - so with crossfade on the track dissolves into itself.
-    if (reachedEnd || remaining <= transitionLookAheadSeconds())
-        beginCrossfadeTo(currentTrackFile);
+    // No gap: go straight back to the start of the same track.
+    //
+    // This used to hand over as a normal transition would, to the same
+    // file, so with crossfade on a track dissolved into itself. That
+    // reads as a bug rather than a feature: the loop point goes mushy,
+    // and on a track shorter than the fade the two copies sit on top of
+    // each other for the whole of the second pass and the level sags.
+    //
+    // A crossfade is for CHANGING track. Skipping, reaching the end of a
+    // non-looping track and switching playlist all still fade; looping
+    // does not. Deliberately not conditional on crossfadeEnabled either,
+    // so a loop sounds the same whichever way that setting is left.
+    //
+    // The lead is the same 50 ms a non-crossfaded transition uses, and
+    // for the same reason: the timer ticks every 30 ms, and waiting for
+    // the transport to stop itself would open an audible gap at the
+    // loop point.
+    constexpr double loopRestartLeadSeconds = 0.05;
+
+    if (reachedEnd || remaining <= loopRestartLeadSeconds)
+        restartCurrentTrack();
 }
 
 void PlaylistEngine::setCrossfadeEnabled(bool shouldCrossfade)

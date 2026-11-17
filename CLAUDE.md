@@ -3847,6 +3847,50 @@ docking for everyone.
 reverting it and going back to six taskbar buttons, because carrying the
 docked group is worth more than a one-click restore.
 
+## Looping crossfaded into itself (0.1.9-beta)
+
+Reported from real use: a looping track had the crossfade applied to the
+loop point as well.
+
+It was deliberate, and the comment said so: "hand over exactly as a
+normal transition would, but to the same file - so with crossfade on the
+track dissolves into itself." It sounds reasonable written down and is
+wrong in the room. The loop point goes mushy, and on a track SHORTER
+than the fade the two copies overlap for the whole of the second pass
+and the level sags.
+
+`advanceLooping`'s no-gap path now calls `restartCurrentTrack()` instead
+of `beginCrossfadeTo(currentTrackFile)`. Cheaper too: a seek to zero on
+the same deck rather than loading the file into the other deck and
+swapping.
+
+The 50 ms lead is kept and matters. The timer ticks every 30 ms, so
+waiting for the transport to stop itself would open an audible gap at
+exactly the loop point - the same reason `transitionLookAheadSeconds()`
+does not return zero when crossfading is off.
+
+**Not conditional on `crossfadeEnabled`.** A loop should sound the same
+however that setting is left, and making it conditional would mean two
+loop behaviours to reason about.
+
+### Why it was never caught
+
+The existing loop suite sets `setCrossfadeEnabled(false)` on the way in,
+with the comment "straight cut, so the gap is the only silence". Sound
+reasoning for testing the gap, and it meant the one combination the user
+actually hit - loop ON, crossfade ON, gap 0 - had no coverage at all.
+
+Four checks now cover it, and they were written BEFORE the fix and seen
+to fail: the crossfade assertion failed, and so did "still playing after
+the loop point", which is the level sag above showing up as silence.
+The fourth is the other half of the ask, that skipping to a different
+track still crossfades with looping on, so the fix cannot be "turn the
+fade off during loops" in a way that breaks transitions.
+
+**Worth remembering:** a test that disables a feature to isolate another
+one leaves the combination untested. This suite had nine checks on
+looping and none of them had the fade on.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future
