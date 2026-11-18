@@ -14,6 +14,44 @@ Numbering changed at 0.1.1-beta - see the release process section of
 CLAUDE.md. Everything below `0.1.1-beta` uses the older
 `0.1.0-beta.NN` scheme, where the leading `0.1.0` never moved.
 
+## v0.1.9-beta - the windows that stopped following
+
+*2026-11-18*
+
+_0.1.8-beta was built but never released; its changes ship here._
+
+**If you are on 0.1.7-beta, please update.** That release had a real
+regression in the way the windows move together.
+
+### Dragging the Player carries the other windows again
+
+0.1.7 took away the extra taskbar buttons so that one click on the
+taskbar would bring Inkwyrd back. That had a side effect nobody
+expected: dragging the Player stopped bringing its docked windows along
+with it, and windows stopped snapping flush against each other, landing
+a few pixels out instead.
+
+Both of those came from the same change, and the taskbar button is not
+the price of fixing it. There is still only one. The other windows are
+taken off the taskbar a different way now, the way Winamp's own window
+layout did it, which leaves everything about how the windows move
+exactly as it was before 0.1.7.
+
+### Looping no longer crossfades a track into itself
+
+With crossfade switched on, a looping track was faded into its own
+restart, so the end and the beginning played over each other. A loop now
+restarts cleanly. Crossfade still applies when you move to a different
+track or playlist, which is what it is there for.
+
+### Track numbers, and columns you can choose
+
+- **A Track No. column**, in both the Library table and the Playlist
+  window.
+- **Album and Genre in the Playlist window.** Only the Library had them.
+- **Right-click any column header** to hide or show columns. What you
+  choose is remembered.
+
 ## v0.1.7-beta - the crash during long sessions
 
 *2026-11-03*

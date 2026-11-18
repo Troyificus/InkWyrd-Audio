@@ -106,7 +106,14 @@ public:
     // minimise and restore with it. Taking them off the taskbar costs
     // nothing except being able to alt-tab to one individually, which
     // for a satellite of a single app is not much of a loss.
-    int getDesktopWindowStyleFlags() const override;
+    //
+    // HOW, and how NOT: this is deliberately NOT done by overriding
+    // getDesktopWindowStyleFlags() to drop windowAppearsOnTaskbar. That
+    // version shipped in 0.1.7 and broke window dragging - see
+    // suppressTaskbarButton() in the .cpp for the whole story. It is
+    // done instead by clearing WS_EX_APPWINDOW on the already-owned
+    // satellite, from applyOwnershipIfNeeded(), which is the mechanism
+    // Winamp's own multi-window layout relied on.
 
     const juce::String& getWindowId() const { return windowId; }
     bool wasVisibleWhenSaved() const { return restoredVisible; }

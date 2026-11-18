@@ -3767,14 +3767,73 @@ choice, rather than restoring the app. Windows does that when an app has
 several taskbar buttons grouped, and JUCE puts **every** top-level window
 on the taskbar - so all six were there.
 
-`DetachableWindow::getDesktopWindowStyleFlags` now strips
-`windowAppearsOnTaskbar` from everything except the master Player window.
 The satellites were already Win32 OWNED windows of the Player, so they
 travel with it in z-order and minimise and restore with it; the taskbar
 button was the only thing making them look independent.
 
 Cost: a satellite cannot be alt-tabbed to individually any more. For a
 satellite of a single app that is not much of a loss.
+
+#### Do NOT do it through JUCE's style flags (0.1.7 regression, fixed 0.1.9)
+
+The first version overrode
+`DetachableWindow::getDesktopWindowStyleFlags()` to strip
+`windowAppearsOnTaskbar` from everything except the Player. It works: one
+line in `juce_Windowing_windows.cpp` turns that flag into
+`WS_EX_APPWINDOW` or `WS_EX_TOOLWINDOW`, and the buttons go away.
+
+It also **broke window dragging**, and shipped that way in 0.1.7.
+Satellites stopped following the Player, and windows stopped snapping
+flush, landing a few pixels out instead. Both symptoms, one change:
+confirmed by a real A/B, two builds identical except for that override,
+where the reverted one dragged and snapped correctly.
+
+The mechanism inside JUCE/Windows was never pinned down. Two theories
+were tested and both are **ruled out**, so nobody re-runs them:
+
+- **Not a geometry divergence.** The leading theory was that the two
+  extended styles have different frame insets, so flush-looking windows
+  fail the dock test (which compares JUCE bounds). A probe created real
+  windows with JUCE's exact style, both extended styles, and JUCE's own
+  `DwmExtendFrameIntoClientArea` margins: window rect, DWM visible
+  bounds and client origin came back byte-identical for both
+  (`window->visible L+7 T+0 R-7 B-7`, `window->client L+8 T+31`).
+  `AdjustWindowRectEx` agrees, and `SM_CYSMCAPTION == SM_CYCAPTION` on
+  Windows 11, so there is no small-caption difference either.
+- **Not peer-recreation timing.** `Component::addToDesktop()` does
+  destroy and recreate the HWND whenever the style flags differ from the
+  peer's, which would leave the drag hook subclassed onto a dead window.
+  But each window calls `setVisible(true)` from its own subclass
+  constructor, so `isMasterWindow()` is already live when the peer is
+  first created and the flags never mismatch.
+
+The fix does not depend on knowing why: it leaves JUCE's style flags
+alone entirely and uses what Winamp's own multi-window layout relied on.
+**An owned window gets no taskbar button unless `WS_EX_APPWINDOW` asks
+for one.** `suppressTaskbarButton()` in `DetachableWindow.cpp` clears
+that one bit from `applyOwnershipIfNeeded()`, which is also where
+ownership is established and re-checked. No `WS_EX_TOOLWINDOW` anywhere.
+
+Two steps, because neither is enough alone: clearing `WS_EX_APPWINDOW`
+settles the window's own state so it stays off the taskbar across a
+later hide/show or peer recreation, and `ITaskbarList::DeleteTab`
+removes the button that already exists, because Windows only
+reconsiders a window's taskbar presence when it is hidden and shown
+again and by then the window is visible.
+
+**A dead drag hook is silent, and that is why this cost three sessions.**
+It presents as two unrelated bugs - no snapping, no group carry - because
+every message the feature needs arrives through that one subclass and
+nothing complains when it is attached to an HWND that no longer exists.
+`installNativeHookIfNeeded()` now logs a line when it re-attaches to a
+changed handle, and a louder one if `SetWindowSubclass` fails outright.
+`applyThemeMetricsToAll()` re-checks it too, since `sendLookAndFeelChange()`
+reaches `ResizableWindow::lookAndFeelChanged()`, which re-applies the
+desktop style flags and is therefore a genuine peer-recreation path.
+
+Verified on the real app: one taskbar button, one click restores
+everything, the Player carries its docked satellites again, and windows
+snap flush.
 
 **None of these four are covered by checks.** Three are drawing or
 windowing behaviour, and the fourth is a keyboard path through a modal
@@ -3843,9 +3902,25 @@ count and the number of open windows. Added rather than guessed at,
 because a guess here is a change to window handling that could break
 docking for everyone.
 
-**If it turns out to be the taskbar change**, the honest trade is
-reverting it and going back to six taskbar buttons, because carrying the
-docked group is worth more than a one-click restore.
+**FIXED in 0.1.9-beta, and it was the taskbar change.** Settled by
+shipping an A/B build identical except for that one override; the
+reverted one dragged and snapped correctly, and its log showed the hook
+firing with `carrying 1-2 docked window(s) of 2 open` on every drag.
+The trade above turned out not to be necessary: the taskbar button is
+suppressed a different way instead, with no `WS_EX_TOOLWINDOW` involved.
+See "Do NOT do it through JUCE's style flags" under "One taskbar button
+instead of six" for the fix, the two theories that were measured and
+ruled out, and why a dead drag hook is silent enough to cost three
+sessions.
+
+Worth noting what the ruled-out list above got wrong, since the method
+was sound and the conclusion still misled: "no frame difference" was
+measured on the running app and was correct, and so was everything else
+on the list. The list was complete and the bug was still none of those
+things. What it was missing was a measurement of the only remaining
+candidate, whether the hook was alive at all, which is exactly what the
+new log line was added to answer and what the A/B ended up answering
+first.
 
 ## Looping crossfaded into itself (0.1.9-beta)
 

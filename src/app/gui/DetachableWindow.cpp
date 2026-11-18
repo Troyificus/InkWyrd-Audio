@@ -10,6 +10,7 @@
  #include <windows.h>
  #include <commctrl.h>
  #include <dwmapi.h>
+ #include <shobjidl.h>
  #pragma comment(lib, "dwmapi.lib")
 #endif
 
@@ -106,6 +107,77 @@ namespace
             return toRectangle(info.rcWork);
 
         return WindowLayoutStore::primaryDisplayArea();
+    }
+
+    // Takes a satellite off the taskbar, leaving everything else about
+    // the window exactly as JUCE created it.
+    //
+    // NOT the obvious route, and the obvious route is a trap. Overriding
+    // JUCE's getDesktopWindowStyleFlags() to drop windowAppearsOnTaskbar
+    // makes JUCE create the window WS_EX_TOOLWINDOW instead of
+    // WS_EX_APPWINDOW (one line in juce_Windowing_windows.cpp), which
+    // does remove the taskbar button. It also broke window dragging, and
+    // shipped that way in 0.1.7: satellites stopped following the Player,
+    // and windows no longer snapped flush, landing a few pixels out.
+    // Confirmed by a real A/B - two builds identical except for that
+    // override, the reverted one dragged and snapped correctly.
+    //
+    // The mechanism inside JUCE/Windows was never pinned down, so this
+    // deliberately does not depend on understanding it: JUCE's own style
+    // flags are left alone entirely. What WAS ruled out, by measuring
+    // rather than reasoning: the two extended styles are geometrically
+    // identical. A probe that created real windows with JUCE's exact
+    // style, both extended styles, and JUCE's own
+    // DwmExtendFrameIntoClientArea margins, reported byte-identical
+    // GetWindowRect, DWM visible bounds and client origin for each
+    // (window->visible L+7 T+0 R-7 B-7, window->client L+8 T+31 for
+    // both). So the regression was not a frame-inset divergence making
+    // flush-looking windows fail the dock test, which was the leading
+    // theory.
+    //
+    // What this does instead is what Winamp's multi-window layout did: an
+    // OWNED window gets no taskbar button of its own unless
+    // WS_EX_APPWINDOW asks for one. These windows are already owned by
+    // the Player (see applyOwnershipToAll), so clearing that one bit is
+    // the whole trick - no WS_EX_TOOLWINDOW anywhere.
+    //
+    // Two steps, because they do different jobs and neither is enough:
+    //  * Clearing WS_EX_APPWINDOW settles the window's own state, so it
+    //    stays off the taskbar across any later hide/show or peer
+    //    recreation.
+    //  * ITaskbarList::DeleteTab removes the button that already exists.
+    //    The style change alone cannot: Windows only reconsiders a
+    //    window's taskbar presence when it is hidden and shown again,
+    //    and by the time this runs the window is visible.
+    void suppressTaskbarButton(HWND hwnd, const juce::String& windowId)
+    {
+        const auto exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+
+        if ((exStyle & WS_EX_APPWINDOW) != 0)
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_APPWINDOW);
+
+        ITaskbarList* taskbar = nullptr;
+
+        if (SUCCEEDED(CoCreateInstance(__uuidof(TaskbarList), nullptr, CLSCTX_INPROC_SERVER,
+                                        __uuidof(ITaskbarList), (void**) &taskbar))
+             && taskbar != nullptr)
+        {
+            if (SUCCEEDED(taskbar->HrInit()))
+                taskbar->DeleteTab(hwnd);
+
+            taskbar->Release();
+            return;
+        }
+
+        // Fallback for the case where COM isn't available on this thread.
+        // Hiding and re-showing is the one thing that makes Windows
+        // re-read the style bit cleared above. Not the first choice: it
+        // costs a visible flicker, and SW_SHOWNOACTIVATE is needed so it
+        // doesn't steal focus on the way back.
+        logLine("[Window] " + windowId
+                 + ": taskbar COM unavailable, falling back to hide/show");
+        ShowWindow(hwnd, SW_HIDE);
+        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     }
 #endif
 }
@@ -211,11 +283,28 @@ void DetachableWindow::installNativeHookIfNeeded()
 
     // The peer can be recreated (JUCE does this for some style changes),
     // which leaves the old subclass attached to a dead HWND.
+    const auto isReattach = hookedWindowHandle != nullptr;
     removeNativeHook();
 
     if (SetWindowSubclass((HWND) handle, detachableWindowSubclassProc, kSubclassId,
                            reinterpret_cast<DWORD_PTR>(this)))
+    {
         hookedWindowHandle = handle;
+
+        // Worth a line because a dead hook is SILENT and looks like two
+        // unrelated bugs: snapping stops working (windows land a few
+        // pixels out instead of flush) and a drag stops carrying the
+        // docked group, both because every message this feature needs
+        // arrives through this subclass and nothing else complains when
+        // it is attached to an HWND that no longer exists.
+        if (isReattach)
+            logLine("[Window] " + windowId + ": native handle changed, drag hook re-attached");
+    }
+    else
+    {
+        logLine("[Window] " + windowId
+                 + ": FAILED to attach drag hook - snapping and group drag will not work");
+    }
 
     applyCompositorTheme((HWND) handle);
 #endif
@@ -481,24 +570,16 @@ void DetachableWindow::applyOwnershipIfNeeded()
     // parent - a genuinely confusing piece of Win32 naming. Re-checked
     // every time rather than tracked with a flag, because a peer can be
     // recreated underneath us and would come back unowned.
-    if ((HWND) GetWindowLongPtr(handle, GWLP_HWNDPARENT) == ownerHandle)
-        return;
+    if ((HWND) GetWindowLongPtr(handle, GWLP_HWNDPARENT) != ownerHandle)
+        SetWindowLongPtr(handle, GWLP_HWNDPARENT, (LONG_PTR) ownerHandle);
 
-    SetWindowLongPtr(handle, GWLP_HWNDPARENT, (LONG_PTR) ownerHandle);
+    // Ownership is also what makes this possible, which is why it lives
+    // here rather than anywhere else: a window with no owner cannot be
+    // taken off the taskbar this way. Runs even when the ownership above
+    // was already correct, since a satellite that was hidden and shown
+    // again keeps its owner but can get its taskbar button back.
+    suppressTaskbarButton(handle, windowId);
 #endif
-}
-
-int DetachableWindow::getDesktopWindowStyleFlags() const
-{
-    auto flags = juce::DocumentWindow::getDesktopWindowStyleFlags();
-
-    // Called when the window is put on the desktop, which happens on the
-    // first setVisible - after construction, so the virtual dispatch to
-    // the subclass's isMasterWindow() is live by then.
-    if (! isMasterWindow())
-        flags &= ~juce::ComponentPeer::windowAppearsOnTaskbar;
-
-    return flags;
 }
 
 void DetachableWindow::applyThemeMetricsToAll()
@@ -517,6 +598,18 @@ void DetachableWindow::applyThemeMetricsToAll()
 
         window->setTitleBarHeight(inkwyrd::theme::titleBarHeight);
         window->sendLookAndFeelChange();
+
+        // sendLookAndFeelChange() reaches ResizableWindow::lookAndFeel-
+        // Changed(), which re-applies the desktop style flags, and
+        // Component::addToDesktop() destroys and recreates the native
+        // window whenever those differ from the ones the peer already
+        // has. A recreated HWND leaves the drag hook attached to a dead
+        // one, silently taking snapping and group-dragging with it. So
+        // re-check it here rather than trusting that nothing moved -
+        // it's a no-op when the handle is unchanged, and the one line it
+        // logs when it isn't is worth having.
+        window->installNativeHookIfNeeded();
+
         window->resized();
         window->repaint();
     }
