@@ -49,6 +49,9 @@ target_sources(InkwyrdAudioApp PRIVATE
     gui/InkwyrdTheme.h
     gui/NowPlayingDisplay.cpp
     gui/NowPlayingDisplay.h
+    gui/SystemMediaControls.cpp
+    gui/SystemMediaControls.h
+    gui/TrackName.h
     gui/WindowLayoutStore.cpp
     gui/WindowLayoutStore.h
     gui/WindowSnapping.cpp

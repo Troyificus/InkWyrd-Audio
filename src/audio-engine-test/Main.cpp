@@ -4356,6 +4356,7 @@ static int runUpdateCheck()
 }
 
 int runResizeFlashTest(); // ResizeFlashTest.cpp
+int runSystemMediaControlsTest(); // SystemMediaControlsTest.cpp
 int runResizeDragTest();  // ResizeFlashTest.cpp - moves the real mouse
 int runResizeDragAppTest(); // ResizeFlashTest.cpp - drags a running Inkwyrd window
 int runSeamTest();          // ResizeFlashTest.cpp
@@ -4399,6 +4400,13 @@ int main(int argc, char* argv[])
     auto sceneSnapshotFolder = juce::SystemStats::getEnvironmentVariable("INKWYRD_SCENESNAPSHOT", "");
     if (sceneSnapshotFolder.isNotEmpty())
         return runSceneSnapshot(juce::File(sceneSnapshotFolder));
+
+    // INKWYRD_MEDIATEST=1: publishes to Windows' media controls and reads
+    // it back through the same API a now-playing overlay uses. Needs a
+    // real window, so it goes above the PLAYLIST_FOLDER guard with the
+    // other windowed checks.
+    if (juce::SystemStats::getEnvironmentVariable("INKWYRD_MEDIATEST", "").isNotEmpty())
+        return runSystemMediaControlsTest();
 
     if (juce::SystemStats::getEnvironmentVariable("INKWYRD_RESIZETEST", "") == "seam")
         return runSeamTest();

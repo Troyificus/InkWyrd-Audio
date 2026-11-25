@@ -5,6 +5,7 @@
 #include <iterator>
 
 #include "InkwyrdTheme.h"
+#include "TrackName.h"
 
 namespace
 {
@@ -13,7 +14,7 @@ namespace
 
 PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
                                   MasterEngine& masterEngineToUse,
-                                  const TrackMetadataStore& trackMetadata,
+                                  const TrackMetadataStore& trackMetadataToUse,
                                   std::function<void()> onTogglePlaylistToUse,
                                   std::function<void()> onToggleLibraryToUse,
                                   std::function<void()> onToggleVoiceFxToUse,
@@ -22,6 +23,7 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
                                   std::function<void()> onSettingsClickedToUse)
     : playlist(playlistToUse),
       masterEngine(masterEngineToUse),
+      trackMetadata(trackMetadataToUse),
       onTogglePlaylist(std::move(onTogglePlaylistToUse)),
       onToggleLibrary(std::move(onToggleLibraryToUse)),
       onToggleVoiceFx(std::move(onToggleVoiceFxToUse)),
@@ -138,6 +140,14 @@ PlayerComponent::PlayerComponent(PlaylistEngine& playlistToUse,
 
     addAndMakeVisible(skipButton);
     skipButton.onClick = [this] { playlist.skipToNext(); };
+
+    // Windows' own media panel and the keyboard's media keys, routed
+    // through the very same clicks a user would make - not straight into
+    // the engine, which would leave the Play button still saying "Play"
+    // while music came out. Same reasoning as keyPressed() below.
+    systemMedia.onPlayPause = [this] { playButton.triggerClick(); };
+    systemMedia.onStop = [this] { stopButton.triggerClick(); };
+    systemMedia.onNext = [this] { skipButton.triggerClick(); };
 
     updateShuffleButtonText();
     addAndMakeVisible(shuffleButton);
@@ -441,6 +451,37 @@ void PlayerComponent::timerCallback()
     // ControlServer commands, and monitoring flips off when Discord
     // connects - refresh the labels here so external changes show up.
     refreshToggleStates();
+
+    publishSystemMediaControls();
+}
+
+void PlayerComponent::publishSystemMediaControls()
+{
+    const auto file = playlist.getCurrentTrackFile();
+
+    // Status BEFORE the track, so the session is never briefly published
+    // with the wrong one - see SystemMediaControls.h. hardStop() clears
+    // the current track, and no track is what should stop an overlay
+    // reporting us at all; a pause still has a track to show.
+    systemMedia.setStatus(file == juce::File()  ? SystemMediaControls::Status::closed
+                           : playlist.isPlaying() ? SystemMediaControls::Status::playing
+                                                  : SystemMediaControls::Status::paused);
+
+    SystemMediaControls::Track track;
+    track.file = file;
+
+    if (file != juce::File())
+    {
+        const auto name = inkwyrd::trackNameFor(file, trackMetadata);
+        const auto metadata = trackMetadata.get(file);
+
+        track.title = name.title;
+        track.artist = name.artist;
+        track.album = metadata.album;
+        track.trackNumber = metadata.trackNumber;
+    }
+
+    systemMedia.setTrack(track);
 }
 
 void PlayerComponent::updateShuffleButtonText()

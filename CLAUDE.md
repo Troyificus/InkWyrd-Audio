@@ -3966,6 +3966,150 @@ fade off during loops" in a way that breaks transitions.
 one leaves the combination untested. This suite had nine checks on
 looping and none of them had the fade on.
 
+## Now playing, published to Windows (0.1.10-beta)
+
+Reported: a Streamlabs "Now Playing" overlay (the separate
+`Troyificus/Twtich-Player-Overlay` repo) showed nothing while Inkwyrd
+played. Nothing was wrong with either program. That overlay reads
+Windows' **System Media Transport Controls**, the same data behind the
+volume popup's media panel, and Inkwyrd published nothing to it at all.
+An app only appears there if it explicitly owns an SMTC session; that is
+why VLC needs a plugin for this and Spotify does not.
+
+`src/app/gui/SystemMediaControls.{h,cpp}` now owns one. `PlayerComponent`
+pushes into it from the 500ms poll it already runs, because
+`PlaylistEngine` has no track-change callback to hook. Title and artist
+come from the shared `inkwyrd::trackNameFor()` (lifted out of
+`NowPlayingDisplay.cpp` into `gui/TrackName.h` so the media panel and the
+app's own readout cannot disagree about what a track is called), album
+and track number from `TrackMetadataStore`, artwork from the embedded tag.
+
+**Why SMTC rather than feeding that one overlay.** Broadcasting
+now-playing JSON over `ControlServer`'s existing websocket was the
+alternative, and it would have needed matching work in the overlay and
+only ever fed that one consumer. SMTC is what every now-playing tool on
+Windows already reads, so neither side has to know the other exists, and
+media-key support arrives with it.
+
+### What was measured, so none of it gets re-guessed
+
+A standalone Win32 spike came first, then `INKWYRD_MEDIATEST`, which
+publishes with the shipping class and reads it back through
+`GlobalSystemMediaTransportControlsSessionManager`: the same API the
+overlay uses. That read-back is the whole point. Every interesting
+failure here is one where we set something, Windows accepts it without
+complaint, and a consumer still sees nothing.
+
+* **A plain Win32 app can own a session.** It is not UWP-only:
+  `ISystemMediaTransportControlsInterop::GetForWindow(hwnd)`. Consumers
+  then see the exe's own name as `SourceAppUserModelId`.
+* **Album art must be a stream reference.** Setting the thumbnail from a
+  `file:///` Uri succeeds, logs nothing, and leaves every consumer with a
+  null thumbnail: indistinguishable from "this app publishes no art".
+  `CreateFromStream` (an `InMemoryRandomAccessStream`) and
+  `CreateFromFile` (a `StorageFile`) both work. The first is used, so
+  there is no temp file to go stale or be rewritten mid-read.
+* **Building that stream needs async WinRT calls**, which cannot be waited
+  on from the message thread, so artwork is prepared on a worker thread
+  and attached when ready. Text needs no async and goes out immediately,
+  so a title appears at once and its art a moment later. Other players do
+  the same; the overlay even retries its art read for that reason.
+* **The consumer's status enum is not the publisher's.**
+  `MediaPlaybackStatus` (what we set) is Closed 0, Changing 1, Stopped 2,
+  Paused 3, Playing 4. `GlobalSystemMediaTransportControlsSessionPlayback`
+  `Status` (what a consumer reads) is Closed 0, Opened 1, Changing 2,
+  Stopped 3, **Playing 4, Paused 5**. Worth knowing because the overlay
+  picks the first session reporting exactly Playing, so that one value
+  decides whether it shows us at all.
+
+### The ghost session, and why this owns its own window
+
+The obvious implementation binds the session to the Player window. That
+was built first, and it leaves a **ghost session** behind. JUCE destroys
+and recreates a window's HWND whenever its desktop style flags change,
+which a skin change does via `applyThemeMetricsToAll()`, and the session
+belonging to the dead handle does **not** go with it. Measured: two
+sessions for this app at once, the stale one still reporting the track
+that was playing at the moment of the skin change, still saying Playing.
+Since a consumer picks the first session reporting Playing, it can pick
+the ghost and then sit frozen on a track that stopped long ago.
+
+Closing the old session on the way past does not work, because by the
+time anything notices the handle changed, the window it belonged to is
+already gone. So `SystemMediaControls` creates its **own** top-level
+window, never shown, and keeps it as long as the session lives. That
+handle cannot change underneath it, which removes the whole class of
+problem instead of catching it. A never-shown window owns a fully working
+session: title, artist, album, track number and artwork all verified
+through the consumer API.
+
+The accepted cost: the media panel's entry is not tied to a window the
+user can see, so clicking it will not bring the Player forward.
+
+This is the same trap, in a new place, that silently killed the window
+drag hook in 0.1.7. Same shape as well: no error, no log, just a thing
+that quietly stops working because a handle it was holding went away.
+
+### Two more real bugs the read-back caught
+
+* **Play after Stop published nothing.** A stop tears the session down
+  but leaves the record of what was playing, so pressing Play again on
+  the same track looked like "nothing changed" and returned early. Found
+  by a check that stops and plays three times over; the fix is the
+  `controls != nullptr` term in `setTrack`'s early-out.
+* **Stopping used to leave an empty session.** A consumer that finds
+  nothing playing falls back to any session it can find, so an empty
+  entry of ours would win that fallback and show a viewer a blank panel.
+  `Status::closed` now takes the session away entirely, and there is a
+  check that an idle app publishes nothing at all.
+
+### What is NOT verified by machine
+
+* **A real media-key press.** The `ButtonPressed` handler is wired (play,
+  pause, stop, next, all routed through the on-screen buttons'
+  `triggerClick()` so their labels cannot drift out of step), but driving
+  real keyboard input while the user is at the machine is off limits, and
+  synthetic input would not prove much anyway. One keypress by hand will.
+* **The app itself, running.** Verified at the level of the class, not a
+  live launch: a second instance shares the one settings file (which
+  holds the bot token), and Play cannot be pressed without synthetic
+  input. Playing anything in the real app and looking at the overlay
+  covers it in one action.
+* **No Previous button.** `PlaylistEngine` has no previous-track
+  operation, so `IsPreviousEnabled` is false. A button that does nothing
+  is worse than one that is not offered.
+
+### A limitation on the overlay's side, not ours
+
+The overlay gets title, artist, album and status from Inkwyrd correctly,
+confirmed by running its own `media.ps1` against the shipping code. Album
+art stays empty, and that is **its** bug, not Inkwyrd's: the thumbnail is
+genuinely there (a C++ consumer reads 3646 bytes of valid PNG from the
+same session at the same moment), but on this machine's PowerShell
+5.1.26100.9711, `OpenReadAsync()` hands back an untyped
+`System.__ComObject` rather than a projected
+`IRandomAccessStreamWithContentType`. Every way of reading bytes from it
+then fails: `AsStreamForRead`, `media.ps1`'s own `DataReader` fallback,
+`DataReader` straight onto the stream, asking for the plain
+`IRandomAccessStream`, and an explicit cast. All five were tried. It
+affects any source, not just Inkwyrd, so the overlay has presumably never
+shown art on this machine. Fixing it means reading the thumbnail outside
+PowerShell (the overlay is Electron, so Node can do it).
+
+### INKWYRD_MEDIATEST
+
+`INKWYRD_MEDIATEST=1` on the harness, run from the repo root, publishes
+and reads back 25 checks: fields, artwork bytes and image magic, a track
+change replacing the previous art, a track with no art not inheriting the
+last one's cover, pause, stop, three stop/play cycles leaving exactly one
+session, and an app window's HWND being recreated as a non-event. It uses
+copies of `test-media/formats/song_mp3.mp3` tagged by the app's own
+`TagEditor`, in `%TEMP%`, and never touches real music.
+
+`INKWYRD_MEDIATEST=hold` publishes one track and waits 45 seconds, for
+pointing something else at it: the overlay's reader, the volume popup, a
+media key.
+
 ## Beta release process
 
 Established during real beta testing, follow this for every future

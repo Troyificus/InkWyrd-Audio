@@ -6,6 +6,11 @@ target_sources(AudioEngineTest PRIVATE
     Main.cpp
     # INKWYRD_RESIZETEST: its own file so windows.h stays out of Main.cpp.
     ResizeFlashTest.cpp
+    # INKWYRD_MEDIATEST: publishes to Windows' media controls with the
+    # shipping class and reads it back through the same API a now-playing
+    # overlay uses. Same reason for its own file - windows.h and winrt.
+    SystemMediaControlsTest.cpp
+    ../app/gui/SystemMediaControls.cpp
     # The real PlaylistPanel, so the self-test can drive its Explorer
     # drag-and-drop path directly. A JUCE Component doesn't need to be on
     # screen to be laid out and have filesDropped() called on it, and

@@ -8,6 +8,7 @@
 #include "MasterEngine.h"
 #include "NowPlayingDisplay.h"
 #include "PlaylistEngine.h"
+#include "SystemMediaControls.h"
 
 // The Player window's whole content: status/transport across the top,
 // then the things that shape playback behaviour (crossfade/loop/fade-out)
@@ -29,7 +30,7 @@ class PlayerComponent : public juce::Component,
 public:
     PlayerComponent(PlaylistEngine& playlistToUse,
                      MasterEngine& masterEngineToUse,
-                     const TrackMetadataStore& trackMetadata,
+                     const TrackMetadataStore& trackMetadataToUse,
                      std::function<void()> onTogglePlaylistToUse,
                      std::function<void()> onToggleLibraryToUse,
                      std::function<void()> onToggleVoiceFxToUse,
@@ -95,6 +96,13 @@ public:
 
 private:
     void timerCallback() override;
+
+    // Pushes what's playing to Windows' media controls, which is what any
+    // now-playing overlay actually reads. Called from the 500ms poll
+    // rather than hooked to a track change, because PlaylistEngine has no
+    // track-change callback to hook. See SystemMediaControls.h.
+    void publishSystemMediaControls();
+
     void updateShuffleButtonText();
     void updateMuteButtonText();
     void updateMonitorButtonText();
@@ -105,6 +113,11 @@ private:
 
     PlaylistEngine& playlist;
     MasterEngine& masterEngine;
+
+    // Held as well as handed to NowPlayingDisplay: the system media
+    // controls need the same resolved artist/title/album, and resolving
+    // it twice from two sources is how two readouts start disagreeing.
+    const TrackMetadataStore& trackMetadata;
 
     // The design's "digital screen": art slot, artist/title/time, the
     // spectrum, and a draggable seek bar. Replaced a single bold
@@ -165,4 +178,16 @@ private:
     std::function<void()> onToggleVoiceFx;
     std::function<void()> onToggleSoundboard;
     std::function<void()> onToggleScenes;
+
+    // Owned here because this is where the transport buttons are: a
+    // media key has to go through the very same click path as the button
+    // on screen, or the button's own label stops matching what's
+    // actually playing.
+    //
+    // Last member, so it's destroyed FIRST - before the buttons its
+    // callbacks click. Nothing can dispatch a queued media-key press
+    // between one member's destruction and the next, so this is belt and
+    // braces rather than a live bug, but it's the order that reads
+    // correctly.
+    SystemMediaControls systemMedia;
 };
